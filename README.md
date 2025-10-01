@@ -1,65 +1,88 @@
 # ChatGPT Andenebb-prosjekt
 
-Dette prosjektet lar deg styre et mekanisk andenebb (servo) med en Raspberry Pi, hvor nebbet beveger seg synkront med tale generert av ChatGPT og Azure Speech (norsk stemme). Systemet bruker OpenAI for tekstgenerering, Azure for tekst-til-tale, og analyserer lydfilen for å styre nebbet i sanntid.
+Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via mikrofon, få svar fra ChatGPT, og høre svaret lest opp med norsk stemme og "Donald Duck"-effekt. Nebbet beveger seg synkront med talen. Systemet støtter nå også wake word ("quack quack") med lokal Porcupine wake word-detektering.
 
 ## Funksjoner
-- Skriv inn spørsmål til ChatGPT i terminalen
-- Få svar lest opp på norsk med "Donald Duck"-effekt (pitch-shift)
-- Andenebbet beveger seg synkront med talevolumet
-- Støtter både GPIO 14 (pin 8) for servo og alle Raspberry Pi-modeller
 
-## Maskinvare
-- Raspberry Pi (med nettverk)
-- SG90 eller lignende servo koblet til GPIO 14 (pin 8)
-- 5V og GND til servo
-- (Anbefalt) Ekstern strøm til servo hvis du bruker kraftig servo
+- **Wake word**: Si "quack quack" for å aktivere anda (Porcupine, lokalt).
+- **Tale-til-tekst**: Azure Speech-to-Text (STT) for norsk tale.
+- **ChatGPT-integrasjon**: Spørsmål sendes til OpenAI ChatGPT (gpt-3.5-turbo).
+- **Tekst-til-tale**: Azure TTS (neural norsk stemme, region westeurope).
+- **Donald Duck-effekt**: Pitch-shifting på tale for andepreg.
+- **Synkront nebb**: Nebbet beveger seg i takt med lydstyrken i svaret.
+- **Støtte for Raspberry Pi (Pi 400, Pi 5 anbefalt)**
 
-## Programvare og avhengigheter
-Installer følgende pakker i ditt virtuelle miljø:
+## Maskinvarekrav
 
+- Raspberry Pi 400, Pi 4 eller Pi 5 (anbefalt)
+- Servo koblet til GPIO 14 (pin 8)
+- USB-headset eller mikrofon
+- (Valgfritt) Høyttaler
+
+## Programvarekrav
+
+- Python 3.8+
+- Azure-konto med Speech-tjeneste i både `westeurope` (TTS) og `norwayeast` (STT)
+- OpenAI API-nøkkel
+- Picovoice-konto for Porcupine wake word og AccessKey
+
+## Installasjon
+
+1. **Installer systemavhengigheter:**
+    ```bash
+    sudo apt update
+    sudo apt install python3-pyaudio portaudio19-dev ffmpeg pigpio
+    sudo systemctl enable pigpiod
+    sudo systemctl start pigpiod
+    ```
+
+2. **Installer Python-pakker:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+    Hvis du ikke har en `requirements.txt`, installer disse:
+    ```bash
+    pip install pydub scipy sounddevice numpy pvporcupine pyaudio python-dotenv azure-cognitiveservices-speech requests
+    ```
+
+3. **Sett opp .env-fil:**
+    Kopier `.env.example` til `.env` og fyll inn dine nøkler:
+    ```
+    AZURE_TTS_KEY=din_tts_nokkel
+    AZURE_TTS_REGION=westeurope
+    AZURE_STT_KEY=din_stt_nokkel
+    AZURE_STT_REGION=norwayeast
+    OPENAI_API_KEY=din_openai_api_nokkel
+    ```
+
+4. **Porcupine wake word:**
+    - Registrer deg på [picovoice.ai](https://console.picovoice.ai/) og last ned wake word-filen (f.eks. `quack_quack.ppn`) og AccessKey.
+    - Legg filen i samme mappe som `chatgpt_voice.py`.
+    - Lim inn AccessKey i koden.
+
+5. **Koble til servo og mikrofon.**
+
+## Bruk
+
+Start programmet:
 ```bash
-sudo apt update
-sudo apt install python3-pip python3-venv pigpio libportaudio2 ffmpeg
-python3 -m venv .venv
-source .venv/bin/activate
-pip install requests python-dotenv azure-cognitiveservices-speech sounddevice numpy pydub pigpio
+python3 chatgpt_voice.py
 ```
+- Si "quack quack" for å vekke anda.
+- Still spørsmål med stemmen.
+- Anda svarer med ChatGPT og beveger nebbet i takt med svaret.
 
-Start pigpio-daemon før du kjører scriptet:
-```bash
-sudo systemctl start pigpiod
-```
+## Sikkerhet
 
-## Konfigurasjon
-Legg inn følgende i `.env`-filen i prosjektmappen:
-```
-OPENAI_API_KEY=din_openai_api_nokkel
-AZURE_SPEECH_KEY=din_azure_speech_key
-AZURE_SPEECH_REGION=westeurope
-```
-
-## Kjøring
-Start scriptet med:
-```bash
-python chatgpt_voice.py
-```
-
-Skriv inn spørsmål i terminalen. Svaret leses opp og andenebbet beveger seg synkront med talen.
-
-## Filer
-- `chatgpt_voice.py` – Hovedscript for ChatGPT, TTS og nebb
-- `duck_beak.py` – Klasse og logikk for å styre andenebbet
-- `.env` – Dine API-nøkler
-
-## Tips
-- Juster variabelen `octaves` i `chatgpt_voice.py` for mer/mindre "Donald Duck"-effekt
-- Du kan endre stemme eller talehastighet i SSML-delen av koden
-- Husk å bruke riktig GPIO-pin for servo
+**Ikke sjekk inn .env-filer med ekte nøkler i offentlige repo!**  
+Bruk `.gitignore` for å utelate `.env` og andre sensitive filer.
 
 ## Feilsøking
-- Får du ikke lyd? Sjekk at PortAudio og ffmpeg er installert, og at du bruker riktig lydutgang
-- Får du ikke bevegelse? Sjekk at pigpio kjører og at servoen er koblet riktig
-- API-feil? Sjekk at nøklene og regionene i `.env` er korrekte
+
+- Hvis du får feil med `pyaudio`, installer `portaudio19-dev` og `python3-pyaudio` via apt.
+- Hvis wake word ikke fungerer, sjekk at AccessKey og `.ppn`-fil er riktig.
+- Hvis servo ikke beveger seg, sjekk at `pigpiod` kjører og at du bruker riktig GPIO.
 
 ---
-Lykke til med snakkende andeprosjekt! 🦆
+
+**Lykke til med andeprosjektet!**
