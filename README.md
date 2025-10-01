@@ -1,6 +1,6 @@
 # ChatGPT Andenebb-prosjekt
 
-Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via mikrofon, få svar fra ChatGPT, og høre svaret lest opp med norsk stemme og "Donald Duck"-effekt. Nebbet beveger seg synkront med talen. Systemet støtter nå også wake word ("quack quack") med lokal Porcupine wake word-detektering.
+Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via mikrofon, få svar fra ChatGPT, og høre svaret lest opp med norsk stemme og "Donald Duck"-effekt. Nebbet beveger seg synkront med talen. Systemet støtter nå også lokal wake word ("quack quack") med Porcupine.
 
 ## Funksjoner
 
@@ -10,7 +10,8 @@ Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via
 - **Tekst-til-tale**: Azure TTS (neural norsk stemme, region westeurope).
 - **Donald Duck-effekt**: Pitch-shifting på tale for andepreg.
 - **Synkront nebb**: Nebbet beveger seg i takt med lydstyrken i svaret.
-- **Støtte for Raspberry Pi (Pi 400, Pi 5 anbefalt)**
+- **Samtaleflyt**: Etter wake word sier anda "Hei på du, hva kan jeg hjelpe deg med?". Etter hvert svar spør anda om du vil fortsette. Svarer du "ja", fortsetter samtalen. Svarer du "nei" (eller noe annet), venter anda på nytt wake word.
+- **Støtte for Raspberry Pi (Pi 400, Pi 4, Pi 5 anbefalt)**
 
 ## Maskinvarekrav
 
@@ -45,7 +46,7 @@ Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via
     pip install pydub scipy sounddevice numpy pvporcupine pyaudio python-dotenv azure-cognitiveservices-speech requests
     ```
 
-3. **Sett opp .env-fil:**
+3. **Sett opp `.env`-fil:**
     Kopier `.env.example` til `.env` og fyll inn dine nøkler:
     ```
     AZURE_TTS_KEY=din_tts_nokkel
@@ -53,12 +54,13 @@ Dette prosjektet lar deg snakke til en "and" (robot med nebb styrt av servo) via
     AZURE_STT_KEY=din_stt_nokkel
     AZURE_STT_REGION=norwayeast
     OPENAI_API_KEY=din_openai_api_nokkel
+    PICOVOICE_ACCESS_KEY=din_picovoice_access_key
     ```
 
 4. **Porcupine wake word:**
-    - Registrer deg på [picovoice.ai](https://console.picovoice.ai/) og last ned wake word-filen (f.eks. `quack_quack.ppn`) og AccessKey.
+    - Registrer deg på [picovoice.ai](https://console.picovoice.ai/) og last ned wake word-filen (f.eks. `Quack-quack.ppn`) og AccessKey.
     - Legg filen i samme mappe som `chatgpt_voice.py`.
-    - Lim inn AccessKey i koden.
+    - Sett riktig filnavn i koden hvis nødvendig.
 
 5. **Koble til servo og mikrofon.**
 
@@ -69,19 +71,22 @@ Start programmet:
 python3 chatgpt_voice.py
 ```
 - Si "quack quack" for å vekke anda.
+- Anda sier: "Hei på du, hva kan jeg hjelpe deg med?"
 - Still spørsmål med stemmen.
 - Anda svarer med ChatGPT og beveger nebbet i takt med svaret.
+- Etter hvert svar spør anda om du vil fortsette. Svarer du "ja", fortsetter samtalen. Svarer du "nei" (eller noe annet), venter anda på nytt wake word.
 
 ## Sikkerhet
 
-**Ikke sjekk inn .env-filer med ekte nøkler i offentlige repo!**  
-Bruk `.gitignore` for å utelate `.env` og andre sensitive filer.
+**Ikke sjekk inn `.env`-filer med ekte nøkler i offentlige repo!**  
+Bruk `.gitignore` for å utelate `.env`, `.env.example` og andre sensitive filer.
 
 ## Feilsøking
 
 - Hvis du får feil med `pyaudio`, installer `portaudio19-dev` og `python3-pyaudio` via apt.
 - Hvis wake word ikke fungerer, sjekk at AccessKey og `.ppn`-fil er riktig.
 - Hvis servo ikke beveger seg, sjekk at `pigpiod` kjører og at du bruker riktig GPIO.
+- Hvis samtalen ikke fortsetter når du sier "ja", sjekk at mikrofonen fanger opp tydelig tale.
 
 ---
 
