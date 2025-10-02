@@ -174,7 +174,7 @@ def main():
                 print("Feil:", e)
                 speak("Beklager, det oppstod en feil.", speech_config, beak)
             # Etter svar, spør om brukeren vil fortsette eller vente på nytt wake word
-            speak("Vil du spørre om noe mer? Si ja for å fortsette, eller nei for å avslutte samtalen.", speech_config, beak)
+            speak("Vil du fortsette samtalen? Si ja eller nei.", speech_config, beak)
             cont = recognize_speech_from_mic(device_name)
             if cont and "ja" in cont.strip().lower():
                 continue  # Fortsett samtalen
