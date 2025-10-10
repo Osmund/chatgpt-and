@@ -1,0 +1,9 @@
+import sounddevice as sd
+import numpy as np
+
+samplerate = 16000
+duration = 3
+print("Snakk nå...")
+audio = sd.rec(int(samplerate * duration), samplerate=samplerate, channels=1, dtype='int16')
+sd.wait()
+print("Maks amplitude:", np.max(np.abs(audio)))

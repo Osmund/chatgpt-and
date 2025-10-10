@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# VS Code settings
+.vscode/
+
+# Environment files
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Audio cache/output
+*.wav
+
+# Test output
+*.log
+
+bfg.jar
+bilde.jpg
+dcscreen.py
+duck_singing.py
+read_dht11.py
+
+# Vosk models
+vosk-model*/
+*.zip
