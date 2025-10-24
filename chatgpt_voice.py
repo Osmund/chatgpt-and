@@ -71,19 +71,27 @@ def speak(text, speech_config, beak):
                 samples = samples[::n_channels]
             samples = samples.astype(np.float32) / np.iinfo(dtype).max
 
-            blocksize = int(framerate * 0.03)
+            # Større blocksize for jevnere lyd, oppdater nebb hver gang
+            blocksize = int(framerate * 0.064)  # 64ms - god balanse
+            
             def callback(outdata, frames, time_info, status):
                 nonlocal idx
                 chunk = samples[idx:idx+frames]
-                amp = np.sqrt(np.mean(chunk**2)) if len(chunk) > 0 else 0
-                beak.open_pct(min(max(amp * 3.5, 0.0), 1.0))
+                
+                # Oppdater nebb umiddelbart basert på faktisk lyd
+                if len(chunk) > 0:
+                    amp = np.sqrt(np.mean(chunk**2))
+                    beak.open_pct(min(max(amp * 3.5, 0.0), 1.0))
+                
                 if len(chunk) < frames:
                     outdata[:len(chunk),0] = chunk
                     outdata[len(chunk):,0] = 0
                 else:
                     outdata[:,0] = chunk
                 idx += frames
+            
             idx = 0
+            
             with sd.OutputStream(samplerate=framerate, channels=1, dtype='float32', blocksize=blocksize, callback=callback):
                 while idx < len(samples):
                     sd.sleep(int(1000 * blocksize / framerate))
