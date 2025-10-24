@@ -7,33 +7,70 @@ Dette prosjektet lar en "and" (med bevegelsesnebb og RGB LED) snakke med deg via
 - Raspberry Pi (testet på Pi 400 og Pi 5)
 - Monk Makes RGB LED (koblet: R=GPIO17, G=GPIO27, B=GPIO22)
 - Servo til nebb (koblet til f.eks. GPIO14) - **NB: Bruk separat strømforsyning til servoen!**
-- (Valgfritt) DHT11 på GPIO4 for temperatur
-- (Valgfritt) TFT-skjerm for tekstutskrift
+- Mikrofon (USB eller Pi-kompatibel)
+- Høyttaler (3.5mm jack eller USB)
 
-## Programvare
+## Programvare - Installasjon
 
-- Python 3.11+
-- Virtuelt miljø anbefales (`python3 -m venv .venv`)
-- Installer avhengigheter:
-  ```bash
-  pip install -r requirements.txt
-  ```
+### 1. System-avhengigheter (før pip install)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-venv portaudio19-dev libportaudio2 ffmpeg
+```
+
+### 2. Opprett virtuelt miljø
+
+```bash
+cd /home/admog/Code/MyFirst
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Installer Python-pakker
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Last ned Vosk-modell
+
+```bash
+wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
+unzip vosk-model-small-sv-rhasspy-0.15.zip
+```
+
+Mappen `vosk-model-small-sv-rhasspy-0.15/` skal ligge i prosjektmappen.
+
+### 5. Opprett `.env`-fil
+
+Opprett filen `/home/admog/Code/MyFirst/.env` med følgende innhold:
+
+```
+OPENAI_API_KEY=din_openai_nøkkel
+AZURE_TTS_KEY=din_azure_tts_nøkkel
+AZURE_TTS_REGION=westeurope
+AZURE_STT_KEY=din_azure_stt_nøkkel
+AZURE_STT_REGION=westeurope
+```
+
+**Skaff API-nøkler:**
+- OpenAI: https://platform.openai.com/api-keys
+- Azure Speech: https://portal.azure.com (Cognitive Services)
+
+## Nødvendige filer
+
+Prosjektet trenger disse Python-filene:
+- `chatgpt_voice.py` (hovedprogram)
+- `duck_beak.py` (servo-kontroll for nebb)
+- `rgb_duck.py` (RGB LED-kontroll)
 
 ## Wake Word med Vosk
 
 Prosjektet bruker **Vosk** for offline wake word detection (svensk modell).
 
-### Sett opp Vosk-modell:
-
-1. **Last ned svensk modell:**
-   ```bash
-   wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
-   unzip vosk-model-small-sv-rhasspy-0.15.zip
-   ```
-
-2. **Plasser mappen i prosjektmappen** (`/home/admog/Code/MyFirst/vosk-model-small-sv-rhasspy-0.15/`)
-
-3. **Standard wake words er "alexa" eller "ulrika"** – du kan endre dette i `wait_for_wake_word()`-funksjonen.
+**Standard wake words er "alexa" eller "ulrika"** – du kan endre dette i `wait_for_wake_word()`-funksjonen.
 
 ## Funksjoner
 
@@ -48,30 +85,6 @@ Prosjektet bruker **Vosk** for offline wake word detection (svensk modell).
   - **Av**: Idle
 - **Stopp samtale**: Si "stopp" for å gå tilbake til wake word.
 
-## Siste endringer
-
-- Byttet fra Picovoice/OpenWakeWord til **Vosk** for wake word detection (offline, gratis, pålitelig).
-- Bruker svensk Vosk-modell (`vosk-model-small-sv-rhasspy-0.15`) for wake words "alexa" og "ulrika".
-- RGB LED-styring flyttet til egen fil `rgb_duck.py` med funksjoner for farger og blinking.
-- Blinkingen under "tenkepause" veksler mellom gul og lilla.
-- LED-styring er robust: `stop_blink()` venter på at blinketråden er ferdig før ny farge settes.
-- Samtaleflyt: Samtalen fortsetter automatisk til du sier "stopp".
-- Lagt til `lgpio` for bedre GPIO-støtte på nyere Raspberry Pi-modeller.
-- **Servo må ha separat strømforsyning for å unngå flikring/støy på LED og Pi.**
-
-## Oppsett av .env
-
-Eksempel på `.env`:
-```
-OPENAI_API_KEY=din_openai_nøkkel
-AZURE_TTS_KEY=din_azure_tts_nøkkel
-AZURE_TTS_REGION=westeurope
-AZURE_STT_KEY=din_azure_stt_nøkkel
-AZURE_STT_REGION=westeurope
-```
-
-**NB:** Du trenger ikke lenger `PICOVOICE_ACCESS_KEY` eller `ANNOUNCE_ENV`.
-
 ## Kjøring
 
 Aktiver venv og start anda:
@@ -85,13 +98,49 @@ Eller direkte:
 /home/admog/Code/MyFirst/.venv/bin/python /home/admog/Code/MyFirst/chatgpt_voice.py
 ```
 
+## Feilsøking
+
+### Portaudio-feil
+```bash
+sudo apt-get install portaudio19-dev libportaudio2
+pip install --upgrade pyaudio
+```
+
+### GPIO-advarsler
+```bash
+pip install lgpio
+```
+
+### Ingen lyd
+- Sjekk `alsamixer` (kjør i terminal)
+- Test høyttaler: `speaker-test -t wav -c 2`
+- Sjekk mikrofon: `arecord -l`
+
+### Vosk finner ikke modell
+- Sjekk at `vosk-model-small-sv-rhasspy-0.15/` finnes i prosjektmappen
+- Verifiser at mappen inneholder `am/`, `graph/`, etc.
+
 ## Tips
 
 - Hvis LED eller Pi flikrer/rebooter: **bruk separat strøm til servoen!**
 - For å endre LED-blink, juster i `rgb_duck.py`.
 - For å endre wake words, endre sjekken i `wait_for_wake_word()`-funksjonen.
 - Vosk støtter flere språk – last ned norsk modell (`vosk-model-small-no-0.22`) hvis du vil bruke norske wake words.
-- Hvis du får GPIO-advarsler, installer `lgpio`: `pip install lgpio`
+
+## Komplett filstruktur
+
+```
+/home/admog/Code/MyFirst/
+├── .venv/
+├── .env
+├── .gitignore
+├── requirements.txt
+├── README.md
+├── chatgpt_voice.py
+├── duck_beak.py
+├── rgb_duck.py
+└── vosk-model-small-sv-rhasspy-0.15/
+```
 
 ---
 
