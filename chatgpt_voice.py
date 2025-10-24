@@ -9,11 +9,8 @@ import requests
 import os
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
-import pvporcupine
-import pyaudio
 import numpy as np
 from rgb_duck import set_blue, set_red, set_green, off, blink_yellow, stop_blink,blink_yellow_purple
-from openwakeword.model import Model
 import vosk
 import json
 

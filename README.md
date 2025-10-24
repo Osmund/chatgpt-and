@@ -21,45 +21,43 @@ Dette prosjektet lar en "and" (med bevegelsesnebb og RGB LED) snakke med deg via
 
 ## Wake Word med Vosk
 
-Prosjektet bruker **Vosk** for offline wake word detection.
+Prosjektet bruker **Vosk** for offline wake word detection (svensk modell).
 
 ### Sett opp Vosk-modell:
 
-1. **Last ned en liten engelsk modell:**
+1. **Last ned svensk modell:**
    ```bash
-   wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-   unzip vosk-model-small-en-us-0.15.zip
+   wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
+   unzip vosk-model-small-sv-rhasspy-0.15.zip
    ```
 
-2. **Plasser mappen i prosjektmappen** eller spesifiser riktig sti i koden.
+2. **Plasser mappen i prosjektmappen** (`/home/admog/Code/MyFirst/vosk-model-small-sv-rhasspy-0.15/`)
 
-3. **Standard wake word er "alexa"** – du kan endre dette i `wait_for_wake_word()`-funksjonen.
+3. **Standard wake words er "alexa" eller "ulrika"** – du kan endre dette i `wait_for_wake_word()`-funksjonen.
 
 ## Funksjoner
 
-- **Wake word**: Si "alexa" for å vekke anda (Vosk offline speech recognition).
-- **Samtale**: Snakk med anda, den svarer med ChatGPT og Azure TTS.
-- **Nebb-bevegelse**: Nebbet beveger seg synkront med tale.
+- **Wake word**: Si "alexa" eller "ulrika" for å vekke anda (Vosk offline speech recognition).
+- **Samtale**: Snakk med anda, den svarer med ChatGPT og Azure TTS (norsk stemme: nb-NO-FinnNeural).
+- **Nebb-bevegelse**: Nebbet beveger seg synkront med tale basert på lydamplitude.
 - **RGB LED-status**:
   - **Blå**: Venter på wake word
   - **Grønn**: Venter på at du skal snakke
-  - **Blinkende gul/lilla**: "Tenkepause" (venter på svar fra ChatGPT/Azure)
+  - **Blinkende gul/lilla**: "Tenkepause" (venter på svar fra ChatGPT)
   - **Rød**: Anda snakker
   - **Av**: Idle
 - **Stopp samtale**: Si "stopp" for å gå tilbake til wake word.
-- **(Valgfritt) Temperatur/klokke**: Kan annonseres automatisk hvis aktivert i `.env`.
 
 ## Siste endringer
 
 - Byttet fra Picovoice/OpenWakeWord til **Vosk** for wake word detection (offline, gratis, pålitelig).
+- Bruker svensk Vosk-modell (`vosk-model-small-sv-rhasspy-0.15`) for wake words "alexa" og "ulrika".
 - RGB LED-styring flyttet til egen fil `rgb_duck.py` med funksjoner for farger og blinking.
-- Blinkingen under "tenkepause" veksler nå mellom gul og lilla.
-- LED-styring er robust: `stop_blink()` venter alltid på at blinketråden er ferdig før ny farge settes.
+- Blinkingen under "tenkepause" veksler mellom gul og lilla.
+- LED-styring er robust: `stop_blink()` venter på at blinketråden er ferdig før ny farge settes.
 - Samtaleflyt: Samtalen fortsetter automatisk til du sier "stopp".
-- DHT11 og temperaturkode er gjort valgfritt og kan enkelt fjernes.
-- Kode for TFT-skjerm og DHT11 er ikke lenger påkrevd for hovedfunksjon.
+- Lagt til `lgpio` for bedre GPIO-støtte på nyere Raspberry Pi-modeller.
 - **Servo må ha separat strømforsyning for å unngå flikring/støy på LED og Pi.**
-- NumPy nedgradert til <2.0 for kompatibilitet med tflite_runtime.
 
 ## Oppsett av .env
 
@@ -70,10 +68,9 @@ AZURE_TTS_KEY=din_azure_tts_nøkkel
 AZURE_TTS_REGION=westeurope
 AZURE_STT_KEY=din_azure_stt_nøkkel
 AZURE_STT_REGION=westeurope
-ANNOUNCE_ENV=0
 ```
 
-**NB:** Du trenger ikke lenger `PICOVOICE_ACCESS_KEY`.
+**NB:** Du trenger ikke lenger `PICOVOICE_ACCESS_KEY` eller `ANNOUNCE_ENV`.
 
 ## Kjøring
 
@@ -83,14 +80,19 @@ source .venv/bin/activate
 python chatgpt_voice.py
 ```
 
+Eller direkte:
+```bash
+/home/admog/Code/MyFirst/.venv/bin/python /home/admog/Code/MyFirst/chatgpt_voice.py
+```
+
 ## Tips
 
 - Hvis LED eller Pi flikrer/rebooter: **bruk separat strøm til servoen!**
-- Hvis du bruker DHT11 eller TFT, se egne seksjoner i koden for oppsett.
 - For å endre LED-blink, juster i `rgb_duck.py`.
-- For å endre wake word, endre i `wait_for_wake_word()`-funksjonen.
-- Vosk støtter flere språk – last ned norsk modell hvis du vil bruke norske wake words.
+- For å endre wake words, endre sjekken i `wait_for_wake_word()`-funksjonen.
+- Vosk støtter flere språk – last ned norsk modell (`vosk-model-small-no-0.22`) hvis du vil bruke norske wake words.
+- Hvis du får GPIO-advarsler, installer `lgpio`: `pip install lgpio`
 
 ---
 
-**God andeprat!** 
+**God andeprat!**

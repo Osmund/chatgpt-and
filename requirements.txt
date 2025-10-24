@@ -3,9 +3,9 @@ python-dotenv
 azure-cognitiveservices-speech
 pydub
 sounddevice
-pyaudio
 numpy
 gpiozero
 RPi.GPIO
 scipy
 vosk
+lgpio
