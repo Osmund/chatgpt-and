@@ -177,7 +177,41 @@ subprocess.run(['sudo', 'journalctl', '-u', 'chatgpt-duck.service',
 - Real-time status badge updates
 - Form validation and error handling
 
-### 3. duck_beak.py - Servo Kontroll
+### 3. fan_control.py - Automatisk Kjøling
+
+**Ansvar**: Overvåke CPU-temperatur og styre vifte.
+
+**Arkitektur**: 
+```python
+# Hovedløkke hvert 5. sekund
+while True:
+    temp = get_cpu_temp()  # Les fra /sys/class/thermal/thermal_zone0/temp
+    mode = get_fan_mode()  # Les fra /tmp/duck_fan.txt
+    
+    if mode == 'auto':
+        # Hysterese for å unngå flapping
+        if temp >= 55.0:
+            GPIO.output(13, GPIO.HIGH)  # Start vifte
+        elif temp <= 50.0:
+            GPIO.output(13, GPIO.LOW)   # Stopp vifte
+    elif mode == 'on':
+        GPIO.output(13, GPIO.HIGH)
+    elif mode == 'off':
+        GPIO.output(13, GPIO.LOW)
+    
+    write_fan_status(mode, running, temp)  # Skriv til /tmp/duck_fan_status.txt
+```
+
+**Hardware**: 
+- GPIO 13 (blå ledning fra Raspberry Pi 5 vifte)
+- 5V vifte
+- PWM-pin (kan senere brukes for hastighetskontroll)
+
+**IPC**:
+- `/tmp/duck_fan.txt` - Modus (auto/on/off)
+- `/tmp/duck_fan_status.txt` - Status (mode|running|temp)
+
+### 4. duck_beak.py - Servo Kontroll
 
 **Ansvar**: Kontrollere nebb-bevegelse synkront med lyd.
 

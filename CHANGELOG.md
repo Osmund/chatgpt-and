@@ -4,6 +4,39 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0] - 2025-11-11
+
+### Ny funksjonalitet
+
+#### 🌀 Automatisk Viftekontroll
+
+**Beskrivelse**: Intelligent temperaturbasert kjøling for Raspberry Pi med 5V vifte på GPIO 13.
+
+**Funksjoner**:
+- **Automatisk modus**: 
+  - Starter vifte når CPU-temperatur ≥ 55°C
+  - Stopper vifte når CPU-temperatur ≤ 50°C
+  - 5°C hysterese for å unngå flapping
+- **Manuell overstyring**:
+  - Auto: Automatisk temperaturbasert kontroll
+  - På: Tving vifte til å alltid gå
+  - Av: Tving vifte til å alltid stå
+- **Web-kontrollpanel integrasjon**:
+  - Tre knapper: Auto/På/Av
+  - Sanntids temperaturvisning
+  - Fargekodet temperatur (grønn < 55°C, orange < 60°C, rød ≥ 60°C)
+  - Live status: Se om vifta går akkurat nå
+  - Automatisk oppdatering hvert 5. sekund
+
+**Teknisk implementering**:
+- Ny service: `fan-control.service`
+- Python-script: `fan_control.py`
+- GPIO 13 (blå ledning fra Pi 5 vifte)
+- IPC via `/tmp/duck_fan.txt` (modus) og `/tmp/duck_fan_status.txt` (status)
+- API endpoints: `/fan-status` (GET) og `/set-fan-mode` (POST)
+
+**Installasjon**: Inkludert i `install-services.sh`
+
 ## [2.0.1] - 2025-11-10
 
 ### Bugfixes

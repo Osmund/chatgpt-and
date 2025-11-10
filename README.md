@@ -25,7 +25,8 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 - 📊 **Sanntids Logger**: Live systemlogger og statusovervåking
 - 🔧 **Justerbar Talehastighet**: Fra treg til lynrask tale
 - 🔊 **Volumkontroll**: Juster lydnivå i sanntid
-- 🎭 **Flere Personligheter**: Velg mellom ulike AI-personligheter
+- � **Automatisk Viftekontroll**: Temperaturbasert kjøling med manuell overstyring
+- �🎭 **Flere Personligheter**: Velg mellom ulike AI-personligheter
 - 📱 **WiFi Portal**: Innebygd WiFi-oppsett for enkel konfigurasjon
 
 ## ⚡ Quick Start
@@ -178,6 +179,12 @@ Systemet inkluderer et komplett web-basert kontrollpanel tilgjengelig på `http:
 - **På/Av**: Aktiver eller deaktiver nebb-bevegelse
 - **Test**: Send testmelding for å verifisere funksjonalitet
 
+#### 🌀 Viftekontroll
+- **Automatisk modus**: Starter vifte ved 55°C, stopper ved 50°C
+- **Manuell overstyring**: Tving vifte på eller av
+- **Sanntids temperaturvisning**: Fargekodet (grønn < 55°C, orange < 60°C, rød ≥ 60°C)
+- **Live status**: Se om vifta går akkurat nå
+
 #### 💬 Send Meldinger
 Tre moduser for direkte kommunikasjon:
 - **🔊 Bare si det (TTS)**: Anda leser opp meldingen uten AI-behandling
@@ -314,6 +321,8 @@ Systemet bruker tmp-filer for kommunikasjon mellom kontrollpanel og hovedapplika
 | `/tmp/duck_speed.txt` | Talehastighet | 0-100 (0=treg, 50=normal, 100=rask) |
 | `/tmp/duck_model.txt` | ChatGPT-modell | gpt-3.5-turbo, gpt-4, gpt-4-turbo |
 | `/tmp/duck_message.txt` | Direktemeldinger | Tekst som skal behandles |
+| `/tmp/duck_fan.txt` | Viftemodus | auto, on, off |
+| `/tmp/duck_fan_status.txt` | Viftestatus | mode\|running\|temp (f.eks. auto\|True\|62.3) |
 
 ### API Endpoints (duck-control.py)
 
@@ -339,6 +348,8 @@ Systemet bruker tmp-filer for kommunikasjon mellom kontrollpanel og hovedapplika
 - `/change-volume` - Endre volum
 - `/change-beak` - Aktiver/deaktiver nebb
 - `/change-speed` - Endre talehastighet
+- `/set-fan-mode` - Endre viftemodus (auto/on/off)
+- `/fan-status` - Hent viftestatus og temperatur
 - `/speak` - Send melding (kun TTS)
 - `/ask` - Send til ChatGPT (stille)
 - `/full-response` - Send med full behandling (AI + TTS + nebb)

@@ -335,6 +335,20 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="speak-section">
+            <h3>🌀 Viftekontroll</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button class="btn" onclick="setFanMode('auto')" style="flex: 1;">🤖 Auto</button>
+                <button class="btn" onclick="setFanMode('on')" style="flex: 1;">✅ På</button>
+                <button class="btn" onclick="setFanMode('off')" style="flex: 1;">⏸️ Av</button>
+            </div>
+            <div id="fan-status" style="text-align: center; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: bold;">
+                <div id="fan-mode">Modus: Laster...</div>
+                <div id="fan-temp" style="font-size: 24px; margin: 10px 0;">🌡️ --°C</div>
+                <div id="fan-running">Status: Laster...</div>
+            </div>
+        </div>
+        
+        <div class="speak-section">
             <h3>📊 Status og tester</h3>
             <button class="btn" onclick="getStatus()">🔍 Sjekk status</button>
             <button class="btn" onclick="testBeak()">🧪 Test nebbet</button>
@@ -441,6 +455,55 @@ HTML_TEMPLATE = """
                 updateVolumeValue();
             } catch (error) {
                 console.error('Kunne ikke laste volum:', error);
+            }
+        }
+
+        async function setFanMode(mode) {
+            try {
+                const response = await fetch('/set-fan-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    loadFanStatus();
+                }
+            } catch (error) {
+                console.error('Kunne ikke endre viftemodus:', error);
+            }
+        }
+
+        async function loadFanStatus() {
+            try {
+                const response = await fetch('/fan-status');
+                const data = await response.json();
+                
+                const modeText = {
+                    'auto': '🤖 Automatisk',
+                    'on': '✅ Alltid på',
+                    'off': '⏸️ Alltid av'
+                };
+                
+                document.getElementById('fan-mode').textContent = 'Modus: ' + (modeText[data.mode] || data.mode);
+                document.getElementById('fan-temp').innerHTML = `🌡️ ${data.temp}°C`;
+                
+                const runningIcon = data.running ? '🌀' : '⏸️';
+                const runningText = data.running ? 'Vifte går' : 'Vifte står';
+                document.getElementById('fan-running').innerHTML = `${runningIcon} ${runningText}`;
+                
+                // Fargekoding av temperatur
+                const tempElement = document.getElementById('fan-temp');
+                if (data.temp >= 60) {
+                    tempElement.style.color = '#ff4444';
+                } else if (data.temp >= 55) {
+                    tempElement.style.color = '#ffaa00';
+                } else {
+                    tempElement.style.color = '#44ff44';
+                }
+            } catch (error) {
+                console.error('Kunne ikke laste viftestatus:', error);
             }
         }
 
@@ -908,10 +971,12 @@ HTML_TEMPLATE = """
             loadCurrentVolume();
             loadCurrentBeak();
             loadCurrentSpeed();
+            loadFanStatus();
             getWiFiNetworks();
             
             // Oppdater status automatisk hvert 5. sekund
             setInterval(updateStatus, 5000);
+            setInterval(loadFanStatus, 5000);
         };
     </script>
 </body>
@@ -1159,6 +1224,31 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 response = {'volume': int(volume)}
             except Exception as e:
                 response = {'volume': 50, 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/fan-status':
+            # Hent viftestatus
+            try:
+                status_file = '/tmp/duck_fan_status.txt'
+                if os.path.exists(status_file):
+                    with open(status_file, 'r') as f:
+                        data = f.read().strip().split('|')
+                        if len(data) == 3:
+                            response = {
+                                'mode': data[0],
+                                'running': data[1].lower() == 'true',
+                                'temp': float(data[2])
+                            }
+                        else:
+                            response = {'mode': 'auto', 'running': False, 'temp': 0.0}
+                else:
+                    response = {'mode': 'auto', 'running': False, 'temp': 0.0}
+            except Exception as e:
+                response = {'mode': 'auto', 'running': False, 'temp': 0.0, 'error': str(e)}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -1654,6 +1744,35 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 volume_file = '/tmp/duck_volume.txt'
                 with open(volume_file, 'w', encoding='utf-8') as f:
                     f.write(str(volume))
+                
+                response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/set-fan-mode':
+            # Endre viftemodus (auto/on/off)
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode())
+            
+            mode = data.get('mode', 'auto').lower()
+            if mode not in ['auto', 'on', 'off']:
+                mode = 'auto'
+            
+            print(f"Endrer viftemodus til: {mode}", flush=True)
+            
+            try:
+                # Skriv modus til fil
+                mode_file = '/tmp/duck_fan.txt'
+                with open(mode_file, 'w', encoding='utf-8') as f:
+                    f.write(mode)
                 
                 response = {'success': True}
                 self.send_response(200)

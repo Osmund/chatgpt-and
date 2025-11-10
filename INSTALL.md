@@ -48,6 +48,20 @@ VCC (5V)   →   Ekstern 5V strømforsyning
 Ground     →   Raspberry Pi Ground OG ekstern strøm ground
 ```
 
+### 1.3 Vifte (5V kjøling - valgfritt)
+
+```
+Vifte      →   Raspberry Pi GPIO
+───────────────────────────────────
+Blå        →   GPIO 13 (pin 33)
+Svart      →   Ground (pin 6, 9, 14, 20, 25, 30, 34, 39)
+```
+
+**Automatisk kjøling**:
+- Starter ved CPU-temperatur ≥ 55°C
+- Stopper ved CPU-temperatur ≤ 50°C
+- Kan overstyres manuelt via kontrollpanel
+
 **Hvorfor separat strøm?**
 - Servos kan trekke 1-2A under bevegelse
 - Pi's 5V pin kan kun levere ~1A total
@@ -477,10 +491,12 @@ Services er allerede konfigurert for autostart, men verifiser:
 # Sjekk at services er enabled
 systemctl is-enabled chatgpt-duck.service
 systemctl is-enabled duck-control.service
+systemctl is-enabled fan-control.service
 
 # Hvis ikke, enable dem
 sudo systemctl enable chatgpt-duck.service
 sudo systemctl enable duck-control.service
+sudo systemctl enable fan-control.service
 
 # Test reboot
 sudo reboot
@@ -488,6 +504,7 @@ sudo reboot
 # Etter reboot, sjekk at alt kjører
 sudo systemctl status chatgpt-duck.service
 sudo systemctl status duck-control.service
+sudo systemctl status fan-control.service
 ```
 
 ## Del 8: Feilsøking
