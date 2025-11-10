@@ -1,37 +1,147 @@
-# Python
+# ===========================================
+# ChatGPT Duck - Git Ignore Configuration
+# ===========================================
+
+# ============ KRITISK - ALDRI COMMIT ============
+# Disse filene inneholder sensitive API-nøkler!
+.env
+.env.*
+*.env
+
+# IPC temporary files (inneholder runtime data)
+/tmp/duck_*.txt
+
+# ============ Python ============
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.so
+.Python
 
 # Virtual environments
 .venv/
 venv/
 ENV/
 env/
+.virtualenv/
 
-# VS Code settings
+# PyCharm
+.idea/
+
+# VS Code
 .vscode/
+*.code-workspace
 
-# Environment files
-.env
+# Jupyter Notebook
+.ipynb_checkpoints
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Audio cache/output
+# ============ Audio/Media ============
+# Temporary audio files
 *.wav
+*.mp3
+*.ogg
+*.flac
 
-# Test output
+# Audio cache
+audio_cache/
+
+# ============ Logs ============
 *.log
+*.log.*
+logs/
+systemd-logs/
 
+# ============ OS Files ============
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# ============ Backup Files ============
+*.backup
+*.bak
+*.old
+*.orig
+*.swp
+*.swo
+*~
+
+# ============ Vosk Models ============
+# Models are large - download separately
+vosk-model*/
+vosk-model-*.zip
+*.zip
+
+# ============ Wake Word Models ============
+# Porcupine models (hvis brukt)
+*.ppn.backup
+porcupine-models/
+
+# ============ Test Files ============
+test_output/
+*.test
+test-*.wav
+
+# ============ Legacy/Deprecated Files ============
 bfg.jar
 bilde.jpg
 dcscreen.py
 duck_singing.py
 read_dht11.py
 
-# Vosk models
-vosk-model*/
-*.zip
+# ============ Build Artifacts ============
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ============ Coverage Reports ============
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ============ Documentation Build ============
+docs/_build/
+site/
+
+# ============ Configuration Overrides ============
+# User-specific configurations
+config.local.json
+settings.local.json
+
+# ============ Secrets ============
+secrets/
+*.key
+*.pem
+*.crt
+
+# ============ Database ============
+# If SQLite is added in future
+*.db
+*.sqlite
+*.sqlite3
+
+# ============ Cache ============
+.cache/
+*.cache
+
+# ============ Temporary Files ============
+tmp/
+temp/
+*.tmp
+
+# ============ Service Logs ============
+# If services create log files locally
+chatgpt-duck.log
+duck-control.log

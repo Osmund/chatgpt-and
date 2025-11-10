@@ -1,13 +1,22 @@
-openai
-python-dotenv
-azure-cognitiveservices-speech
-pydub
-sounddevice
-pyaudio
-numpy
-gpiozero
-RPi.GPIO
-scipy
-vosk
-lgpio
-requests
+# AI og Speech Services
+openai>=1.0.0                          # ChatGPT API
+azure-cognitiveservices-speech>=1.31.0 # Azure TTS/STT
+
+# Audio Processing
+pydub>=0.25.1                          # Audio manipulation
+sounddevice>=0.4.6                     # Audio playback
+pyaudio>=0.2.13                        # Audio I/O
+numpy>=1.24.0                          # Audio array processing
+scipy>=1.10.0                          # Signal processing for beak sync
+
+# Wake Word Detection
+vosk>=0.3.45                           # Offline speech recognition
+
+# Hardware Control (Raspberry Pi)
+gpiozero>=2.0                          # GPIO abstraction layer
+RPi.GPIO>=0.7.1                        # Direct GPIO access
+lgpio>=0.2.0                           # Modern GPIO library
+
+# Utilities
+python-dotenv>=1.0.0                   # Environment variable management
+requests>=2.31.0                       # HTTP requests for web features

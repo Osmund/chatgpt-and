@@ -19,6 +19,10 @@ def set_green():
     stop_blink()
     led.color = (0, 1, 0)  # Grønn
 
+def set_yellow():
+    stop_blink()
+    led.color = (1, 1, 0)  # Gul
+
 def off():
     stop_blink()
     led.off()

@@ -3,7 +3,7 @@ import time, random
 import pigpio
 
 # === KONFIG ===
-GPIO_SERVO = 14          # PWM-pin til servo (GPIO14/pin 8)
+GPIO_SERVO = 12         # PWM-pin til servo
 CLOSE_DEG = 6            # dine verdier
 OPEN_DEG  = 102
 TRIM_DEG  = 0
@@ -16,7 +16,6 @@ BEAT_MS_MIN = 60         # min varighet pr "stavelse"
 BEAT_MS_MAX = 140        # max varighet pr "stavelse"
 
 # Servo-innstillinger (mikrosek)
-# Typisk SG90: ~500–2500 us. Juster om din servo trenger smalere/bredere pulser.
 CLOSE_US_DEFAULT = 900
 OPEN_US_DEFAULT  = 2000
 
@@ -40,9 +39,31 @@ class Beak:
         self.close_us = close_us
         self.open_us  = open_us
 
-        # Startposisjon
+        # Bruk hardware_PWM hvis tilgjengelig, ellers wave
         self.current_us = self._deg_to_us(self.close_deg + self.trim_deg)
-        self.pi.set_servo_pulsewidth(self.gpio, self.current_us)
+        self._set_position(self.current_us)
+        print(f"Servo initialisert på GPIO {self.gpio}, pulsewidth: {self.current_us}us")
+
+    def _set_position(self, pulsewidth_us):
+        """Setter servo-posisjon med wave-basert PWM (fungerer alltid)"""
+        # Stopp eventuell eksisterende wave
+        self.pi.wave_clear()
+        
+        # Lag en PWM-puls (20ms periode = 50Hz)
+        frequency = 50  # Hz
+        period_us = 1000000 // frequency  # 20000 us
+        
+        # Lag pulsen: HIGH i pulsewidth_us, LOW resten
+        waveform = []
+        waveform.append(pigpio.pulse(1 << self.gpio, 0, pulsewidth_us))
+        waveform.append(pigpio.pulse(0, 1 << self.gpio, period_us - pulsewidth_us))
+        
+        self.pi.wave_add_generic(waveform)
+        wave_id = self.pi.wave_create()
+        
+        if wave_id >= 0:
+            # Send wave kontinuerlig
+            self.pi.wave_send_repeat(wave_id)
 
     def _deg_to_us(self, deg):
         deg = clamp(deg, 0, 180)
@@ -57,20 +78,24 @@ class Beak:
             direction = 1 if target_us > self.current_us else -1
             step_us = abs(self._deg_to_us(step_deg) - self._deg_to_us(0))
             self.current_us += direction * min(step_us, abs(target_us - self.current_us))
-            self.pi.set_servo_pulsewidth(self.gpio, self.current_us)
+            self._set_position(self.current_us)
             time.sleep(dt)
 
     def open_pct(self, pct):
         pct = clamp(pct, 0.0, 1.0)
         target_deg = self.close_deg + self.trim_deg + pct * (self.open_deg - self.close_deg)
-        self.goto_deg_smooth(target_deg, step_deg=5, dt=0.01)
+        target_us = self._deg_to_us(target_deg)
+        self.current_us = target_us
+        self._set_position(self.current_us)
 
     def close(self):
         self.goto_deg_smooth(self.close_deg + self.trim_deg, step_deg=5, dt=0.01)
 
     def stop(self):
-        # Slipp servoen (valgfritt). Sett til 0 for å deaktivere signalet.
-        self.pi.set_servo_pulsewidth(self.gpio, 0)
+        # Stopp wave og slipp pin
+        self.pi.wave_tx_stop()
+        self.pi.wave_clear()
+        self.pi.write(self.gpio, 0)
         self.pi.stop()
 
 def snakk_syklus(beak: Beak, ms: int):

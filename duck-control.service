@@ -1,0 +1,14 @@
+[Unit]
+Description=ChatGPT Duck Control Panel
+After=network.target
+
+[Service]
+Type=simple
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/duck-control.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

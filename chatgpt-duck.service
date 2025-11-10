@@ -1,0 +1,17 @@
+[Unit]
+Description=ChatGPT Duck Voice Assistant
+After=sound.target pigpiod.service
+Wants=pigpiod.service
+
+[Service]
+Type=simple
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/chatgpt_voice.py
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

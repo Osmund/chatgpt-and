@@ -1,0 +1,492 @@
+# ChatGPT Duck - Teknisk Arkitektur
+
+## Oversikt
+
+ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer via fildeling og systemd-kontroll.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Brukergrensesnitt                         │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
+│  │  Web Browser     │  │  Stemmekommando  │  │  Physical I/O │ │
+│  │  (Port 3000)     │  │  (Mikrofon)      │  │  (RGB LED)    │ │
+│  └────────┬─────────┘  └────────┬─────────┘  └───────┬───────┘ │
+└───────────┼─────────────────────┼─────────────────────┼─────────┘
+            │                     │                     │
+            ▼                     ▼                     ▼
+┌───────────────────────┐ ┌──────────────────────────────────────┐
+│  duck-control.service │ │     chatgpt-duck.service             │
+│  (Web Kontrollpanel)  │ │     (Hovedapplikasjon)               │
+│                       │ │                                      │
+│  - HTTP Server        │ │  - Wake Word Detection (Vosk)       │
+│  - REST API           │ │  - Speech Recognition (Azure STT)   │
+│  - Service Control    │ │  - ChatGPT Integration              │
+│  - Real-time Logs     │ │  - Text-to-Speech (Azure TTS)       │
+│  - Settings UI        │ │  - Beak Servo Control               │
+│                       │ │  - RGB LED Control                   │
+└───────────┬───────────┘ └────────────┬─────────────────────────┘
+            │                          │
+            │  IPC via /tmp files      │
+            └──────────────────────────┘
+                        │
+            ┌───────────┴───────────┐
+            │                       │
+            ▼                       ▼
+    ┌──────────────┐        ┌──────────────┐
+    │   systemd    │        │  Hardware    │
+    │   (Service   │        │  (GPIO pins) │
+    │   Manager)   │        │              │
+    └──────────────┘        └──────────────┘
+```
+
+## Komponentbeskrivelse
+
+### 1. chatgpt_voice.py - Hovedapplikasjon
+
+**Ansvar**: Håndtere all AI-interaksjon, stemmegjenkjenning og lydavspilling.
+
+**Hovedmoduler**:
+
+#### Wake Word Detection
+```python
+def wait_for_wake_word(model_path):
+    """
+    Bruker Vosk offline speech recognition
+    - Laster svensk modell (vosk-model-small-sv-rhasspy-0.15)
+    - Lytter kontinuerlig i bakgrunnen
+    - Trigger: "alexa" eller "ulrika"
+    - RGB LED: Blå under lytting
+    """
+```
+
+#### Speech Recognition
+```python
+def listen_for_speech():
+    """
+    Azure Speech-to-Text
+    - Høykvalitets cloud-basert gjenkjenning
+    - Norsk språkstøtte (nb-NO)
+    - Streaming recognition
+    - RGB LED: Grønn under innspilling, gul blinkende under prosessering
+    """
+```
+
+#### ChatGPT Integration
+```python
+def get_chatgpt_response(text, conversation_history):
+    """
+    OpenAI GPT API
+    - Støtter gpt-3.5-turbo, gpt-4, gpt-4-turbo
+    - System prompts basert på personlighet
+    - Conversation history for kontekst
+    - RGB LED: Lilla blinkende under venting på respons
+    """
+```
+
+#### Text-to-Speech
+```python
+def speak(text, voice='nb-NO-FinnNeural', speed=50):
+    """
+    Azure TTS med SSML
+    - Norske neural voices (Finn, Pernille, Iselin)
+    - SSML prosody rate control for hastighet
+    - Synkron nebb-bevegelse via amplitude detection
+    - RGB LED: Rød under tale
+    """
+```
+
+**Personligheter** (system prompts):
+```python
+PERSONALITIES = {
+    'normal': "Du er en hjelpsom assistent...",
+    'entusiastic': "Du er veldig energisk og entusiastisk...",
+    'philosophical': "Du er en dyp tenker...",
+    'humorous': "Du er morsom og spøkefull...",
+    'concise': "Du svarer kort og konsist..."
+}
+```
+
+**IPC - Lesing av innstillinger**:
+```python
+# Leses ved hver interaksjon
+personality = read_file('/tmp/duck_personality.txt', 'normal')
+voice = read_file('/tmp/duck_voice.txt', 'nb-NO-FinnNeural')
+volume = int(read_file('/tmp/duck_volume.txt', '50'))
+beak_enabled = read_file('/tmp/duck_beak.txt', 'on') == 'on'
+speed = int(read_file('/tmp/duck_speed.txt', '50'))
+model = read_file('/tmp/duck_model.txt', 'gpt-3.5-turbo')
+```
+
+### 2. duck-control.py - Web Kontrollpanel
+
+**Ansvar**: HTTP server for konfigurasjon og administrasjon.
+
+**Arkitektur**: BaseHTTPRequestHandler uten eksterne avhengigheter.
+
+#### HTTP Request Handler
+```python
+class DuckControlHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        # Serve HTML, status, logs, current settings
+        
+    def do_POST(self):
+        # Handle configuration changes, service control
+```
+
+**HTML Template**: Embedded i Python-fil som multiline string.
+- Responsive design med gradient styling
+- Real-time status updates (setInterval 5s)
+- Live log streaming med color-coding
+- Inline JavaScript for all client-side logic
+
+#### Service Control
+```python
+subprocess.run(['sudo', 'systemctl', 'start|stop|restart', 'chatgpt-duck.service'])
+subprocess.run(['systemctl', 'is-active', 'chatgpt-duck.service'])
+```
+
+#### IPC - Skriving av innstillinger
+```python
+# POST /change-personality
+with open('/tmp/duck_personality.txt', 'w') as f:
+    f.write(personality)
+
+# POST /change-speed
+with open('/tmp/duck_speed.txt', 'w') as f:
+    f.write(str(speed))
+```
+
+#### Live Logging
+```python
+subprocess.run(['sudo', 'journalctl', '-u', 'chatgpt-duck.service', 
+                '-n', '50', '--no-pager'])
+```
+
+**JavaScript Features**:
+- Async/await for all API calls
+- Smart scroll (only auto-scroll if at bottom)
+- Color-coded log lines (red=error, orange=warning, green=success)
+- Real-time status badge updates
+- Form validation and error handling
+
+### 3. duck_beak.py - Servo Kontroll
+
+**Ansvar**: Kontrollere nebb-bevegelse synkront med lyd.
+
+```python
+def move_beak_with_amplitude(audio_file_path):
+    """
+    Amplitude-basert servo-kontroll:
+    1. Last lydfilmen med pydub
+    2. Beregn RMS amplitude per frame (50ms chunks)
+    3. Map amplitude til servo-vinkel (0-180 grader)
+    4. Synkroniser servo-bevegelse med lydavspilling
+    """
+```
+
+**Teknisk detaljer**:
+- Bruker `gpiozero.Servo` for PWM-kontroll
+- GPIO pin: 14 (PWM capable)
+- Amplitude threshold for bevegelse
+- Smoothing for naturlig bevegelse
+
+**Separat strømforsyning påkrevd**: Servo kan trekke opptil 1A under bevegelse, som kan forårsake voltage drops og Pi-reboot hvis servet deler strøm med Pi.
+
+### 4. rgb_duck.py - LED Status
+
+**Ansvar**: Visuell tilbakemelding via RGB LED.
+
+```python
+class RGBDuck:
+    def __init__(self, red_pin=17, green_pin=27, blue_pin=22):
+        self.red = LED(red_pin)
+        self.green = LED(green_pin)
+        self.blue = LED(blue_pin)
+    
+    def color(self, r, g, b):
+        """Set RGB color (0.0 - 1.0)"""
+        
+    def blink_yellow_purple(self, duration=3.0):
+        """Thinking animation"""
+        
+    def off(self):
+        """Turn off all LEDs"""
+```
+
+**Farger og tilstander**:
+| RGB Verdi | Farge | Tilstand |
+|-----------|-------|----------|
+| (0, 0, 1) | Blå | Wake word |
+| (0, 1, 0) | Grønn | Lytter |
+| (1, 1, 0) | Gul | STT prosessering |
+| (1, 0, 1) | Lilla | ChatGPT tenking |
+| (1, 0, 0) | Rød | Snakker |
+| (0, 0, 0) | Av | Idle |
+
+## Data Flow
+
+### Brukerinitialisert Samtale
+
+```
+1. Bruker sier "alexa"
+   └─> Vosk detekterer wake word
+       └─> RGB: Blå → Grønn
+           └─> Azure STT lytter
+               └─> RGB: Gul (blinker)
+                   └─> Tekst → ChatGPT
+                       └─> RGB: Lilla (blinker)
+                           └─> Respons → Azure TTS
+                               └─> RGB: Rød
+                                   └─> Audio + Servo synkronisert
+                                       └─> RGB: Blå (tilbake til wake word)
+```
+
+### Web-initialisert Melding (Full behandling)
+
+```
+1. Bruker skriver i web-panel
+   └─> POST /full-response
+       └─> Skriver til /tmp/duck_message.txt
+           └─> chatgpt_voice.py leser fil
+               └─> Tekst → ChatGPT
+                   └─> Respons → Azure TTS
+                       └─> Audio + Servo synkronisert
+```
+
+### Innstillingsendring
+
+```
+1. Bruker velger ny talehastighet (70%)
+   └─> JavaScript: POST /change-speed {speed: 70}
+       └─> duck-control.py: write('/tmp/duck_speed.txt', '70')
+           └─> Response: {success: true}
+               └─> JavaScript: updateUI()
+   
+2. Neste gang anda snakker:
+   └─> chatgpt_voice.py: speed = read('/tmp/duck_speed.txt')
+       └─> SSML: <prosody rate="+40%">
+```
+
+## Sikkerhet og Rettigheter
+
+### Sudo-rettigheter
+
+`duck-control.py` krever sudo for:
+- `systemctl start|stop|restart` - Service-kontroll
+- `journalctl -u chatgpt-duck.service` - Loggtilgang
+
+**Konfigurasjon** (`/etc/sudoers.d/duck-control`):
+```
+admog ALL=(ALL) NOPASSWD: /bin/systemctl start chatgpt-duck.service
+admog ALL=(ALL) NOPASSWD: /bin/systemctl stop chatgpt-duck.service
+admog ALL=(ALL) NOPASSWD: /bin/systemctl restart chatgpt-duck.service
+admog ALL=(ALL) NOPASSWD: /bin/journalctl -u chatgpt-duck.service*
+```
+
+### API-nøkler
+
+Lagret i `.env` (IKKE commit til git):
+```
+OPENAI_API_KEY=sk-...
+AZURE_TTS_KEY=...
+AZURE_TTS_REGION=westeurope
+AZURE_STT_KEY=...
+AZURE_STT_REGION=westeurope
+```
+
+### Filrettigheter
+
+```bash
+# /tmp filer kan leses/skrives av begge services
+chmod 666 /tmp/duck_*.txt
+
+# Service-filer
+chmod 644 /etc/systemd/system/*.service
+
+# Executable scripts
+chmod +x *.sh
+chmod +x *.py
+```
+
+## Feilhåndtering
+
+### Hovedapplikasjon (chatgpt_voice.py)
+
+**Wake Word Recovery**:
+```python
+while True:
+    try:
+        wait_for_wake_word()
+        # Conversation loop
+    except Exception as e:
+        print(f"Error: {e}")
+        rgb.color(1, 0, 0)  # Red for error
+        time.sleep(2)
+        rgb.color(0, 0, 1)  # Back to blue
+```
+
+**API Timeouts**:
+- Azure STT: 10s timeout
+- ChatGPT: 30s timeout
+- Azure TTS: 15s timeout
+
+**Retry Logic**:
+- 3 attempts for API calls
+- Exponential backoff
+- User notification via RGB
+
+### Web Panel (duck-control.py)
+
+**HTTP Error Responses**:
+```python
+try:
+    result = subprocess.run(...)
+    if result.returncode == 0:
+        return {'success': True}
+    else:
+        return {'success': False, 'error': result.stderr}
+except Exception as e:
+    return {'success': False, 'error': str(e)}
+```
+
+**JavaScript Error Handling**:
+```javascript
+try {
+    const response = await fetch('/endpoint');
+    const data = await response.json();
+    if (data.success === true) {
+        // Success
+    } else {
+        alert('Feil: ' + data.error);
+    }
+} catch (error) {
+    alert('Feil: ' + error.message);
+}
+```
+
+## Performance og Optimalisering
+
+### Latency Breakdown (typisk)
+
+| Komponent | Latency | Optimalisering |
+|-----------|---------|----------------|
+| Wake Word Detection | <100ms | Offline (Vosk) |
+| Speech-to-Text | 1-2s | Azure streaming |
+| ChatGPT Response | 2-5s | Avhenger av modell og lengde |
+| Text-to-Speech | 1-2s | Azure neural |
+| Total (wake → første ord) | 4-9s | Kan ikke reduseres mye |
+
+### Memory Usage
+
+- chatgpt_voice.py: ~200-300 MB (inkl. Vosk model)
+- duck-control.py: ~20-30 MB (minimal HTTP server)
+- Total: ~250-350 MB
+
+### CPU Usage
+
+- Idle (wake word): 5-10%
+- Active conversation: 20-40%
+- Audio processing: 30-50%
+
+### Storage
+
+- Vosk model: ~40 MB
+- Python packages: ~500 MB
+- Logs (rotert): max 100 MB
+
+## Skalering og Utvidelser
+
+### Mulige utvidelser
+
+1. **Multi-bruker support**: Session-basert web-panel
+2. **Lokalbaserte modeller**: Whisper for STT, lokal LLM
+3. **Custom wake words**: Porcupine eller Snowboy
+4. **MQTT integration**: IoT-kontroll
+5. **Database logging**: SQLite for samtalehistorikk
+6. **WebSocket live updates**: Real-time status uten polling
+7. **Docker deployment**: Containerisert deployment
+8. **Multi-room audio**: Snapcast eller PulseAudio
+
+### Ytterligere hardware
+
+- **LCD display**: Status-visning uten web
+- **Knapper**: Physical control (GPIO)
+- **Flere servos**: Øyne, hode-bevegelse
+- **Kamera**: Computer vision integration
+
+## Debugging og Logging
+
+### Systematiske debugging
+
+```bash
+# Service status
+sudo systemctl status chatgpt-duck.service
+sudo systemctl status duck-control.service
+
+# Live logs
+sudo journalctl -u chatgpt-duck.service -f
+sudo journalctl -u duck-control.service -f
+
+# Sjekk tmp-filer
+cat /tmp/duck_*.txt
+
+# GPIO test
+python3 -c "from gpiozero import LED; led = LED(17); led.on()"
+
+# Audio test
+speaker-test -t wav -c 2
+
+# Nettverk
+curl http://localhost:3000/duck-status
+```
+
+### Common Issues
+
+| Problem | Diagnose | Løsning |
+|---------|----------|---------|
+| No wake word detection | Vosk model missing | Download model |
+| No audio output | Wrong audio device | Configure ALSA |
+| Servo jittering | Voltage drop | Separate power supply |
+| RGB not working | Wrong GPIO pins | Check wiring |
+| Web panel 404 | Service not running | `systemctl start duck-control` |
+| ChatGPT errors | API key invalid | Check .env file |
+
+## Teknologivalg - Begrunnelser
+
+### Python som hovedspråk
+- Rikt økosystem for AI/ML
+- Excellent hardware support (GPIO)
+- Rask prototyping
+
+### BaseHTTPRequestHandler vs Flask/FastAPI
+- Ingen eksterne avhengigheter for web-panel
+- Enklere deployment
+- Tilstrekkelig for våre behov
+
+### Tmp-filer vs Database/Redis
+- Enkleste IPC-metode
+- Ingen ekstra services
+- Atomic writes
+- Lett å debugge
+
+### Vosk vs andre wake word engines
+- Fully offline
+- Gratis (ingen cloud-costs)
+- God nok accuracy
+- Svensk modell funker bra
+
+### Azure Speech vs alternatives
+- Høyeste kvalitet norske stemmer
+- God dokumentasjon
+- Reliable streaming
+- Konkurransedyktige priser
+
+### Systemd vs Docker
+- Native Pi integration
+- Automatic restart on failure
+- Logs via journald
+- Enklere å debugge
+
+---
+
+**Sist oppdatert**: 10. november 2025
