@@ -4,6 +4,29 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.1] - 2025-11-10
+
+### Bugfixes
+
+#### 🐛 Volumkontroll
+
+**Problem**: Volumslideren i kontrollpanelet hadde ingen effekt på lydavspilling. Slideren kunne justeres, men volumet endret seg ikke når anda snakket.
+
+**Årsak**: 
+1. HTML slider mangler `oninput` event handler - visningen oppdaterte seg ikke under draing
+2. `chatgpt_voice.py` leste aldri volumet fra `/tmp/duck_volume.txt`
+3. Volumet ble ikke anvendt på lydsamplene før avspilling
+
+**Løsning**:
+- Lagt til `oninput="updateVolumeValue()"` i HTML slider for sanntidsoppdatering av visning
+- Lagt til `VOLUME_FILE = "/tmp/duck_volume.txt"` konstant i `chatgpt_voice.py`
+- Implementert volumlesing i `speak()` funksjonen (0-100, hvor 50 = normal)
+- Konverterer volumverdien til gain multiplier (0.0-2.0 hvor 1.0 = normal)
+- Anvender volumet på lydsamplene etter fade-in/fade-out: `samples = samples * volume_gain`
+- Lagt til voluminfo i TTS-logging: `Volum: 50% (gain: 1.00)`
+
+**Resultat**: Volumkontroll fungerer nå som forventet - 0% = stille, 50% = normalt, 100% = dobbelt lydstyrke.
+
 ## [2.0.0] - 2025-11-10
 
 ### Major Release: Web Control Panel & Enhanced Features

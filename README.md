@@ -164,6 +164,11 @@ Systemet inkluderer et komplett web-basert kontrollpanel tilgjengelig på `http:
   - `nb-NO-PernilleNeural` (kvinne, klar stemme)
   - `nb-NO-IselinNeural` (kvinne, varm stemme)
 - **Volumkontroll**: Juster lydnivå 0-100% i sanntid
+  - 0%: Stille (ingen lyd)
+  - 50%: Normal lydstyrke (gain 1.0)
+  - 100%: Dobbelt lydstyrke (gain 2.0)
+  - Slideren viser live prosent-visning mens du justerer
+  - Volumet anvendes direkte på lydsamplene før avspilling
 - **Talehastighet**: Juster hastighet fra treg (0%) til lynrask (100%)
   - 0%: Veldig sakte (–50% hastighet)
   - 50%: Normal hastighet

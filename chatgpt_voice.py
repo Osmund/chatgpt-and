@@ -37,6 +37,8 @@ DEFAULT_VOICE = "nb-NO-FinnNeural"
 BEAK_FILE = "/tmp/duck_beak.txt"
 # Fil for talehastighet (0-100, 50 = normal)
 SPEED_FILE = "/tmp/duck_speed.txt"
+# Fil for volum (0-100, 50 = normal)
+VOLUME_FILE = "/tmp/duck_volume.txt"
 # Filer for AI-query fra kontrollpanel
 AI_QUERY_FILE = "/tmp/duck_ai_query.txt"
 AI_RESPONSE_FILE = "/tmp/duck_ai_response.txt"
@@ -176,12 +178,26 @@ def speak(text, speech_config, beak):
     except Exception as e:
         print(f"Feil ved lesing av hastighet-konfigurasjon: {e}, bruker normal hastighet", flush=True)
     
+    # Les volum (0-100, hvor 50 = normal)
+    volume_value = 50
+    try:
+        if os.path.exists(VOLUME_FILE):
+            with open(VOLUME_FILE, 'r') as f:
+                volume_str = f.read().strip()
+                if volume_str:
+                    volume_value = int(volume_str)
+    except Exception as e:
+        print(f"Feil ved lesing av volum-konfigurasjon: {e}, bruker normal volum", flush=True)
+    
+    # Konverter volume_value (0-100) til gain multiplier (0.0-2.0, hvor 1.0 = normal)
+    volume_gain = volume_value / 50.0
+    
     # Konverter speed_value (0-100) til rate percentage
     # 0 = -50%, 50 = 0%, 100 = +50%
     rate_percent = (speed_value - 50)
     rate_str = f"{rate_percent:+d}%" if rate_percent != 0 else "0%"
     
-    print(f"Bruker TTS-stemme: {voice_name}, Nebbet: {'på' if beak_enabled else 'av'}, Hastighet: {rate_str}", flush=True)
+    print(f"Bruker TTS-stemme: {voice_name}, Nebbet: {'på' if beak_enabled else 'av'}, Hastighet: {rate_str}, Volum: {volume_value}% (gain: {volume_gain:.2f})", flush=True)
     
     # Sett høyere lydkvalitet fra Azure (48kHz)
     speech_config.set_speech_synthesis_output_format(
@@ -237,6 +253,9 @@ def speak(text, speech_config, beak):
                 # Fade out
                 fade_out = np.linspace(1, 0, fade_samples)
                 samples[-fade_samples:] *= fade_out
+
+            # Anvend volum (gain multiplier fra volume_value)
+            samples = samples * volume_gain
 
             # Skal allerede være 48000 Hz etter pitch-shift
             target_rate = 48000

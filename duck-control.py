@@ -324,7 +324,7 @@ HTML_TEMPLATE = """
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span>🔉 Lavt</span>
                 <input type="range" id="volume-slider" min="0" max="100" value="50" 
-                       onchange="changeVolume()" 
+                       oninput="updateVolumeValue()" onchange="changeVolume()" 
                        style="flex: 1;">
                 <span>🔊 Høyt</span>
             </div>
@@ -575,6 +575,39 @@ HTML_TEMPLATE = """
                         const aiResponseText = data.response || 'Ingen svar mottatt';
                         const formattedResponse = `<strong>Spørsmål:</strong> ${text}<br><br><strong>Svar:</strong> ${aiResponseText}`;
                         responseTextDiv.innerHTML = formattedResponse;
+                        
+                        // Legg til knapp for å få anda til å si svaret
+                        const speakButton = document.createElement('button');
+                        speakButton.textContent = '🔊 La anda si svaret';
+                        speakButton.style.marginTop = '10px';
+                        speakButton.style.width = '100%';
+                        speakButton.onclick = async () => {
+                            speakButton.disabled = true;
+                            speakButton.textContent = '⏳ Sender til anda...';
+                            try {
+                                const fullText = `Du spurte om: ${text}. Her er svaret: ${aiResponseText}`;
+                                const speakResponse = await fetch('/speak', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ text: fullText })
+                                });
+                                const speakData = await speakResponse.json();
+                                if (speakData.success === true) {
+                                    speakButton.textContent = '✓ Anda sier det nå!';
+                                    setTimeout(() => {
+                                        speakButton.disabled = false;
+                                        speakButton.textContent = '🔊 La anda si svaret';
+                                    }, 3000);
+                                } else {
+                                    speakButton.textContent = '❌ Feil ved sending';
+                                    speakButton.disabled = false;
+                                }
+                            } catch (error) {
+                                speakButton.textContent = '❌ Feil: ' + error.message;
+                                speakButton.disabled = false;
+                            }
+                        };
+                        responseTextDiv.appendChild(speakButton);
                     } else {
                         responseTextDiv.innerHTML = '<em style="color: red;">Feil: ' + (data.error || 'Ukjent feil') + '</em>';
                     }
@@ -1163,8 +1196,13 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
-        elif self.path == '/ask-ai':
-            # Send melding til AI og få respons
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def do_POST(self):
+        if self.path == '/ask-ai':
+            # Send melding til AI og få respons direkte via OpenAI API
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
@@ -1180,60 +1218,90 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 return
             
             try:
-                # Skriv spørsmål til en spesiell fil som chatgpt_voice.py kan lese
-                ai_query_file = '/tmp/duck_ai_query.txt'
-                ai_response_file = '/tmp/duck_ai_response.txt'
+                # Import nødvendige moduler
+                import os as _os
+                import requests
+                from dotenv import load_dotenv
                 
-                # Slett gammel respons
-                if os.path.exists(ai_response_file):
-                    os.remove(ai_response_file)
+                # Les personlighet og modell
+                personality_file = '/tmp/duck_personality.txt'
+                personality = 'normal'
+                if _os.path.exists(personality_file):
+                    with open(personality_file, 'r') as f:
+                        personality = f.read().strip() or 'normal'
                 
-                # Skriv spørsmål
-                with open(ai_query_file, 'w', encoding='utf-8') as f:
-                    f.write(text)
+                model_file = '/tmp/duck_model.txt'
+                model = 'gpt-3.5-turbo'
+                if _os.path.exists(model_file):
+                    with open(model_file, 'r') as f:
+                        model = f.read().strip() or 'gpt-3.5-turbo'
                 
-                # Vent på respons (maks 30 sekunder)
-                import time
-                for i in range(60):  # 60 * 0.5s = 30s
-                    if os.path.exists(ai_response_file):
-                        with open(ai_response_file, 'r', encoding='utf-8') as f:
-                            ai_response = f.read().strip()
-                        
-                        # Slett filer
-                        os.remove(ai_query_file)
-                        os.remove(ai_response_file)
-                        
-                        response = {'success': True, 'response': ai_response}
-                        self.send_response(200)
-                        self.send_header('Content-type', 'application/json')
-                        self.end_headers()
-                        self.wfile.write(json.dumps(response).encode())
-                        return
+                # Les API-nøkkel fra .env
+                load_dotenv()
+                api_key = _os.getenv('OPENAI_API_KEY')
+                
+                if not api_key:
+                    raise Exception('OPENAI_API_KEY ikke funnet i .env')
+                
+                # Kall OpenAI API
+                
+                system_prompts = {
+                    'normal': 'Du er en hjelpsom assistent.',
+                    'entusiastic': 'Du er veldig energisk og entusiastisk!',
+                    'philosophical': 'Du er en dyp tenker som reflekterer over livet.',
+                    'humorous': 'Du er morsom og spøkefull.',
+                    'concise': 'Du svarer kort og konsist.'
+                }
+                
+                system_prompt = system_prompts.get(personality, system_prompts['normal'])
+                
+                headers = {
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                }
+                
+                payload = {
+                    'model': model,
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': text}
+                    ],
+                    'max_tokens': 500,
+                    'temperature': 0.7
+                }
+                
+                api_response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+                
+                if api_response.status_code == 200:
+                    result = api_response.json()
+                    ai_text = result['choices'][0]['message']['content'].strip()
                     
-                    time.sleep(0.5)
-                
-                # Timeout
-                if os.path.exists(ai_query_file):
-                    os.remove(ai_query_file)
-                
-                response = {'success': False, 'error': 'Timeout - anda svarte ikke'}
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                    response = {'success': True, 'response': ai_text}
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode())
+                else:
+                    error_msg = f'OpenAI API error: {api_response.status_code}'
+                    response = {'success': False, 'error': error_msg}
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode())
                 
             except Exception as e:
+                print(f"Feil i /ask-ai: {e}", flush=True)
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
         
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def do_POST(self):
-        if self.path == '/control':
+        elif self.path == '/control':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())

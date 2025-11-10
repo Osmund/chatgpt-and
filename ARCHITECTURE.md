@@ -111,10 +111,18 @@ PERSONALITIES = {
 # Leses ved hver interaksjon
 personality = read_file('/tmp/duck_personality.txt', 'normal')
 voice = read_file('/tmp/duck_voice.txt', 'nb-NO-FinnNeural')
-volume = int(read_file('/tmp/duck_volume.txt', '50'))
+volume = int(read_file('/tmp/duck_volume.txt', '50'))  # 0-100, konverteres til gain (0.0-2.0)
 beak_enabled = read_file('/tmp/duck_beak.txt', 'on') == 'on'
-speed = int(read_file('/tmp/duck_speed.txt', '50'))
+speed = int(read_file('/tmp/duck_speed.txt', '50'))  # 0-100, konverteres til SSML rate
 model = read_file('/tmp/duck_model.txt', 'gpt-3.5-turbo')
+```
+
+**Volumbehandling i TTS**:
+```python
+# I speak() funksjonen
+volume_value = int(read_file('/tmp/duck_volume.txt', '50'))
+volume_gain = volume_value / 50.0  # 0=0.0, 50=1.0, 100=2.0
+samples = samples * volume_gain  # Anvend på float32 lydsamplene
 ```
 
 ### 2. duck-control.py - Web Kontrollpanel
