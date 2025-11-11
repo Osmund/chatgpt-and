@@ -74,6 +74,77 @@ sudo systemctl start duck-control.service
 - Mikrofon (USB eller Pi-kompatibel)
 - Høyttaler (3.5mm jack eller USB)
 
+## Hardware & software endringer (Pi 5 / MAX98357A) - 2025-11-11
+
+Dette prosjektet er oppdatert for Raspberry Pi 5 og for bruk med en
+MAX98357A I2S Class-D forsterker. Under er kortfattede instruksjoner og
+forklaringer på valg og endringer som er gjort under utvikling.
+
+Maskinvare (anbefalt kobling)
+- MAX98357A (I2S mono amp):
+  - VCC -> 5V eller 3.3V avhengig av board (sjekk din modul)
+  - GND -> GND
+  - DIN -> GPIO21 (PCM_DOUT / I2S Data)
+  - BCLK -> GPIO18 (PCM_CLK / Bit Clock)
+  - LRCK/WS (LRCLK) -> GPIO19 (PCM_FS / Word Select)
+  - SD (shutdown / enable) -> Koble til fast 3.3V (pin 1 eller 17) for "alltid på",
+    alternativt kan SD styres fra en GPIO hvis du vil slå forsterkeren av mellom avspillinger.
+  - GAIN -> Koble til GND for lavere forsterkning (9dB) hvis pop eller forvrengning
+    er et problem (standard er 15dB når GAIN flyter eller er til VCC).
+
+  Notat: Koble GAIN til GND reduserer forsterkning og ofte reduserer start/stop-pop
+  merkbart. Hvis du opplever gjenstående pop, vurder en DC-blocking kondensator
+  mellom høyttalerutganger (SPK+/SPK-) eller bytt til en DAC/amp med innebygd
+  pop-suppression.
+
+- PCA9685 servo driver (beak servo):
+  - I2C SDA -> GPIO2
+  - I2C SCL -> GPIO3
+  - Servo signal -> valgt kanal (default kanal 0 i `duck_beak.py`)
+  - Bruk separat 5V strøm til servo (viktig!)
+
+Software / kodeendringer
+- `duck_beak.py`:
+  - Migrert fra pigpio til `adafruit_servokit` som snakker til en PCA9685 over I2C.
+  - Konfigurasjon: `SERVO_CHANNEL`, `CLOSE_DEG`, `OPEN_DEG`, og pulse width range
+    (`CLOSE_US_DEFAULT` / `OPEN_US_DEFAULT`) finnes i toppen av filen for enkel kalibrering.
+
+- `chatgpt_voice.py`:
+  - Støtter I2S (Google Voice HAT / MAX98357A). Endringer som ble vurdert/implementert
+    i utviklingsløpet inkluderte: styring av SD-pin via GPIO, pre/post silence, og
+    fade-in/fade-out for å redusere pop på Class-D-forsterkeren.
+  - Endelig anbefaling i dette prosjektet: koble `SD` til 3.3V og `GAIN` til GND,
+    og sett ALSA Master (~70%) for best kombinasjon av lydnivå og lav forvrengning.
+  - Hvis du vil gjøre videre feilsøking: sjekk `journalctl -u chatgpt-duck.service` og
+    `alsamixer -c 1`.
+
+ALSA / lydoppsett
+- En anbefalt `.asoundrc` er lagt inn for å bruke softvol + dmix og S32_LE format
+  for Google Voice HAT. Hvis du bytter til USB-lyd, oppdater `pcm`-innstillingene
+  eller la `aplay -l` / `sd.query_devices()` vise devices.
+
+Råd for minimal størrelse (inn i lekeand)
+- MAX98357A er kompakt og fortsatt det beste alternativet når plass er kritisk.
+- Hvis du vil eliminere pop helt, vurder en DAC/HAT med pop-suppression
+  (f.eks. HifiBerry / PCM5102A-baserte moduler), men de tar mer plass og/eller
+  krever ekstra strømforsyning.
+
+Feilsøking / tips
+- Hvis du hører pop etter disse endringene, prøv i denne rekkefølgen:
+  1. Koble `GAIN` til GND (gjort)
+  2. Sett ALSA Master til ~70%: `amixer -c 1 sset Master 70%`
+  3. Hvis pop fortsatt er plagsomt: legg til en DC-blocking kondensator (100–1000µF
+     ikke-polarisert) mellom SPK+ og SPK- eller bytt til en DAC med innebygd pop-suppression.
+
+Hvor i koden finner du dette?
+- `duck_beak.py` - servo & PCA9685
+- `chatgpt_voice.py` - lydkjøring (I2S), TTS, beak-synkronisering, wake-word
+
+Hvis du ønsker, kan jeg også:
+- Lage en liten pinout-skisse for plassering internt i anden
+- Flytte lyd til et USB-lydkort (ingen GPIO brukt) hvis du får plass
+
+
 ## Programvare - Installasjon
 
 ### 1. System-avhengigheter (før pip install)

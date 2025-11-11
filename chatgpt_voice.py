@@ -3,8 +3,7 @@ from scipy.signal import resample
 import sounddevice as sd
 import time
 import random
-from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, JITTER, BEAT_MS_MIN, BEAT_MS_MAX
-GPIO_SERVO = 12  # PWM-pin til servo (GPIO12 - fri fra I2S)
+from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, JITTER, BEAT_MS_MIN, BEAT_MS_MAX, SERVO_CHANNEL
 import requests                                                                                                                                                                                           
 import os
 from dotenv import load_dotenv
@@ -19,6 +18,10 @@ import atexit
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
+
+# MAX98357A SD pin skal kobles til fast 3.3V (pin 1 eller 17)
+# Dette holder forsterkeren alltid på for rask respons
+print("MAX98357A SD pin skal være koblet til 3.3V - forsterker alltid på", flush=True)
 
 # Last inn Vosk-modellen GLOBALT, kun én gang
 VOSK_MODEL = vosk.Model("vosk-model-small-sv-rhasspy-0.15")
@@ -56,14 +59,17 @@ def find_usb_microphone():
     return None
 
 def find_hifiberry_output():
-    """Finn sounddevice index for HifiBerry DAC"""
+    """Finn sounddevice index for Google Voice HAT / MAX98357A"""
     devices = sd.query_devices()
     for i, device in enumerate(devices):
-        if 'hifiberry' in device['name'].lower() and device['max_output_channels'] > 0:
-            print(f"Fant HifiBerry DAC: device {i} ({device['name']})", flush=True)
+        # Søk etter Google Voice HAT eller voicehat i navnet
+        if ('googlevoicehat' in device['name'].lower() or 
+            'voicehat' in device['name'].lower() or
+            'hifiberry' in device['name'].lower()) and device['max_output_channels'] > 0:
+            print(f"Fant I2S DAC: device {i} ({device['name']})", flush=True)
             return i
     # Fallback til default
-    print("Fant ikke HifiBerry DAC, bruker default", flush=True)
+    print("Fant ikke I2S DAC, bruker default", flush=True)
     return None
 
 def find_usb_mic_alsa_card():
@@ -244,7 +250,10 @@ def speak(text, speech_config, beak):
                 samples = samples[::n_channels]
             samples = samples.astype(np.float32) / np.iinfo(dtype).max
 
-            # Legg til fade-in/fade-out for å unngå klikkelyd
+            # Anvend volum (gain multiplier fra volume_value)
+            samples = samples * volume_gain
+            
+            # Legg til kort fade-in/fade-out for mykere lyd
             fade_samples = int(framerate * 0.01)  # 10ms fade
             if len(samples) > fade_samples * 2:
                 # Fade in
@@ -253,9 +262,6 @@ def speak(text, speech_config, beak):
                 # Fade out
                 fade_out = np.linspace(1, 0, fade_samples)
                 samples[-fade_samples:] *= fade_out
-
-            # Anvend volum (gain multiplier fra volume_value)
-            samples = samples * volume_gain
 
             # Skal allerede være 48000 Hz etter pitch-shift
             target_rate = 48000
@@ -293,7 +299,7 @@ def speak(text, speech_config, beak):
             
             idx = 0
             
-            # Finn HifiBerry DAC dynamisk (card-nummer kan endre seg ved reboot)
+            # Finn I2S DAC (Google Voice HAT / MAX98357A) dynamisk
             tried_device = find_hifiberry_output()
             stream_started = False
             max_attempts = 3
@@ -301,12 +307,15 @@ def speak(text, speech_config, beak):
             
             for attempt in range(max_attempts):
                 try:
-                    # Prøv HifiBerry med 2 kanaler
+                    # Prøv I2S DAC med 2 kanaler
                     with sd.OutputStream(samplerate=framerate, device=tried_device, channels=2, dtype='float32', 
                                        blocksize=blocksize, callback=callback):
                         stream_started = True
                         while idx < len(samples):
                             sd.sleep(int(1000 * blocksize / framerate))
+                        
+                        # Hold streamen åpen litt ekstra for post-silence
+                        sd.sleep(100)
                     break  # Suksess, avslutt loop
                 except Exception as e:
                     print(f"Audio device {tried_device} feil (forsøk {attempt+1}/{max_attempts}): {e}")
@@ -468,7 +477,7 @@ def check_ai_queries(api_key, speech_config, beak):
         time.sleep(0.5)  # Sjekk hver halve sekund
 
 def main():
-    beak = Beak(GPIO_SERVO, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
+    beak = Beak(SERVO_CHANNEL, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     tts_key = os.getenv("AZURE_TTS_KEY")

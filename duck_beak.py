@@ -1,19 +1,39 @@
 #!/usr/bin/env python3
+"""
+duck_beak.py
+----------------
+Servo control for the duck beak using a PCA9685 (I2C) + Adafruit ServoKit.
+
+Hardware notes:
+- PCA9685 I2C: SDA = GPIO2, SCL = GPIO3 (standard Raspberry Pi I2C pins)
+- Servo signal connected to one PCA9685 channel (default SERVO_CHANNEL = 0)
+- Use a separate 5V servo power supply (do NOT power heavy servos from the Pi 5V rail)
+
+Software notes:
+- This module uses `adafruit_servokit.ServoKit(channels=16)` to control the PCA9685.
+- Calibrate your `CLOSE_US_DEFAULT` and `OPEN_US_DEFAULT` pulse widths and
+    `CLOSE_DEG` / `OPEN_DEG` degrees for your particular servo to avoid mechanical
+    stress or hitting the beak housing.
+
+Updated: 2025-11-11 - migrated from pigpio to PCA9685 / adafruit_servokit for
+Raspberry Pi 5 compatibility.
+"""
+
 import time, random
-import pigpio
+from adafruit_servokit import ServoKit
 
 # === KONFIG ===
-GPIO_SERVO = 12         # PWM-pin til servo
-CLOSE_DEG = 6            # dine verdier
+SERVO_CHANNEL = 0       # PCA9685 kanal (0-15)
+CLOSE_DEG = 6           # dine verdier
 OPEN_DEG  = 102
 TRIM_DEG  = 0
 
 # Snakk-innstillinger
-TALK_MS     = 5000       # hvor lenge den "snakker" pr runde
-PAUSE_MS    = 1500       # pause mellom fraser
-JITTER      = 0.25       # 0..0.5 variasjon i åpning
-BEAT_MS_MIN = 60         # min varighet pr "stavelse"
-BEAT_MS_MAX = 140        # max varighet pr "stavelse"
+TALK_MS     = 5000      # hvor lenge den "snakker" pr runde
+PAUSE_MS    = 1500      # pause mellom fraser
+JITTER      = 0.25      # 0..0.5 variasjon i åpning
+BEAT_MS_MIN = 60        # min varighet pr "stavelse"
+BEAT_MS_MAX = 140       # max varighet pr "stavelse"
 
 # Servo-innstillinger (mikrosek)
 CLOSE_US_DEFAULT = 900
@@ -23,82 +43,79 @@ OPEN_US_DEFAULT  = 2000
 def clamp(val, a, b): return max(a, min(b, val))
 
 class Beak:
-    def __init__(self, gpio, close_deg, open_deg, trim_deg=0,
+    def __init__(self, servo_channel, close_deg, open_deg, trim_deg=0,
                  close_us=CLOSE_US_DEFAULT, open_us=OPEN_US_DEFAULT):
-        self.pi = pigpio.pi()
-        if not self.pi.connected:
-            raise RuntimeError("pigpio daemon kjører ikke. Start med: sudo systemctl start pigpio")
-
-        self.gpio = gpio
-        self.pi.set_mode(self.gpio, pigpio.OUTPUT)
-
-        self.close_deg = close_deg
-        self.open_deg  = open_deg
-        self.trim_deg  = trim_deg
-
-        self.close_us = close_us
-        self.open_us  = open_us
-
-        # Bruk hardware_PWM hvis tilgjengelig, ellers wave
-        self.current_us = self._deg_to_us(self.close_deg + self.trim_deg)
-        self._set_position(self.current_us)
-        print(f"Servo initialisert på GPIO {self.gpio}, pulsewidth: {self.current_us}us")
-
-    def _set_position(self, pulsewidth_us):
-        """Setter servo-posisjon med wave-basert PWM (fungerer alltid)"""
-        # Stopp eventuell eksisterende wave
-        self.pi.wave_clear()
+        """
+        Initialiserer servo via PCA9685
         
-        # Lag en PWM-puls (20ms periode = 50Hz)
-        frequency = 50  # Hz
-        period_us = 1000000 // frequency  # 20000 us
-        
-        # Lag pulsen: HIGH i pulsewidth_us, LOW resten
-        waveform = []
-        waveform.append(pigpio.pulse(1 << self.gpio, 0, pulsewidth_us))
-        waveform.append(pigpio.pulse(0, 1 << self.gpio, period_us - pulsewidth_us))
-        
-        self.pi.wave_add_generic(waveform)
-        wave_id = self.pi.wave_create()
-        
-        if wave_id >= 0:
-            # Send wave kontinuerlig
-            self.pi.wave_send_repeat(wave_id)
+        Args:
+            servo_channel: PCA9685 kanal nummer (0-15)
+            close_deg: Grader for lukket posisjon
+            open_deg: Grader for åpen posisjon
+            trim_deg: Justering av posisjon
+            close_us: Pulsewidth for lukket (mikrosekunder)
+            open_us: Pulsewidth for åpen (mikrosekunder)
+        """
+        try:
+            # Initialiser PCA9685 (16 kanaler)
+            self.kit = ServoKit(channels=16)
+            self.servo_channel = servo_channel
+            
+            # Sett pulse width range basert på dine verdier
+            self.kit.servo[servo_channel].set_pulse_width_range(close_us, open_us)
+            
+            self.close_deg = close_deg
+            self.open_deg  = open_deg
+            self.trim_deg  = trim_deg
+            
+            self.close_us = close_us
+            self.open_us  = open_us
+            
+            # Start i lukket posisjon
+            self.current_deg = self.close_deg + self.trim_deg
+            self.kit.servo[servo_channel].angle = self.current_deg
+            
+            print(f"Servo initialisert på PCA9685 kanal {servo_channel}, posisjon: {self.current_deg}°")
+        except Exception as e:
+            raise RuntimeError(f"Kunne ikke initialisere PCA9685: {e}\nSjekk at PCA9685 er koblet til I2C (SDA=GPIO2, SCL=GPIO3)")
 
-    def _deg_to_us(self, deg):
-        deg = clamp(deg, 0, 180)
-        span_deg = 180.0
-        span_us  = (self.open_us - self.close_us)
-        return int(self.close_us + (deg / span_deg) * span_us)
+    def _deg_to_angle(self, deg):
+        """Konverterer grader til servo angle"""
+        return clamp(deg, 0, 180)
 
     def goto_deg_smooth(self, target_deg, step_deg=5, dt=0.01):
+        """Beveger servo smootht til target grader"""
         target_deg = clamp(target_deg, 0, 180)
-        target_us = self._deg_to_us(target_deg)
-        while abs(self.current_us - target_us) > 5:
-            direction = 1 if target_us > self.current_us else -1
-            step_us = abs(self._deg_to_us(step_deg) - self._deg_to_us(0))
-            self.current_us += direction * min(step_us, abs(target_us - self.current_us))
-            self._set_position(self.current_us)
+        
+        while abs(self.current_deg - target_deg) > 1:
+            direction = 1 if target_deg > self.current_deg else -1
+            step = min(step_deg, abs(target_deg - self.current_deg))
+            self.current_deg += direction * step
+            self.kit.servo[self.servo_channel].angle = self._deg_to_angle(self.current_deg)
             time.sleep(dt)
 
     def open_pct(self, pct):
+        """Åpner nebbet til en prosentandel (0.0 = lukket, 1.0 = fullt åpen)"""
         pct = clamp(pct, 0.0, 1.0)
         target_deg = self.close_deg + self.trim_deg + pct * (self.open_deg - self.close_deg)
-        target_us = self._deg_to_us(target_deg)
-        self.current_us = target_us
-        self._set_position(self.current_us)
+        self.current_deg = target_deg
+        self.kit.servo[self.servo_channel].angle = self._deg_to_angle(target_deg)
 
     def close(self):
+        """Lukker nebbet smootht"""
         self.goto_deg_smooth(self.close_deg + self.trim_deg, step_deg=5, dt=0.01)
 
     def stop(self):
-        # Stopp wave og slipp pin
-        self.pi.wave_tx_stop()
-        self.pi.wave_clear()
-        self.pi.write(self.gpio, 0)
-        self.pi.stop()
+        """Frigjør servo (stopper signaler)"""
+        try:
+            # Sett servo til None for å frigjøre
+            self.kit.servo[self.servo_channel].angle = None
+        except:
+            pass
+
 
 def snakk_syklus(beak: Beak, ms: int):
+    """Simulerer snakking ved å åpne/lukke nebbet i en periode"""
     t0 = time.time()
     while (time.time() - t0) * 1000 < ms:
         # Velg åpning 30–100% med litt jitter
@@ -114,13 +131,15 @@ def snakk_syklus(beak: Beak, ms: int):
     beak.open_pct(0.0)
 
 def main():
-    beak = Beak(GPIO_SERVO, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
+    """Test-funksjon for å kjøre nebbet standalone"""
+    beak = Beak(SERVO_CHANNEL, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
     try:
+        print("Tester nebb-bevegelse (Ctrl+C for å avslutte)")
         while True:
             snakk_syklus(beak, TALK_MS)
             time.sleep(PAUSE_MS / 1000.0)
     except KeyboardInterrupt:
-        pass
+        print("\nStopper...")
     finally:
         beak.close()
         beak.stop()
