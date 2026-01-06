@@ -35,7 +35,7 @@ DEFAULT_MODEL = "gpt-3.5-turbo"
 PERSONALITY_FILE = "/tmp/duck_personality.txt"
 # Fil for TTS-stemme
 VOICE_FILE = "/tmp/duck_voice.txt"
-DEFAULT_VOICE = "nb-NO-FinnNeural"
+DEFAULT_VOICE = "nb-NO-IselinNeural"
 # Fil for nebbet-kontroll
 BEAK_FILE = "/tmp/duck_beak.txt"
 # Fil for talehastighet (0-100, 50 = normal)
@@ -45,6 +45,15 @@ VOLUME_FILE = "/tmp/duck_volume.txt"
 # Filer for AI-query fra kontrollpanel
 AI_QUERY_FILE = "/tmp/duck_ai_query.txt"
 AI_RESPONSE_FILE = "/tmp/duck_ai_response.txt"
+
+# Fade in/out lengde i millisekunder (for å redusere knepp ved start/slutt)
+# Sett til 0 for å deaktivere fade
+FADE_MS = 150  # 150ms fade in/out
+
+# Nebb-synkronisering (juster for bedre timing)
+BEAK_CHUNK_MS = 30  # Hvor ofte nebbet oppdateres (mindre = mer responsivt)
+BEAK_PRE_START_MS = 0  # Start nebb før aplay (negativ = etter aplay starter)
+# Sett BEAK_PRE_START_MS = -150 hvis nebb starter for tidlig
 
 # Finn USB mikrofon dynamisk (unngå hardkodede device-numre som endrer seg ved reboot)
 def find_usb_microphone():
@@ -99,10 +108,15 @@ atexit.register(cleanup)
 signal.signal(signal.SIGTERM, lambda sig, frame: (cleanup(), sys.exit(0)))
 signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), sys.exit(0)))
 
+# Wake words som støttes
+WAKE_WORDS = ['anda', 'vakna', 'hej', 'hallå', 'assistent', 'alfred', 'alexa', 'ulrika', 'siri', 'oskar']
+
 def wait_for_wake_word():
     set_blue()
     recognizer = vosk.KaldiRecognizer(VOSK_MODEL, 48000)  # Bruk 48000 Hz (USB mikrofon støtter dette)
-    print("Si 'Ulrika', 'Alexa', 'Siri' eller 'Oscar' for å vekke anda!")
+    recognizer.SetWords(True)  # Aktiver word-level timestamps
+    wake_words_display = ', '.join([f"'{w.capitalize()}'" for w in WAKE_WORDS[:6]])
+    print(f"Si {wake_words_display} eller flere for å vekke anda!")
     
     # Finn USB mikrofon dynamisk
     usb_mic_device = find_usb_microphone()
@@ -112,7 +126,8 @@ def wait_for_wake_word():
     # til vi lykkes.
     while True:
         try:
-            with sd.RawInputStream(samplerate=48000, blocksize=24000, dtype='int16', channels=1, device=usb_mic_device) as stream:
+            # Mindre blocksize (8000 = 0.17s) gir bedre respons for korte wake words
+            with sd.RawInputStream(samplerate=48000, blocksize=8000, dtype='int16', channels=1, device=usb_mic_device) as stream:
                 while True:
                     # Sjekk om det finnes en ekstern melding
                     if os.path.exists(MESSAGE_FILE):
@@ -130,16 +145,24 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"Feil ved lesing av meldingsfil: {e}", flush=True)
                     
-                    data = stream.read(24000)[0]
+                    data = stream.read(8000)[0]
                     if recognizer.AcceptWaveform(bytes(data)):
                         result = json.loads(recognizer.Result())
                         text = result.get("text", "").lower().strip()
-                        # Ignorer tomme eller veldig korte resultater (støy)
-                        if len(text) > 2:  # Bare print hvis det er mer enn 2 tegn
+                        if text:  # Bare sjekk om ikke tom
                             print(f"Gjenkjent: {text}")
-                            if "alexa" in text or "ulrika" in text or "siri" in text or "oskar" in text or "anders" in text or "astrid" in text:
+                            # Sjekk om noen av wake words er i teksten
+                            if any(wake_word in text for wake_word in WAKE_WORDS):
                                 print("Wake word oppdaget!")
                                 return None  # Wake word, ingen direkte melding
+                    else:
+                        # Sjekk partial results for raskere respons
+                        partial = json.loads(recognizer.PartialResult())
+                        partial_text = partial.get("partial", "").lower().strip()
+                        if partial_text and any(wake_word in partial_text for wake_word in WAKE_WORDS):
+                            print(f"Wake word oppdaget i partial: {partial_text}")
+                            recognizer.Reset()  # Reset for neste deteksjon
+                            return None
         except StopIteration:
             return None  # Wake word oppdaget via StopIteration
         except Exception as e:
@@ -217,51 +240,61 @@ def speak(text, speech_config, beak):
         speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
         result = speech_synthesizer.speak_ssml_async(ssml).get()
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            # Last inn og gjør pitch-shift
+            # Last inn original lyd
             sound = AudioSegment.from_wav(tmpfile.name)
-            octaves = 1.5  # Mye høyere for ekte and-stemme
-            new_sample_rate = int(sound.frame_rate * (2.0 ** octaves))
-            shifted = sound._spawn(sound.raw_data, overrides={'frame_rate': new_sample_rate})
-            shifted = shifted.set_frame_rate(48000)  # Sett til 48kHz direkte
             
-            import io
-            shifted_io = io.BytesIO()
-            shifted.export(shifted_io, format="wav")
-            shifted_io.seek(0)
+            # Konverter til numpy array
+            samples_original = np.array(sound.get_array_of_samples(), dtype=np.float32)
+            samples_original = samples_original / (2**15)  # Normaliser til -1.0 til 1.0
             
-            with wave.open(shifted_io, 'rb') as wf:
-                n_channels = wf.getnchannels()
-                sampwidth = wf.getsampwidth()
-                framerate = wf.getframerate()
-                n_frames = wf.getnframes()
-                audio = wf.readframes(n_frames)
+            # Gjør pitch-shift MED tempo endring (for and-stemme)
+            # Høyere pitch = raskere tempo (som Alvin og gjengen)
+            octaves = 0.5  # And-stemme (moderat høyere pitch, fortsatt forståelig)
+            pitch_factor = 2.0 ** octaves  # ca 1.41x
             
-            print(f"After pitch-shift: {framerate} Hz, {n_channels} ch, {sampwidth*8} bit")
+            # Resample til færre samples = høyere pitch når spilt på original sample rate
+            new_length = int(len(samples_original) / pitch_factor)
+            samples = resample(samples_original, new_length)
             
-            if sampwidth == 2:
-                dtype = np.int16
-            elif sampwidth == 1:
-                dtype = np.uint8
-            else:
-                raise ValueError("Bare 8/16-bit wav støttes")
+            # VIKTIG: Vi beholder original framerate, men med færre samples
+            # Dette gir høyere pitch (lyden spilles raskere)
             
-            samples = np.frombuffer(audio, dtype=dtype)
-            if n_channels > 1:
-                samples = samples[::n_channels]
-            samples = samples.astype(np.float32) / np.iinfo(dtype).max
+            framerate = sound.frame_rate
+            n_channels = sound.channels
+            sampwidth = sound.sample_width
+            
+            print(f"After pitch-shift: {framerate} Hz, {n_channels} ch, {sampwidth*8} bit, {len(samples)} samples (var {len(samples_original)})")
 
+            
+            # samples er allerede float32 fra pitch-shift
+            
+            # Sjekk for clipping og normaliser hvis nødvendig
+            peak = np.max(np.abs(samples))
+            if peak > 0.95:  # Nesten clipping
+                print(f"Peak: {peak:.2f} - normaliserer for å unngå clipping", flush=True)
+                samples = samples / peak * 0.95
+            
             # Anvend volum (gain multiplier fra volume_value)
             samples = samples * volume_gain
             
-            # Legg til kort fade-in/fade-out for mykere lyd
-            fade_samples = int(framerate * 0.01)  # 10ms fade
-            if len(samples) > fade_samples * 2:
-                # Fade in
-                fade_in = np.linspace(0, 1, fade_samples)
-                samples[:fade_samples] *= fade_in
-                # Fade out
-                fade_out = np.linspace(1, 0, fade_samples)
-                samples[-fade_samples:] *= fade_out
+            # Sjekk igjen for clipping etter volum
+            peak_after = np.max(np.abs(samples))
+            if peak_after > 1.0:
+                print(f"Clipping detektert ({peak_after:.2f}) - reduserer volum", flush=True)
+                samples = np.clip(samples, -0.99, 0.99)
+            
+            # Legg til fade-in/fade-out for å redusere knepp ved start/slutt
+            # Sett FADE_MS = 0 i toppen av filen for å deaktivere
+            if FADE_MS > 0:
+                fade_samples = int(framerate * FADE_MS / 1000.0)
+                if len(samples) > fade_samples * 2:
+                    # Fade in
+                    fade_in = np.linspace(0, 1, fade_samples)
+                    samples[:fade_samples] *= fade_in
+                    # Fade out
+                    fade_out = np.linspace(1, 0, fade_samples)
+                    samples[-fade_samples:] *= fade_out
+                    print(f"Anvendt {FADE_MS}ms fade in/out", flush=True)
 
             # Skal allerede være 48000 Hz etter pitch-shift
             target_rate = 48000
@@ -270,74 +303,109 @@ def speak(text, speech_config, beak):
                 num_samples_new = int(len(samples) * target_rate / framerate)
                 samples = resample(samples, num_samples_new)
                 framerate = target_rate
+            
+            # Low-pass filter deaktivert - kan introdusere artefakter
+            # from scipy.signal import butter, filtfilt
+            # nyquist = framerate / 2
+            # cutoff = 8000  # Kutt av over 8kHz (tale er under dette)
+            # b, a = butter(4, cutoff / nyquist, btype='low')
+            # samples = filtfilt(b, a, samples)
 
-            # Større blocksize for jevnere lyd (64ms som original)
-            blocksize = int(framerate * 0.064)
-            
-            def callback(outdata, frames, time_info, status):
-                nonlocal idx
-                if status:
-                    print(f"Audio status: {status}")
-                
-                chunk = samples[idx:idx+frames]
-                
-                # Oppdater nebb umiddelbart basert på faktisk lyd (original metode)
-                if beak_enabled and len(chunk) > 0:
-                    amp = np.sqrt(np.mean(chunk**2))
-                    beak.open_pct(min(max(amp * 3.5, 0.05), 1.0))  # Min 5% for å unngå kollisjon
-                
-                # Støtt både mono (1 kanal) og stereo (2 kanaler)
-                num_channels = outdata.shape[1] if len(outdata.shape) > 1 else 1
-                if len(chunk) < frames:
-                    for ch in range(num_channels):
-                        outdata[:len(chunk),ch] = chunk
-                        outdata[len(chunk):,ch] = 0
-                else:
-                    for ch in range(num_channels):
-                        outdata[:,ch] = chunk
-                idx += frames
-            
-            idx = 0
-            
-            # Finn I2S DAC (Google Voice HAT / MAX98357A) dynamisk
-            tried_device = find_hifiberry_output()
+            # Bruk aplay med dmixer (definert i ~/.asoundrc) for click/pop reduction
             stream_started = False
-            max_attempts = 3
-            retry_delay = 1.0
             
-            for attempt in range(max_attempts):
-                try:
-                    # Prøv I2S DAC med 2 kanaler
-                    with sd.OutputStream(samplerate=framerate, device=tried_device, channels=2, dtype='float32', 
-                                       blocksize=blocksize, callback=callback):
-                        stream_started = True
-                        while idx < len(samples):
-                            sd.sleep(int(1000 * blocksize / framerate))
+            try:
+                # Konverter float32 samples til int16 og lag stereo
+                samples_int16 = (samples * 32767).astype(np.int16)
+                stereo_samples = np.column_stack([samples_int16, samples_int16])
+                
+                # Bruk pydub for å lage WAV
+                audio_segment = AudioSegment(
+                    stereo_samples.tobytes(),
+                    frame_rate=framerate,
+                    sample_width=2,  # 16-bit = 2 bytes
+                    channels=2
+                )
+                
+                # Eksporter til temp fil og spill med aplay (bruker dmixer fra ~/.asoundrc)
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmpwav:
+                    audio_segment.export(tmpwav.name, format='wav')
+                    import subprocess
+                    import threading
+                    
+                    # Oppdater nebb i takt med lydnivå mens aplay kjører
+                    if beak_enabled and beak:
+                        # Beregn chunk size for å synkronisere med lyd
+                        chunk_size = int(framerate * BEAK_CHUNK_MS / 1000.0)
                         
-                        # Hold streamen åpen litt ekstra for post-silence
-                        sd.sleep(100)
-                    break  # Suksess, avslutt loop
-                except Exception as e:
-                    print(f"Audio device {tried_device} feil (forsøk {attempt+1}/{max_attempts}): {e}")
-                    if attempt < max_attempts - 1:
-                        print(f"Venter {retry_delay}s før nytt forsøk...")
-                        time.sleep(retry_delay)
+                        # Start både aplay og nebb-thread samtidig
+                        nebb_stop = threading.Event()
+                        
+                        def update_beak():
+                            if BEAK_PRE_START_MS > 0:
+                                time.sleep(BEAK_PRE_START_MS / 1000.0)
+                            
+                            idx = 0
+                            start_time = time.time()
+                            
+                            # Lyden er pitch-shifted (1.41x raskere), så juster timing
+                            # Faktisk varighet i sekunder
+                            actual_duration = len(samples) / framerate
+                            
+                            while not nebb_stop.is_set() and idx < len(samples):
+                                chunk = samples[idx:idx+chunk_size]
+                                if len(chunk) > 0:
+                                    amp = np.sqrt(np.mean(chunk**2))
+                                    open_pct = min(max(amp * 3.5, 0.05), 1.0)
+                                    beak.open_pct(open_pct)
+                                
+                                idx += chunk_size
+                                
+                                # Beregn når neste oppdatering skal skje basert på faktisk tid
+                                elapsed = time.time() - start_time
+                                target_time = (idx / len(samples)) * actual_duration
+                                sleep_time = target_time - elapsed
+                                
+                                if sleep_time > 0:
+                                    time.sleep(sleep_time)
+                            
+                            # Lukk nebbet når ferdig
+                            if not nebb_stop.is_set():
+                                beak.open_pct(0.05)
+                        
+                        # Start nebb-thread
+                        beak_thread = threading.Thread(target=update_beak, daemon=True)
+                        beak_thread.start()
+                    
+                    # Start aplay
+                    process = subprocess.Popen(['aplay', '-q', tmpwav.name], 
+                                              stdout=subprocess.PIPE, 
+                                              stderr=subprocess.PIPE)
+                    
+                    # Vent på at aplay er ferdig
+                    process.wait()
+                    
+                    # Stopp nebb-thread
+                    if beak_enabled and beak:
+                        nebb_stop.set()
+                        beak_thread.join(timeout=1.0)
+                    
+                    os.unlink(tmpwav.name)
+                    
+                    if process.returncode == 0:
+                        stream_started = True
                     else:
-                        # Siste forsøk: prøv default device
-                        print("Prøver default device...")
-                        try:
-                            with sd.OutputStream(samplerate=framerate, device=None, channels=2, dtype='float32', 
-                                               blocksize=blocksize, callback=callback):
-                                stream_started = True
-                                while idx < len(samples):
-                                    sd.sleep(int(1000 * blocksize / framerate))
-                        except Exception as e2:
-                            print(f"Default device også feilet: {e2}")
+                        stderr = process.stderr.read().decode()
+                        print(f"aplay error: {stderr}")
+                    
+            except Exception as e:
+                print(f"dmixer playback error: {e}")
             
             if not stream_started:
                 print("Kunne ikke starte lydstrøm. Avslutter tale-funksjon uten å spille av.")
             
-            beak.open_pct(0.05)  # Minst 5% åpen når ferdig
+            if beak:  # Kun hvis servo er tilgjengelig
+                beak.open_pct(0.05)  # Minst 5% åpen når ferdig
         else:
             print("TTS-feil:", result.reason)
             if hasattr(result, "cancellation_details"):
@@ -456,6 +524,9 @@ def check_ai_queries(api_key, speech_config, beak):
                 with open(AI_QUERY_FILE, 'r', encoding='utf-8') as f:
                     query = f.read().strip()
                 
+                # Slett filen umiddelbart etter lesing for å unngå gjentakelse
+                os.remove(AI_QUERY_FILE)
+                
                 if query:
                     print(f"AI-query fra kontrollpanel: {query}", flush=True)
                     
@@ -477,7 +548,15 @@ def check_ai_queries(api_key, speech_config, beak):
         time.sleep(0.5)  # Sjekk hver halve sekund
 
 def main():
-    beak = Beak(SERVO_CHANNEL, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
+    # Prøv å initialisere servo, men fortsett uten hvis den ikke finnes
+    beak = None
+    try:
+        beak = Beak(SERVO_CHANNEL, CLOSE_DEG, OPEN_DEG, TRIM_DEG)
+        print("Servo initialisert OK", flush=True)
+    except Exception as e:
+        print(f"Advarsel: Kunne ikke initialisere servo (fortsetter uten): {e}", flush=True)
+        beak = None
+    
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     tts_key = os.getenv("AZURE_TTS_KEY")
@@ -492,28 +571,41 @@ def main():
     print("AI-query tråd startet", flush=True)
 
     # Oppstartshilsen (ikke la en TTS-feil stoppe tjenesten ved boot)
-    time.sleep(2)  # Vent litt for at systemet skal være klart
+    time.sleep(3)  # Vent litt lenger for at systemet skal være klart
     try:
-        # Hent IP-adresse
+        # Hent IP-adresse (prøv flere ganger)
         import socket
         ip_address = None
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip_address = s.getsockname()[0]
-            s.close()
-        except:
-            pass
+        for attempt in range(5):  # Prøv 5 ganger
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.settimeout(2)
+                s.connect(("8.8.8.8", 80))
+                ip_address = s.getsockname()[0]
+                s.close()
+                if ip_address and ip_address != "127.0.0.1":
+                    break  # Vellykket, avslutt loop
+            except:
+                if attempt < 4:  # Ikke vent etter siste forsøk
+                    time.sleep(2)  # Vent 2 sekunder før neste forsøk
         
         if ip_address and ip_address != "127.0.0.1":
             greeting = f"Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er {ip_address.replace('.', ' punkt ')}. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!"
+            print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
         else:
-            greeting = "Kvakk kvakk! Jeg er nå klar for andeprat. Si navnet mitt for å starte en samtale!"
+            greeting = "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+            print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
         
         speak(greeting, speech_config, beak)
         print("Oppstartshilsen ferdig", flush=True)
     except Exception as e:
         print(f"Oppstartshilsen mislyktes (audio ikke klar ennå): {e}", flush=True)
+        # Prøv en enklere hilsen uten TTS
+        try:
+            print("Prøver forenklet oppstart...", flush=True)
+            time.sleep(2)
+        except:
+            pass
     
     print("Anda venter på wake word... (si 'quack quack')", flush=True)
     while True:
@@ -522,8 +614,9 @@ def main():
         # Hvis det er en ekstern melding, sjekk om det er en samtale-trigger
         if external_message:
             if external_message == '__START_CONVERSATION__':
-                # Start samtale direkte uten hilsen
+                # Start samtale direkte med en kort hilsen
                 print("Starter samtale via web-interface", flush=True)
+                speak("Hei på du, hva kan jeg hjelpe deg med?", speech_config, beak)
             else:
                 # Bare si meldingen og gå tilbake til wake word
                 speak(external_message, speech_config, beak)

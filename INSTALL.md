@@ -38,14 +38,27 @@ python3 -c "from gpiozero import LED; led = LED(22); led.on(); input('Press Ente
 
 ### 1.2 Servo (nebb-bevegelse)
 
-⚠️ **KRITISK**: Servo MÅ ha separat strømforsyning!
+⚠️ **KRITISK**: Servo MÅ ha separat strømforsyning via USB-C PD-trigger!
 
 ```
-Servo      →   Tilkobling
+PCA9685        →   Tilkobling
 ───────────────────────────────────
-Signal     →   GPIO 14 (pin 8)
-VCC (5V)   →   Ekstern 5V strømforsyning
-Ground     →   Raspberry Pi Ground OG ekstern strøm ground
+VCC (logikk)   →   3.3V (Pi pin 1 eller 17)
+GND            →   Ground (Pi pin 6, 9, etc)
+SDA            →   GPIO2 (pin 3)
+SCL            →   GPIO3 (pin 5)
+V+ (servo)     →   USB-C PD-trigger 5V output
+GND (servo)    →   USB-C PD-trigger GND (koblet til Pi GND)
+Servo CH0      →   Nebb-servo signal
+```
+
+**USB-C PD-trigger oppsett:**
+```
+USB-C PD-trigger    →   Tilkobling
+─────────────────────────────────────
+USB-C input         →   Pi USB-C port (via avklippet kabel)
+5V output (+)       →   PCA9685 V+
+GND output (-)      →   PCA9685 GND + Pi GND (felles ground)
 ```
 
 ### 1.3 Vifte (5V kjøling - valgfritt)
@@ -67,26 +80,34 @@ Svart      →   Ground (pin 6, 9, 14, 20, 25, 30, 34, 39)
 - Pi's 5V pin kan kun levere ~1A total
 - Delt strøm gir voltage drops → Pi rebooter
 
-**Anbefalt oppsett**:
+**Anbefalt oppsett med USB-C PD-trigger**:
 ```
-┌──────────────┐
-│   Raspberry  │  GPIO 14 Signal
-│     Pi       ├──────────────┐
-│              │              │
-│   Ground     │              │
-└──────┬───────┘              │
-       │                      ▼
-       │              ┌───────────────┐
-       │              │     Servo     │
-       │              │  (SG90/MG90)  │
-       │              └───────┬───────┘
-       │                      │
-       │                      │ VCC
-       │              ┌───────▼────────┐
-       └──────────────┤  5V Power      │
-         (Common      │  Supply        │
-          Ground)     │  (2A minimum)  │
-                      └────────────────┘
+┌──────────────┐  USB-C        ┌─────────────────┐
+│   Raspberry  │  (avklippet   │  USB-C PD       │
+│     Pi       ├───────────────┤  Trigger        │
+│              │  kabel)       │  Module         │
+│              │               └────┬──────┬─────┘
+│  GPIO2/3     │                    │      │
+│  (I2C)       ├───────┐            │5V    │GND
+│              │       │            │      │
+│   Ground     │       │            │      │
+└──────┬───────┘       │            │      │
+       │               │            │      │
+       │               ▼            ▼      │
+       │       ┌───────────────────────┐   │
+       │       │      PCA9685          │   │
+       │       │   Servo Controller    │   │
+       │       │  VCC=3.3V  V+=5V      │   │
+       │       └──────┬────────────────┘   │
+       │              │ Servo CH0          │
+       │              ▼                    │
+       │       ┌─────────────┐             │
+       │       │   Servo     │             │
+       │       │ (SG90/MG90) │             │
+       │       └─────────────┘             │
+       │                                   │
+       └───────────────────────────────────┘
+         (Felles Ground)
 ```
 
 **Test servo**:

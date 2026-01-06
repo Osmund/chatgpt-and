@@ -10,13 +10,15 @@ numpy>=1.24.0                          # Audio array processing
 scipy>=1.10.0                          # Signal processing for beak sync
 
 # Wake Word Detection
-vosk>=0.3.45                           # Offline speech recognition
+vosk>=0.3.45                           # Offline speech recognition (ikke i bruk, bruker Porcupine)
+pvporcupine>=3.0.0                     # Porcupine wake word detection
 
 # Hardware Control (Raspberry Pi)
 gpiozero>=2.0                          # GPIO abstraction layer
 RPi.GPIO>=0.7.1                        # Direct GPIO access
 lgpio>=0.2.0                           # Modern GPIO library
+adafruit-circuitpython-servokit>=1.3.0 # PCA9685 servo control
 
 # Utilities
 python-dotenv>=1.0.0                   # Environment variable management
-requests>=2.31.0                       # HTTP requests for web features
+requests>=2.31.0                       # HTTP requests for web featuresaudioop-lts>=0.2.2                      # Python 3.13+ audioop replacement

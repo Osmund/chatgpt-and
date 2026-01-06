@@ -239,6 +239,13 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="speak-section">
+            <h3>🎙️ Wake Words</h3>
+            <div id="wake-words-list" class="info" style="background: #e8f5e9; border-left-color: #4caf50;">
+                <p style="margin: 0; color: #2e7d32;">Laster wake words...</p>
+            </div>
+        </div>
+        
+        <div class="speak-section">
             <h3>🤖 AI Modell</h3>
             <select id="model-select" onchange="changeModel()">
                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
@@ -346,6 +353,16 @@ HTML_TEMPLATE = """
                 <div id="fan-temp" style="font-size: 24px; margin: 10px 0;">🌡️ --°C</div>
                 <div id="fan-running">Status: Laster...</div>
             </div>
+        </div>
+        
+        <div class="speak-section" style="background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+            <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎵 La anda synge!</h3>
+            <select id="song-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; background: white; margin-bottom: 15px; box-sizing: border-box;">
+                <option value="">Velg en sang...</option>
+            </select>
+            <button class="btn-start" onclick="playSong()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #e91e63; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">🎤 Syng!</button>
+            <button class="btn-stop" onclick="stopSong()" style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='scale(1)'">⏹ Stopp syng</button>
+            <div id="song-status" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.9); border-radius: 8px; display: none; color: #333;"></div>
         </div>
         
         <div class="speak-section">
@@ -712,6 +729,22 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function loadWakeWords() {
+            try {
+                const response = await fetch('/wake-words');
+                const data = await response.json();
+                if (data.wake_words) {
+                    const wakeWordsList = document.getElementById('wake-words-list');
+                    const wordsHtml = data.wake_words.map((word, i) => 
+                        `<span style="display: inline-block; margin: 5px 8px; padding: 8px 16px; background: #4caf50; color: white; border-radius: 20px; font-weight: bold; font-size: 0.95em;">${word.charAt(0).toUpperCase() + word.slice(1)}</span>`
+                    ).join('');
+                    wakeWordsList.innerHTML = `<p style="margin: 0 0 10px 0; color: #2e7d32; font-weight: bold;">Aktive wake words:</p><div>${wordsHtml}</div>`;
+                }
+            } catch (error) {
+                console.error('Feil ved lasting av wake words:', error);
+            }
+        }
+        
         async function getStatus() {
             const resultDiv = document.getElementById('test-result');
             resultDiv.textContent = 'Henter status...';
@@ -962,9 +995,102 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function loadWakeWords() {
+            try {
+                const response = await fetch('/wake-words');
+                const data = await response.json();
+                if (data.wake_words) {
+                    const wakeWordsList = document.getElementById('wake-words-list');
+                    const wordsHtml = data.wake_words.map((word, i) => 
+                        `<span style="display: inline-block; margin: 5px 8px; padding: 8px 16px; background: #4caf50; color: white; border-radius: 20px; font-weight: bold; font-size: 0.95em;">${word.charAt(0).toUpperCase() + word.slice(1)}</span>`
+                    ).join('');
+                    wakeWordsList.innerHTML = `<p style="margin: 0 0 10px 0; color: #2e7d32; font-weight: bold;">Aktive wake words:</p><div>${wordsHtml}</div>`;
+                }
+            } catch (error) {
+                console.error('Feil ved lasting av wake words:', error);
+            }
+        }
+
+        // Sang-funksjoner
+        async function loadSongs() {
+            try {
+                const response = await fetch('/songs');
+                const data = await response.json();
+                const select = document.getElementById('song-select');
+                
+                // Tøm eksisterende alternativer (behold første "Velg en sang...")
+                select.innerHTML = '<option value="">Velg en sang...</option>';
+                
+                if (data.songs && data.songs.length > 0) {
+                    data.songs.forEach(song => {
+                        const option = document.createElement('option');
+                        option.value = song.path;
+                        option.textContent = song.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML += '<option value="" disabled>Ingen sanger funnet</option>';
+                }
+            } catch (error) {
+                console.error('Kunne ikke laste sanger:', error);
+            }
+        }
+        
+        async function playSong() {
+            const select = document.getElementById('song-select');
+            const statusDiv = document.getElementById('song-status');
+            const songPath = select.value;
+            
+            if (!songPath) {
+                alert('Velg en sang først!');
+                return;
+            }
+            
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<strong>🎤 Anda synger nå...</strong>';
+            
+            try {
+                const response = await fetch('/play-song', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ song_path: songPath })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = '<strong style="color: #4caf50;">✓ Sang startet!</strong>';
+                    setTimeout(() => statusDiv.style.display = 'none', 5000);
+                } else {
+                    statusDiv.innerHTML = '<strong style="color: #f44336;">✗ Feil: ' + (data.error || 'Ukjent feil') + '</strong>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<strong style="color: #f44336;">✗ Feil: ' + error.message + '</strong>';
+            }
+        }
+        
+        async function stopSong() {
+            const statusDiv = document.getElementById('song-status');
+            
+            try {
+                const response = await fetch('/stop-song', {method: 'POST'});
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = '<strong style="color: #ff9800;">⏹ Sang stoppet</strong>';
+                    setTimeout(() => statusDiv.style.display = 'none', 3000);
+                } else {
+                    alert('Feil ved stopp av sang');
+                }
+            } catch (error) {
+                alert('Feil: ' + error.message);
+            }
+        }
+
         // Load current settings on page load
         window.onload = function() {
             updateStatus();
+            loadWakeWords();
             loadCurrentModel();
             loadCurrentPersonality();
             loadCurrentVoice();
@@ -973,6 +1099,7 @@ HTML_TEMPLATE = """
             loadCurrentSpeed();
             loadFanStatus();
             getWiFiNetworks();
+            loadSongs();  // Last sanger
             
             // Oppdater status automatisk hvert 5. sekund
             setInterval(updateStatus, 5000);
@@ -1230,6 +1357,19 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/wake-words':
+            # Returner liste over aktive wake words
+            try:
+                wake_words = ['anda', 'vakna', 'hej', 'hallå', 'assistent', 'alfred', 'alexa', 'ulrika', 'siri', 'oskar']
+                response = {'wake_words': wake_words}
+            except Exception as e:
+                response = {'error': str(e), 'wake_words': []}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         elif self.path == '/fan-status':
             # Hent viftestatus
             try:
@@ -1249,6 +1389,36 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     response = {'mode': 'auto', 'running': False, 'temp': 0.0}
             except Exception as e:
                 response = {'mode': 'auto', 'running': False, 'temp': 0.0, 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/songs':
+            # Hent liste over tilgjengelige sanger
+            try:
+                music_dir = '/home/admog/Code/chatgpt-and/musikk'
+                songs = []
+                
+                if os.path.exists(music_dir):
+                    for artist_song in os.listdir(music_dir):
+                        song_path = os.path.join(music_dir, artist_song)
+                        if os.path.isdir(song_path):
+                            # Sjekk om begge filene finnes
+                            mix_file = os.path.join(song_path, 'duck_mix.wav')
+                            vocals_file = os.path.join(song_path, 'vocals_duck.wav')
+                            if os.path.exists(mix_file) and os.path.exists(vocals_file):
+                                songs.append({
+                                    'name': artist_song,
+                                    'path': song_path
+                                })
+                
+                # Sorter alfabetisk
+                songs.sort(key=lambda x: x['name'])
+                response = {'songs': songs}
+            except Exception as e:
+                response = {'songs': [], 'error': str(e)}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -1833,6 +2003,73 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 model_file = '/tmp/duck_model.txt'
                 with open(model_file, 'w', encoding='utf-8') as f:
                     f.write(model)
+                
+                response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/play-song':
+            # Spill av en sang
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode())
+            
+            song_path = data.get('song_path', '').strip()
+            print(f"Sang-forespørsel: {song_path}", flush=True)
+            
+            if not song_path:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Ingen sang valgt'}).encode())
+                return
+            
+            try:
+                # Sjekk om servicen kjører
+                result = subprocess.run(
+                    ['sudo', 'systemctl', 'is-active', 'chatgpt-duck.service'],
+                    capture_output=True, text=True, timeout=5
+                )
+                
+                if result.stdout.strip() != 'active':
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': False, 'error': 'Duck-servicen kjører ikke'}).encode())
+                    return
+                
+                # Skriv sangforespørsel til fil
+                song_request_file = '/tmp/duck_song_request.txt'
+                with open(song_request_file, 'w', encoding='utf-8') as f:
+                    f.write(song_path)
+                
+                response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/stop-song':
+            # Stopp sang
+            print("Stopp sang-forespørsel", flush=True)
+            
+            try:
+                # Skriv stopp-forespørsel til fil
+                song_stop_file = '/tmp/duck_song_stop.txt'
+                with open(song_stop_file, 'w', encoding='utf-8') as f:
+                    f.write('stop')
                 
                 response = {'success': True}
                 self.send_response(200)

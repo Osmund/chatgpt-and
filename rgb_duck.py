@@ -58,4 +58,10 @@ def stop_blink():
     _blink_stop.set()
     if _blink_thread and _blink_thread.is_alive():
         _blink_thread.join()  # Fjern timeout for å vente til tråden er ferdig
+
+def set_intensity(intensity):
+    """Setter LED-intensitet basert på lydnivå (0.0-1.0)"""
+    stop_blink()
+    # Bruk rød med varierende intensitet
+    led.color = (intensity, 0, 0)
     _blink_thread = None

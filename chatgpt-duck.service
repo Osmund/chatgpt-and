@@ -6,10 +6,10 @@ Wants=pigpiod.service
 [Service]
 Type=simple
 User=admog
-WorkingDirectory=/home/admog/Code/chatgpt-and-pi5/chatgpt-and
-Environment="PATH=/home/admog/Code/chatgpt-and-pi5/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-EnvironmentFile=/home/admog/Code/chatgpt-and-pi5/chatgpt-and/.env
-ExecStart=/home/admog/Code/chatgpt-and-pi5/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and-pi5/chatgpt-and/chatgpt_voice.py
+WorkingDirectory=/home/admog/Code/chatgpt-and
+Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/admog/Code/chatgpt-and/.env
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/chatgpt_voice.py
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=60

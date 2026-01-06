@@ -95,6 +95,33 @@ def speak(text, voice='nb-NO-FinnNeural', speed=50):
     """
 ```
 
+#### Oppstartshilsen med Nettverksdeteksjon
+```python
+def main():
+    # Prøver å koble til nettverk i opptil 10 sekunder
+    ip_address = None
+    for attempt in range(5):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(2)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+            if ip_address and ip_address != "127.0.0.1":
+                break
+        except:
+            if attempt < 4:
+                time.sleep(2)
+    
+    # Annonserer IP hvis tilgjengelig, ellers varsler om manglende tilkobling
+    if ip_address and ip_address != "127.0.0.1":
+        greeting = f"Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er {ip_address.replace('.', ' punkt ')}. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!"
+    else:
+        greeting = "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+    
+    speak(greeting, speech_config, beak)
+```
+
 **Personligheter** (system prompts):
 ```python
 PERSONALITIES = {
@@ -455,6 +482,40 @@ try {
 - **Knapper**: Physical control (GPIO)
 - **Flere servos**: Øyne, hode-bevegelse
 - **Kamera**: Computer vision integration
+
+## Hardware Arkitektur
+
+### Strømforsyning
+
+**Raspberry Pi:**
+- Offisiell 5V/5A USB-C strømforsyning
+- Forbruker: ~3-5W (idle til full load)
+
+**PCA9685 og Servo (USB-C PD-trigger løsning):**
+- **USB-C PD-trigger** med avklippet USB-C kabel koblet til Pi
+- PD-trigger leverer stabil 5V til PCA9685 V+ pin
+- PCA9685 VCC (logikk) koblet til Pi 3.3V
+- Felles ground mellom Pi, PD-trigger og PCA9685
+- **Hvorfor PD-trigger?** Servos kan trekke 1-2A under bevegelse, nok til å reboote Pi hvis strømmen trekkes fra Pi's 5V pin
+- **Fordeler**: Kompakt, pålitelig, ingen eksterne strømforsyninger nødvendig
+
+### GPIO Bruk
+
+**I2C (PCA9685 servo-kontroller):**
+- GPIO2 (SDA)
+- GPIO3 (SCL)
+
+**I2S (MAX98357A audio):**
+- GPIO18 (BCLK)
+- GPIO19 (LRCK)
+- GPIO21 (DIN)
+
+**RGB LED:**
+- GPIO17 (Rød)
+- GPIO27 (Grønn)
+- GPIO22 (Blå)
+
+**Totalt:** 8 GPIO pins brukt
 
 ## Debugging og Logging
 

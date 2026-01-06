@@ -38,10 +38,16 @@ Styrer servo for nebb-bevegelse via I2C.
 | GND         | →  | Pin 6, 9, 14, etc  | GND  | Ground |
 | SDA         | →  | Pin 3              | GPIO2 | I2C Data |
 | SCL         | →  | Pin 5              | GPIO3 | I2C Clock |
-| V+          | →  | **Ekstern 5V**     | -    | Servo strøm (VIKTIG: Bruk separat strømforsyning!) |
+| V+          | →  | **USB-C PD-trigger**| -    | Servo strøm (5V fra PD-trigger) |
 | Servo CH0   | →  | Servo signal       | -    | Nebb-servo på kanal 0 |
 
-**⚠️ VIKTIG:** PCA9685 V+ skal kobles til en **separat 5V strømforsyning** (f.eks. battery pack eller USB power bank), IKKE til Raspberry Pi 5V! Dette forhindrer at Pi'en rebootes når servoen trekker mye strøm.
+**⚠️ VIKTIG:** PCA9685 V+ skal kobles til en **USB-C PD-trigger** (med avklippet USB-C kabel koblet til Pi), IKKE til Raspberry Pi 5V! Dette forhindrer at Pi'en rebootes når servoen trekker mye strøm.
+
+**USB-C PD-trigger oppsett:**
+- USB-C PD-trigger modul koblet til Pi via avklippet USB-C kabel
+- PD-trigger gir stabil 5V output til PCA9685 V+
+- GND fra PD-trigger kobles til Pi GND (felles ground)
+- Dette gir servoene nok strøm uten å belaste Pi'en
 
 ---
 
@@ -126,15 +132,20 @@ Plug & play - ingen GPIO brukt.
   - RGB LED: ~60mA (20mA per farge)
 
 ### PCA9685 Servo Strøm (V+)
-- **⚠️ KRITISK:** Bruk **separat 5V strømforsyning**
-- **Eksempler:**
+- **⚠️ KRITISK:** Bruk **USB-C PD-trigger**
+- **Oppsett:**
+  - USB-C PD-trigger modul med avklippet USB-C kabel
+  - Kabel kobles til Pi's USB-C port
+  - PD-trigger leverer stabil 5V til PCA9685 V+ pin
+  - GND fra PD-trigger kobles til Pi's GND (felles ground)
+- **Alternativer (hvis PD-trigger ikke er tilgjengelig):**
   - USB power bank (5V 2A+)
   - 4x AA batterier (6V via regulator til 5V)
   - Dedikert 5V/2A DC adapter
 - **Kobling:** 
-  - V+ og GND fra separat forsyning
+  - V+ og GND fra PD-trigger/separat forsyning
   - **Ikke** koble V+ til Pi's 5V pin!
-  - **Koble** GND fra separat forsyning til Pi's GND (felles ground)
+  - **Koble** GND fra PD-trigger til Pi's GND (felles ground)
 
 ---
 

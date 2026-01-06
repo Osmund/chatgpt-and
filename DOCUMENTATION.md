@@ -251,8 +251,10 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 | Web-panel | README.md | "kontrollpanel", "3000", "web interface" |
 | Talehastighet | README.md, ARCHITECTURE.md | "speed", "hastighet", "SSML prosody" |
 | Nebb-kontroll | INSTALL.md, ARCHITECTURE.md | "servo", "beak", "amplitude" |
+| USB-C PD-trigger | PINOUT.md, INSTALL.md | "PD-trigger", "strømforsyning", "servo strøm" |
 | RGB LED | INSTALL.md, README.md | "RGB", "GPIO 17 27 22", "status-indikatorer" |
 | Wake word | README.md, INSTALL.md | "alexa", "ulrika", "Vosk" |
+| Oppstartsmelding | README.md, ARCHITECTURE.md | "oppstart", "IP-adresse", "nettverksdeteksjon" |
 | Feilsøking | INSTALL.md, ARCHITECTURE.md | "troubleshooting", "feilsøking", "problem" |
 | Nettverkskonfigurasjon | PORTS.md | "port", "brannmur", "firewall" |
 | IPC | README.md, ARCHITECTURE.md | "tmp", "IPC", "/tmp/duck_" |

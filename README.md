@@ -2,9 +2,11 @@
 
 Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services, fysisk nebb-bevegelse, RGB LED-status og web-basert kontrollpanel.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](requirements.txt)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
+
+**[English documentation](README_EN.md)** | **[Norsk dokumentasjon](README.md)**
 
 ## 📚 Dokumentasjon
 
@@ -70,7 +72,9 @@ sudo systemctl start duck-control.service
 
 - Raspberry Pi (testet på Pi 400 og Pi 5)
 - Monk Makes RGB LED (koblet: R=GPIO17, G=GPIO27, B=GPIO22)
-- Servo til nebb (koblet til f.eks. GPIO14) - **NB: Bruk separat strømforsyning til servoen!**
+- USB-C PD-trigger med avklippet USB-C kabel koblet til Pi
+- PCA9685 servo-kontroller (koblet til PD-trigger for 5V strøm)
+- Servo til nebb (koblet til PCA9685 kanal 0) - **NB: Strøm fra PD-trigger, ikke Pi!**
 - Mikrofon (USB eller Pi-kompatibel)
 - Høyttaler (3.5mm jack eller USB)
 
@@ -101,7 +105,10 @@ Maskinvare (anbefalt kobling)
   - I2C SDA -> GPIO2
   - I2C SCL -> GPIO3
   - Servo signal -> valgt kanal (default kanal 0 i `duck_beak.py`)
-  - Bruk separat 5V strøm til servo (viktig!)
+  - VCC (logikk) -> 3.3V fra Pi
+  - V+ (servo strøm) -> 5V fra USB-C PD-trigger
+  - **Viktig**: USB-C PD-trigger med avklippet kabel gir stabil 5V til servokontrolleren
+  - Dette unngår at servoen trekker strøm direkte fra Pi'en (forhindrer reboots)
 
 Software / kodeendringer
 - `duck_beak.py`:
@@ -266,6 +273,14 @@ Tre moduser for direkte kommunikasjon:
 - **WiFi-nettverk**: Vis tilgjengelige nettverk
 - **Hotspot-modus**: Bytt til WiFi-portal for konfigurasjon
 - **System**: Reboot eller shutdown via kontrollpanel
+
+## Oppstartsmelding
+
+Ved oppstart annonserer anda sin IP-adresse hvis nettverket er tilgjengelig:
+- **Med nettverk**: "Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er [IP]. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!"
+- **Uten nettverk**: "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+
+Anda forsøker å koble til nettverket i opptil 10 sekunder før den gir opp og annonserer at den ikke har tilkobling.
 
 ## RGB LED Status-indikatorer
 

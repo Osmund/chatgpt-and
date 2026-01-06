@@ -4,6 +4,40 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.1] - 2026-01-06
+
+### Forbedringer
+
+#### 🌐 Nettverksdeteksjon ved Oppstart
+
+**Beskrivelse**: Anda annonserer nå tydeligere hvis den ikke klarer å koble til nettverket ved oppstart.
+
+**Endringer**:
+- Oppdatert oppstartsmelding når nettverket ikke er tilgjengelig
+- **Gammel melding**: "Kvakk kvakk! Jeg er nå klar for andeprat. Nettverket er ikke tilgjengelig ennå, men jeg kan fortsatt snakke med deg."
+- **Ny melding**: "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+- Prøver å koble til nettverket i opptil 10 sekunder (5 forsøk × 2 sekunder)
+- Gir tydeligere brukertilbakemelding om nettverksproblemer
+
+#### 📚 Dokumentasjonsoppdateringer
+
+**USB-C PD-trigger dokumentasjon**:
+- Dokumentert bruken av USB-C PD-trigger med avklippet USB-C kabel for servo-strøm
+- PCA9685 servo-kontroller kobles til PD-trigger for å få 5V strøm
+- Dette unngår at servoen trekker strøm direkte fra Pi'en (forhindrer reboots)
+- Oppdatert dokumentasjon i:
+  - **README.md**: Hardware-seksjon og oppsett-diagram
+  - **PINOUT.md**: Detaljert PD-trigger tilkoblings-informasjon
+  - **INSTALL.md**: Installasjonsveiledning med PD-trigger oppsett
+  - **ARCHITECTURE.md**: Hardware-arkitektur og strømforsyning
+  - **DOCUMENTATION.md**: Søkeindeks oppdatert
+
+**Fordeler med PD-trigger**:
+- Kompakt løsning for servo-strøm
+- Stabil 5V output
+- Ingen eksterne strømforsyninger nødvendig
+- Perfekt for integrasjon i lekeand
+
 ## [2.1.0] - 2025-11-11
 
 ### Ny funksjonalitet

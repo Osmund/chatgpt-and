@@ -58,6 +58,7 @@ class Beak:
         """
         try:
             # Initialiser PCA9685 (16 kanaler)
+            # Standard I2C (GPIO 2/3) på /dev/i2c-1
             self.kit = ServoKit(channels=16)
             self.servo_channel = servo_channel
             

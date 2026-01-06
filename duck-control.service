@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=admog
-WorkingDirectory=/home/admog/Code/chatgpt-and-pi5/chatgpt-and
-ExecStart=/home/admog/Code/chatgpt-and-pi5/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and-pi5/chatgpt-and/duck-control.py
+WorkingDirectory=/home/admog/Code/chatgpt-and
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/duck-control.py
 Restart=always
 RestartSec=5
 
