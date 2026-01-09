@@ -75,6 +75,33 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Resultat**: Mer naturlige samtaler - ingen behov for eksplisitt "stopp"-kommando! 👋
 
+#### 💫 LED-pulsing når Nebb er Av
+
+**Beskrivelse**: Når nebbet er deaktivert via kontrollpanelet, pulser LED-lysene i takt med talen i stedet!
+
+**Funksjoner**:
+- **Automatisk fallback**: LED tar over når nebb er av
+- **Amplitude-basert pulsing**: LED-intensitet følger talens lydnivå
+- **Samme synkronisering**: Bruker identisk teknikk som musikk-avspilling
+- **Visuell feedback**: Du ser at anda snakker selv uten nebb-bevegelse
+- **Toggle via kontrollpanel**: Skru nebb av/på i sanntid
+
+**Eksempel**:
+1. Åpne kontrollpanelet (http://pi-ip:3000)
+2. Sett "Nebb" til "Av 🔇"
+3. Si "Samantha, hva er klokka?"
+4. Anda svarer med LED som pulser i takt med stemmen (nebb står stille)
+
+**Teknisk implementering**:
+- Delt thread-funksjon: `update_beak_or_led()`
+- Sjekker `beak_enabled` flag fra `/tmp/duck_beak.txt`
+- Hvis nebb på: `beak.open_pct(amplitude * 3.5)`
+- Hvis nebb av: `set_intensity(amplitude * 4.0)`
+- Samme timing og chunk-synkronisering som nebb-bevegelse
+- Funker både for tale og sang-avspilling
+
+**Resultat**: Anda gir alltid visuell feedback - enten med nebb eller LED! 💫🎤
+
 #### 🌤️ Værmelding fra yr.no
 
 **Beskrivelse**: Anda kan nå svare på spørsmål om været ved å hente live data fra yr.no (Meteorologisk institutt).

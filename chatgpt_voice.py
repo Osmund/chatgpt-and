@@ -403,48 +403,58 @@ def speak(text, speech_config, beak):
                     import threading
                     
                     # Oppdater nebb i takt med lydnivå mens aplay kjører
-                    if beak_enabled and beak:
-                        # Beregn chunk size for å synkronisere med lyd
-                        chunk_size = int(framerate * BEAK_CHUNK_MS / 1000.0)
+                    # Hvis nebb er av, bruk LED i stedet
+                    chunk_size = int(framerate * BEAK_CHUNK_MS / 1000.0)
+                    
+                    # Start både aplay og nebb/LED-thread samtidig
+                    control_stop = threading.Event()
+                    
+                    def update_beak_or_led():
+                        if BEAK_PRE_START_MS > 0:
+                            time.sleep(BEAK_PRE_START_MS / 1000.0)
                         
-                        # Start både aplay og nebb-thread samtidig
-                        nebb_stop = threading.Event()
+                        idx = 0
+                        start_time = time.time()
                         
-                        def update_beak():
-                            if BEAK_PRE_START_MS > 0:
-                                time.sleep(BEAK_PRE_START_MS / 1000.0)
-                            
-                            idx = 0
-                            start_time = time.time()
-                            
-                            # Lyden er pitch-shifted (1.41x raskere), så juster timing
-                            # Faktisk varighet i sekunder
-                            actual_duration = len(samples) / framerate
-                            
-                            while not nebb_stop.is_set() and idx < len(samples):
-                                chunk = samples[idx:idx+chunk_size]
-                                if len(chunk) > 0:
-                                    amp = np.sqrt(np.mean(chunk**2))
+                        # Lyden er pitch-shifted (1.41x raskere), så juster timing
+                        # Faktisk varighet i sekunder
+                        actual_duration = len(samples) / framerate
+                        
+                        while not control_stop.is_set() and idx < len(samples):
+                            chunk = samples[idx:idx+chunk_size]
+                            if len(chunk) > 0:
+                                amp = np.sqrt(np.mean(chunk**2))
+                                
+                                if beak_enabled and beak:
+                                    # Normal nebb-bevegelse
                                     open_pct = min(max(amp * 3.5, 0.05), 1.0)
                                     beak.open_pct(open_pct)
-                                
-                                idx += chunk_size
-                                
-                                # Beregn når neste oppdatering skal skje basert på faktisk tid
-                                elapsed = time.time() - start_time
-                                target_time = (idx / len(samples)) * actual_duration
-                                sleep_time = target_time - elapsed
-                                
-                                if sleep_time > 0:
-                                    time.sleep(sleep_time)
+                                else:
+                                    # LED-pulsing når nebb er av
+                                    intensity = min(amp * 4.0, 1.0)
+                                    intensity = max(intensity, 0.1)  # Minimum intensitet
+                                    set_intensity(intensity)
                             
-                            # Lukk nebbet når ferdig
-                            if not nebb_stop.is_set():
-                                beak.open_pct(0.05)
+                            idx += chunk_size
+                            
+                            # Beregn når neste oppdatering skal skje basert på faktisk tid
+                            elapsed = time.time() - start_time
+                            target_time = (idx / len(samples)) * actual_duration
+                            sleep_time = target_time - elapsed
+                            
+                            if sleep_time > 0:
+                                time.sleep(sleep_time)
                         
-                        # Start nebb-thread
-                        beak_thread = threading.Thread(target=update_beak, daemon=True)
-                        beak_thread.start()
+                        # Lukk nebbet eller slå av LED når ferdig
+                        if not control_stop.is_set():
+                            if beak_enabled and beak:
+                                beak.open_pct(0.05)
+                            else:
+                                off()  # Slå av LED
+                    
+                    # Start nebb/LED-thread
+                    control_thread = threading.Thread(target=update_beak_or_led, daemon=True)
+                    control_thread.start()
                     
                     # Start aplay
                     process = subprocess.Popen(['aplay', '-q', tmpwav.name], 
@@ -454,10 +464,9 @@ def speak(text, speech_config, beak):
                     # Vent på at aplay er ferdig
                     process.wait()
                     
-                    # Stopp nebb-thread
-                    if beak_enabled and beak:
-                        nebb_stop.set()
-                        beak_thread.join(timeout=1.0)
+                    # Stopp nebb/LED-thread
+                    control_stop.set()
+                    control_thread.join(timeout=1.0)
                     
                     os.unlink(tmpwav.name)
                     
