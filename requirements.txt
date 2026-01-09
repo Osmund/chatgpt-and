@@ -10,8 +10,7 @@ numpy>=1.24.0                          # Audio array processing
 scipy>=1.10.0                          # Signal processing for beak sync
 
 # Wake Word Detection
-vosk>=0.3.45                           # Offline speech recognition (ikke i bruk, bruker Porcupine)
-pvporcupine>=3.0.0                     # Porcupine wake word detection
+pvporcupine>=3.0.0                     # Porcupine wake word detection (Picovoice)
 
 # Hardware Control (Raspberry Pi)
 gpiozero>=2.0                          # GPIO abstraction layer

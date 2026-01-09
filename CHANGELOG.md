@@ -4,9 +4,121 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.2] - 2026-01-09
+
+### Ny funksjonalitet
+
+#### ⏰ Dato og Tid Bevissthet
+
+**Beskrivelse**: ChatGPT kan nå svare på spørsmål om nåværende dato og tid ved å lese fra systemklokka.
+
+**Funksjoner**:
+- **Automatisk dato/tid injeksjon**: System prompt inkluderer alltid nåværende dato og tid
+- **Norsk formatering**: "Torsdag 9. Januar 2026, klokken 11:53"
+- **Naturlig dialog**: Anda kan svare på spørsmål som:
+  - "Hva er klokka?"
+  - "Hvilken dato er det?"
+  - "Hvilken dag er det i dag?"
+  - "Hvor lenge til midnatt?"
+
+**Teknisk implementering**:
+- `datetime.now()` henter systemtid ved hver ChatGPT-forespørsel
+- Formateres med `strftime('%A %d. %B %Y, klokken %H:%M')`
+- Legges til i system prompt før personlighet
+- Implementert i både `chatgpt_voice.py` og `duck-control.py`
+
+**Resultat**: Anda vet alltid nøyaktig hvilken dato og tid det er! 🕐📅
+
+#### 🎵 Sang-avspilling med Nebb og LED Synkronisering
+
+**Beskrivelse**: Anda kan nå synge sanger med synkronisert nebb-bevegelse og LED-pulsing!
+
+**Funksjoner**:
+- **Dual-file system**:
+  - `duck_mix.wav`: Full mix av sang for avspilling
+  - `vocals_duck.wav`: Isolert vokal-track for nebb-synkronisering
+- **LED-pulsing**: LED pulser i takt med musikkens amplitude
+- **Nebb-synkronisering**: Nebbet følger vokalens amplitude i sangtid
+- **Artist/tittel-annonsering**: Anda sier artist og sangtittel før avspilling
+- **Stereo/mono auto-detection**: Håndterer automatisk forskjellige audioformater
+- **Sanntids synkronisering**: Progressbasert synkronisering av nebb og LED
+- **Web-kontroll**: Start og stopp sanger via kontrollpanelet
+
+**Teknisk implementering**:
+- Separate threads for playback, LED-kontroll og nebb-kontroll
+- Progressbasert mapping: `vocals_pos = (mix_idx / total_frames) * vocals_length`
+- LED konverterer stereo til mono for amplitude-deteksjon
+- Chunk size: 30ms (BEAK_CHUNK_MS) for smooth bevegelse
+- IPC via `/tmp/duck_song_request.txt` og `/tmp/duck_song_stop.txt`
+
+**Sangtilgang**: Web-kontrollpanel viser liste over alle tilgjengelige sanger i `musikk/` mappen.
+
+**Resultat**: Anda synger med perfekt synkronisert nebb og pulserende LED!
+
+### Forbedringer
+
+#### 🎤 Audio Resampling for Porcupine
+
+**Beskrivelse**: Implementert audio resampling for å håndtere forskjell mellom USB-mikrofon (48kHz) og Porcupine (16kHz).
+
+**Endringer**:
+- **scipy.signal.resample**: Konverterer 48000 Hz → 16000 Hz (3:1 ratio)
+- **Buffer-størrelse**: 6144 samples (4x Porcupine frame length)
+- **Stabilitetsgevinst**: Reduserer buffer overflow problemer
+- **Logging**: Viser resampling-detaljer ved oppstart
+
+**Resultat**: Porcupine wake word detection fungerer stabilt med USB-mikrofoner.
+
+#### 🔇 Buffer Overflow Håndtering
+
+**Beskrivelse**: Undertrykt buffer overflow advarsler som ikke påvirker funksjonalitet.
+
+**Endringer**:
+- Økt buffer-størrelse fra 1536 til 6144 samples
+- Undertrykt PortAudio overflow warnings (`err_code = -9981`)
+- Logging kun hvis ikke overflow (unngår logg-spam)
+
+**Resultat**: Renere logger uten funksjonalitetstap.
+
+#### 🎨 Stereo/Mono Auto-Detection
+
+**Beskrivelse**: Automatisk håndtering av stereo og mono audio-filer.
+
+**Endringer**:
+- Detekterer antall kanaler i mix og vocals
+- Åpner OutputStream med korrekt antall kanaler
+- Konverterer vocals til mono for amplitude-deteksjon
+- Konverterer mix til mono for LED-kontroll
+
+**Resultat**: Sanger spilles med korrekt hastighet uavhengig av format.
+
+### Dokumentasjonsoppdateringer
+
+- **ARCHITECTURE.md**: Dokumentert sang-avspilling arkitektur
+- **DOCUMENTATION.md**: Oppdatert statistikk og sist oppdatert dato
+- **requirements.txt**: Lagt til scipy for resampling
+- **README.md**: Dokumentert sang-funksjonalitet
+
 ## [2.1.1] - 2026-01-06
 
 ### Forbedringer
+
+#### 🎤 Wake Word-teknologi Oppgradering
+
+**Beskrivelse**: Byttet fra Vosk til Porcupine for mer pålitelig wake word-deteksjon.
+
+**Endringer**:
+- **Wake word endret**: Fra "Anda" til "Samantha"
+- **Engine**: Picovoice Porcupine (erstatter Vosk)
+- **Fordeler**:
+  - Mer pålitelig deteksjon av wake word
+  - Lavere CPU-bruk
+  - Raskere responstid
+  - Bedre støyreduksjon
+- **Konfigurasjon**: Krever Picovoice API-nøkkel i `.env`
+- **Uttale**: "Samantha" er lettere å gjenkjenne enn "Anda"
+
+**Si "Samantha" for å starte en samtale!**
 
 #### 🌐 Nettverksdeteksjon ved Oppstart
 
@@ -304,7 +416,7 @@ sudo systemctl restart chatgpt-duck.service
 ### Initial Release
 
 #### Core Features
-- Wake word detection med Vosk (svensk modell)
+- Wake word detection med Porcupine ("Samantha")
 - Azure Speech-to-Text for stemmegjenkjenning
 - ChatGPT integration via OpenAI API
 - Azure Text-to-Speech med norske stemmer

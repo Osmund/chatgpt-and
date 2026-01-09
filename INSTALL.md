@@ -214,28 +214,16 @@ pip install --upgrade pyaudio
 pip install --no-binary :all: pyaudio
 ```
 
-### 2.4 Last ned Vosk-modell
+### 2.4 Picovoice API-nøkkel
 
-```bash
-cd /home/admog/Code/chatgpt-and
+Porcupine wake word detection krever en gratis API-nøkkel fra Picovoice:
 
-# Last ned svensk modell
-wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
+1. Gå til https://console.picovoice.ai/
+2. Opprett gratis konto
+3. Kopier Access Key
+4. Legg til i `.env` filen (se Del 3)
 
-# Pakk ut
-unzip vosk-model-small-sv-rhasspy-0.15.zip
-
-# Verifiser struktur
-ls vosk-model-small-sv-rhasspy-0.15/
-# Skal inneholde: am/ conf/ graph/ ivector/ README
-```
-
-**Alternativ: Norsk modell** (for norske wake words):
-```bash
-wget https://alphacephei.com/vosk/models/vosk-model-small-no-0.22.zip
-unzip vosk-model-small-no-0.22.zip
-# Oppdater model_path i chatgpt_voice.py
-```
+**Note**: Porcupine-modellen (`porcupine/samantha_en_raspberry-pi_v4_0_0.ppn`) er allerede inkludert i prosjektet.
 
 ## Del 3: API-nøkler
 
@@ -277,6 +265,7 @@ AZURE_TTS_KEY=your-azure-tts-key-here
 AZURE_TTS_REGION=westeurope
 AZURE_STT_KEY=your-azure-stt-key-here
 AZURE_STT_REGION=westeurope
+PICOVOICE_API_KEY=your-picovoice-key-here
 EOF
 
 # Sikre .env filen
@@ -458,14 +447,22 @@ Rediger `chatgpt_voice.py`:
 ```python
 def wait_for_wake_word(model_path):
     # ...
-    if "alexa" in text or "ulrika" in text:  # ← Endre her
-        return True
-```
+### 6.1 Wake Word
 
-Anbefalt norske wake words (med norsk Vosk-modell):
-- "hei anda"
-- "hallo duck"
-- "vekk opp"
+Wake word er nå "Samantha" og bruker Porcupine wake word detection. Wake word er definert av modellen `porcupine/samantha_en_raspberry-pi_v4_0_0.ppn`.
+
+For å endre wake word, må du enten:
+1. Lage en custom wake word på https://console.picovoice.ai/
+2. Eller bruke en annen forhåndstrent modell fra Picovoice
+
+Sensitivitet kan justeres i `chatgpt_voice.py`:
+```python
+porcupine = pvporcupine.create(
+    access_key=access_key,
+    keyword_paths=[keyword_path],
+    sensitivities=[0.5]  # ← 0.0-1.0, høyere = mer sensitiv
+)
+```
 
 ### 6.2 Endre GPIO-pins
 
@@ -538,8 +535,8 @@ sudo systemctl status fan-control.service
 arecord -d 5 -f cd test.wav
 aplay test.wav
 
-# Sjekk Vosk-modell
-ls -la vosk-model-small-sv-rhasspy-0.15/
+# Sjekk Porcupine modell
+ls -la porcupine/samantha_en_raspberry-pi_v4_0_0.ppn
 
 # Sjekk logger
 sudo journalctl -u chatgpt-duck.service -n 50

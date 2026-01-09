@@ -307,5 +307,5 @@ Plassering i and:
 
 ---
 
-**Oppdatert:** 2025-11-11  
+**Oppdatert:** 2026-01-09  
 **Versjon:** oDuckberry5 (Raspberry Pi 5 + MAX98357A + PCA9685)

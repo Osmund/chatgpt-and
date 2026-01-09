@@ -8,6 +8,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import subprocess
 import json
 import os
+from datetime import datetime
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -1505,6 +1506,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 
                 # Kall OpenAI API
                 
+                # Hent nåværende dato og tid
+                from datetime import datetime as dt
+                now = dt.now()
+                date_time_info = f"Nåværende dato og tid: {now.strftime('%A %d. %B %Y, klokken %H:%M')}. "
+                
                 system_prompts = {
                     'normal': 'Du er en hjelpsom assistent.',
                     'entusiastic': 'Du er veldig energisk og entusiastisk!',
@@ -1513,7 +1519,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     'concise': 'Du svarer kort og konsist.'
                 }
                 
-                system_prompt = system_prompts.get(personality, system_prompts['normal'])
+                system_prompt = date_time_info + system_prompts.get(personality, system_prompts['normal'])
                 
                 headers = {
                     'Authorization': f'Bearer {api_key}',

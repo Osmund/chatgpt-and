@@ -2,7 +2,7 @@
 
 Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services, fysisk nebb-bevegelse, RGB LED-status og web-basert kontrollpanel.
 
-[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](requirements.txt)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
@@ -18,11 +18,10 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 
 ## Hovedfunksjoner
 
-- 🎤 **Wake Word Detection**: Offline wake word (Vosk) - si "alexa" eller "ulrika"
+- 🎤 **Wake Word Detection**: Porcupine wake word - si "Samantha"
 - 💬 **ChatGPT Samtaler**: Naturlig dialog med AI-personligheter
 - 🗣️ **Azure TTS**: Høykvalitets norsk talesyntese med flere stemmer
-- 👄 **Synkron Nebb-bevegelse**: Servostyrt nebb som beveger seg til lyden
-- 💡 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
+- 👄 **Synkron Nebb-bevegelse**: Servostyrt nebb som beveger seg til lyden- 🎵 **Sang-avspilling**: Anda kan synge med synkronisert nebb og LED-pulsing- 💡 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
 - 🌐 **Web Kontrollpanel**: Komplett fjernstyring via nettleser
 - 📊 **Sanntids Logger**: Live systemlogger og statusovervåking
 - 🔧 **Justerbar Talehastighet**: Fra treg til lynrask tale
@@ -51,13 +50,10 @@ AZURE_TTS_KEY=your-key
 AZURE_TTS_REGION=westeurope
 AZURE_STT_KEY=your-key
 AZURE_STT_REGION=westeurope
+PICOVOICE_API_KEY=your-picovoice-key
 EOF
 
-# 4. Last ned Vosk-modell
-wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
-unzip vosk-model-small-sv-rhasspy-0.15.zip
-
-# 5. Installer og start services
+# 4. Installer og start services
 sudo ./install-services.sh
 sudo systemctl start chatgpt-duck.service
 sudo systemctl start duck-control.service
@@ -176,16 +172,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Last ned Vosk-modell
-
-```bash
-wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
-unzip vosk-model-small-sv-rhasspy-0.15.zip
-```
-
-Mappen `vosk-model-small-sv-rhasspy-0.15/` skal ligge i prosjektmappen.
-
-### 5. Opprett `.env`-fil
+### 4. Opprett `.env`-fil
 
 Opprett filen `/home/admog/Code/MyFirst/.env` med følgende innhold:
 
@@ -195,11 +182,13 @@ AZURE_TTS_KEY=din_azure_tts_nøkkel
 AZURE_TTS_REGION=westeurope
 AZURE_STT_KEY=din_azure_stt_nøkkel
 AZURE_STT_REGION=westeurope
+PICOVOICE_API_KEY=din_picovoice_nøkkel
 ```
 
 **Skaff API-nøkler:**
 - OpenAI: https://platform.openai.com/api-keys
 - Azure Speech: https://portal.azure.com (Cognitive Services)
+- Picovoice: https://console.picovoice.ai/ (gratis)
 
 ## Nødvendige filer
 

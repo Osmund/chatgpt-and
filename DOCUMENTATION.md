@@ -4,10 +4,10 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 
 ## 📊 Statistikk
 
-- **Totalt antall linjer dokumentasjon**: ~2400 linjer
+- **Totalt antall linjer dokumentasjon**: ~2500 linjer
 - **Antall markdown-filer**: 5 filer
-- **Total dokumentasjonsstørrelse**: ~60 KB
-- **Sist oppdatert**: 10. november 2025
+- **Total dokumentasjonsstørrelse**: ~65 KB
+- **Sist oppdatert**: 9. januar 2026
 
 ## 📚 Dokumentasjonsstruktur
 

@@ -49,13 +49,15 @@ ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer 
 
 #### Wake Word Detection
 ```python
-def wait_for_wake_word(model_path):
+def wait_for_wake_word():
     """
-    Bruker Vosk offline speech recognition
-    - Laster svensk modell (vosk-model-small-sv-rhasspy-0.15)
-    - Lytter kontinuerlig i bakgrunnen
-    - Trigger: "alexa" eller "ulrika"
+    Bruker Porcupine (Picovoice) wake word detection
+    - Trigger: "Samantha" (custom wake word)
+    - Krever Picovoice API key i .env
+    - Modell: samantha_en_raspberry-pi_v4_0_0.ppn
+    - Sample rate: 16000 Hz (resampler fra USB mic 48000 Hz)
     - RGB LED: Blå under lytting
+    - Buffer: 6144 samples for stabilitet
     """
 ```
 
@@ -92,6 +94,24 @@ def speak(text, voice='nb-NO-FinnNeural', speed=50):
     - SSML prosody rate control for hastighet
     - Synkron nebb-bevegelse via amplitude detection
     - RGB LED: Rød under tale
+    """
+```
+
+#### Sang-avspilling (Nytt i 2025/2026)
+```python
+def play_song(song_path, beak, speech_config):
+    """
+    Spiller sanger med nebb og LED synkronisering
+    - Dual-file system:
+      - duck_mix.wav: Full mix for avspilling
+      - vocals_duck.wav: Isolert vokal for nebb-synk
+    - LED: Pulser i takt med musikkens amplitude
+    - Nebb: Følger vokalens amplitude i sanntid
+    - Threading: Separate threads for playback, LED og nebb
+    - Auto-detection: Støtter stereo og mono WAV-filer
+    - Progressbasert synkronisering: Nebb og LED følger playback position
+    - Annonsering: Sier artist og sangtittel før avspilling
+    - IPC: Kontrolleres via /tmp/duck_song_request.txt og /tmp/duck_song_stop.txt
     """
 ```
 
@@ -322,6 +342,60 @@ class RGBDuck:
                        └─> Audio + Servo synkronisert
 ```
 
+### Sang-avspilling (Nytt i v2.1.2)
+
+```
+1. Bruker klikker "Spill" på sang i web-panel
+   └─> POST /play-song {song: "Artist - Title"}
+       └─> Skriver "Artist - Title" til /tmp/duck_song_request.txt
+           └─> chatgpt_voice.py leser fil i main loop
+               └─> Annonserer artist og tittel via speak()
+                   └─> play_song() starter
+                       │
+                       ├─> Last duck_mix.wav (full mix)
+                       ├─> Last vocals_duck.wav (isolert vokal)
+                       │
+                       ├─> Konverter til numpy arrays
+                       │   ├─> mix_samples (stereo/mono)
+                       │   └─> vocals_samples (mono)
+                       │
+                       ├─> Start tre threads:
+                       │   │
+                       │   ├─> Playback thread (main):
+                       │   │   └─> sounddevice.OutputStream
+                       │   │       └─> Spiller mix_samples i 4096-frame chunks
+                       │   │           └─> Oppdaterer mix_idx for synkronisering
+                       │   │
+                       │   ├─> LED controller thread:
+                       │   │   └─> Leser mix amplitude ved current position (mix_idx)
+                       │   │       └─> Pulser LED intensity basert på amplitude
+                       │   │           └─> Sleep 30ms, repeat
+                       │   │
+                       │   └─> Beak controller thread:
+                       │       └─> Mapper mix_idx til vocals position
+                       │           ├─> progress = mix_idx / total_frames
+                       │           ├─> vocals_pos = progress * vocals_length
+                       │           └─> Leser vocals amplitude ved vocals_pos
+                       │               └─> Åpner nebb basert på amplitude
+                       │                   └─> Sleep 30ms, repeat
+                       │
+                       └─> Når ferdig: RGB tilbake til blå (wake word mode)
+
+2. Bruker klikker "Stopp sang"
+   └─> POST /stop-song
+       └─> Skriver "stop" til /tmp/duck_song_stop.txt
+           └─> Threads detekterer stop-fil
+               └─> Avslutter playback og threads gracefully
+```
+
+**Tekniske detaljer**:
+- **Dual-file system**: Separate filer for mix og vocals
+- **Progressbasert synkronisering**: `vocals_pos = (mix_idx / total_frames) * vocals_length`
+- **Stereo/mono håndtering**: Auto-detection og konvertering
+- **Threading**: Separate daemon threads for LED og nebb
+- **Sample rates**: Automatisk detection av framerate
+- **Chunk sizes**: 30ms for nebb/LED (smooth movement), 4096 frames for playback (stable audio)
+
 ### Innstillingsendring
 
 ```
@@ -375,6 +449,48 @@ chmod 644 /etc/systemd/system/*.service
 # Executable scripts
 chmod +x *.sh
 chmod +x *.py
+```
+
+## IPC (Inter-Process Communication)
+
+Alle IPC-filer ligger i `/tmp/` for kommunikasjon mellom services:
+
+| Fil | Retning | Formål | Format | Eksempel |
+|-----|---------|--------|--------|----------|
+| `/tmp/duck_personality.txt` | → chatgpt_voice.py | AI-personlighet | String | `normal`, `humorous`, `philosophical` |
+| `/tmp/duck_voice.txt` | → chatgpt_voice.py | TTS-stemme | String | `nb-NO-FinnNeural`, `nb-NO-PernilleNeural` |
+| `/tmp/duck_volume.txt` | → chatgpt_voice.py | Lydvolum | Integer (0-100) | `50` (normal), `100` (høyt) |
+| `/tmp/duck_speed.txt` | → chatgpt_voice.py | Talehastighet | Integer (0-100) | `50` (normal), `75` (rask) |
+| `/tmp/duck_beak.txt` | → chatgpt_voice.py | Nebb på/av | String | `on`, `off` |
+| `/tmp/duck_model.txt` | → chatgpt_voice.py | GPT-modell | String | `gpt-3.5-turbo`, `gpt-4` |
+| `/tmp/duck_message.txt` | → chatgpt_voice.py | Direktemelding | String | `Hva er været i dag?` |
+| `/tmp/duck_song_request.txt` | → chatgpt_voice.py | Sang-forespørsel | String | `A-ha - Take on me` |
+| `/tmp/duck_song_stop.txt` | → chatgpt_voice.py | Stopp sang | Eksistens | Fil eksisterer = stopp |
+| `/tmp/duck_fan.txt` | → fan_control.py | Vifte-modus | String | `auto`, `on`, `off` |
+| `/tmp/duck_fan_status.txt` | ← fan_control.py | Vifte-status | CSV | `auto|true|52.3` (mode\|running\|temp) |
+
+**Filrettigheter**: Alle `/tmp/duck_*.txt` filer må ha 666 permissions for å la services dele data:
+```bash
+chmod 666 /tmp/duck_*.txt
+```
+
+**Lesing (chatgpt_voice.py)**:
+```python
+def read_file(file_path, default):
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                return f.read().strip()
+    except:
+        pass
+    return default
+```
+
+**Skriving (duck-control.py)**:
+```python
+def write_file(file_path, content):
+    with open(file_path, 'w') as f:
+        f.write(content)
 ```
 
 ## Feilhåndtering

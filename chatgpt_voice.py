@@ -3,18 +3,22 @@ from scipy.signal import resample
 import sounddevice as sd
 import time
 import random
+import threading
 from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, JITTER, BEAT_MS_MIN, BEAT_MS_MAX, SERVO_CHANNEL
 import requests                                                                                                                                                                                           
 import os
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 import numpy as np
-from rgb_duck import set_blue, set_red, set_green, off, blink_yellow, stop_blink,blink_yellow_purple
-import vosk
+from rgb_duck import set_blue, set_red, set_green, off, blink_yellow, stop_blink, blink_yellow_purple, set_intensity
+import pvporcupine
 import json
 import sys
 import signal
 import atexit
+import struct
+import traceback
+from datetime import datetime
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -22,9 +26,6 @@ sys.stdout.reconfigure(line_buffering=True)
 # MAX98357A SD pin skal kobles til fast 3.3V (pin 1 eller 17)
 # Dette holder forsterkeren alltid på for rask respons
 print("MAX98357A SD pin skal være koblet til 3.3V - forsterker alltid på", flush=True)
-
-# Last inn Vosk-modellen GLOBALT, kun én gang
-VOSK_MODEL = vosk.Model("vosk-model-small-sv-rhasspy-0.15")
 
 # Fil for eksterne meldinger
 MESSAGE_FILE = "/tmp/duck_message.txt"
@@ -45,6 +46,9 @@ VOLUME_FILE = "/tmp/duck_volume.txt"
 # Filer for AI-query fra kontrollpanel
 AI_QUERY_FILE = "/tmp/duck_ai_query.txt"
 AI_RESPONSE_FILE = "/tmp/duck_ai_response.txt"
+# Filer for sang-forespørsler
+SONG_REQUEST_FILE = "/tmp/duck_song_request.txt"
+SONG_STOP_FILE = "/tmp/duck_song_stop.txt"
 
 # Fade in/out lengde i millisekunder (for å redusere knepp ved start/slutt)
 # Sett til 0 for å deaktivere fade
@@ -108,26 +112,68 @@ atexit.register(cleanup)
 signal.signal(signal.SIGTERM, lambda sig, frame: (cleanup(), sys.exit(0)))
 signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), sys.exit(0)))
 
-# Wake words som støttes
-WAKE_WORDS = ['anda', 'vakna', 'hej', 'hallå', 'assistent', 'alfred', 'alexa', 'ulrika', 'siri', 'oskar']
-
 def wait_for_wake_word():
     set_blue()
-    recognizer = vosk.KaldiRecognizer(VOSK_MODEL, 48000)  # Bruk 48000 Hz (USB mikrofon støtter dette)
-    recognizer.SetWords(True)  # Aktiver word-level timestamps
-    wake_words_display = ', '.join([f"'{w.capitalize()}'" for w in WAKE_WORDS[:6]])
-    print(f"Si {wake_words_display} eller flere for å vekke anda!")
+    
+    # Last inn Picovoice API-nøkkel fra .env
+    load_dotenv()
+    access_key = os.getenv('PICOVOICE_API_KEY')
+    if not access_key:
+        print("⚠️  PICOVOICE_API_KEY mangler i .env - Porcupine kan ikke starte!", flush=True)
+        print("Legg til: PICOVOICE_API_KEY=din_api_nøkkel i .env", flush=True)
+        time.sleep(5)
+        return None
+    
+    # Porcupine modell sti
+    keyword_path = "porcupine/samantha_en_raspberry-pi_v4_0_0.ppn"
+    if not os.path.exists(keyword_path):
+        print(f"⚠️  Porcupine modell ikke funnet: {keyword_path}", flush=True)
+        time.sleep(5)
+        return None
+    
+    print("Si 'Samantha' for å vekke anda!", flush=True)
     
     # Finn USB mikrofon dynamisk
     usb_mic_device = find_usb_microphone()
     
-    # Prøv å åpne mikrofon-input i en retry-loop slik at tjenesten ikke krasjer ved boot
-    # hvis ALSA-enheten ikke er klar umiddelbart. Vi vil forsøke igjen hvert par sekunder
-    # til vi lykkes.
-    while True:
-        try:
-            # Mindre blocksize (8000 = 0.17s) gir bedre respons for korte wake words
-            with sd.RawInputStream(samplerate=48000, blocksize=8000, dtype='int16', channels=1, device=usb_mic_device) as stream:
+    # Initialiser Porcupine
+    porcupine = None
+    audio_stream = None
+    
+    try:
+        porcupine = pvporcupine.create(
+            access_key=access_key,
+            keyword_paths=[keyword_path],
+            sensitivities=[0.5]  # 0.0 til 1.0, høyere = mer sensitiv (flere false positives)
+        )
+        
+        print(f"Porcupine startet! Sample rate: {porcupine.sample_rate} Hz, Frame length: {porcupine.frame_length}", flush=True)
+        
+        # USB mikrofon støtter 48000 Hz, men Porcupine trenger 16000 Hz
+        # Vi må resample
+        mic_sample_rate = 48000
+        porcupine_sample_rate = porcupine.sample_rate  # 16000 Hz
+        ratio = mic_sample_rate / porcupine_sample_rate  # 3.0
+        mic_frame_length = int(porcupine.frame_length * ratio)  # 512 * 3 = 1536
+        
+        # Øk buffer størrelse for å unngå overflows under resampling
+        # Bruk 4x større buffer for å gi nok tid til prosessering
+        mic_buffer_size = mic_frame_length * 4  # 1536 * 4 = 6144
+        
+        print(f"Resampling: {mic_sample_rate} Hz -> {porcupine_sample_rate} Hz (ratio: {ratio}), buffer: {mic_buffer_size}", flush=True)
+        
+        # Prøv å åpne mikrofon-input i en retry-loop
+        while True:
+            try:
+                audio_stream = sd.RawInputStream(
+                    samplerate=mic_sample_rate,
+                    blocksize=mic_buffer_size,
+                    dtype='int16',
+                    channels=1,
+                    device=usb_mic_device
+                )
+                audio_stream.start()
+                
                 while True:
                     # Sjekk om det finnes en ekstern melding
                     if os.path.exists(MESSAGE_FILE):
@@ -137,38 +183,61 @@ def wait_for_wake_word():
                             os.remove(MESSAGE_FILE)
                             if message:
                                 print(f"Ekstern melding mottatt: {message}", flush=True)
-                                # Sjekk om det er en trigger for å starte samtale
                                 if message == '__START_CONVERSATION__':
-                                    return '__START_CONVERSATION__'  # Spesiell trigger for samtale
+                                    return '__START_CONVERSATION__'
                                 else:
-                                    return message  # Returner meldingen direkte
+                                    return message
                         except Exception as e:
                             print(f"Feil ved lesing av meldingsfil: {e}", flush=True)
                     
-                    data = stream.read(8000)[0]
-                    if recognizer.AcceptWaveform(bytes(data)):
-                        result = json.loads(recognizer.Result())
-                        text = result.get("text", "").lower().strip()
-                        if text:  # Bare sjekk om ikke tom
-                            print(f"Gjenkjent: {text}")
-                            # Sjekk om noen av wake words er i teksten
-                            if any(wake_word in text for wake_word in WAKE_WORDS):
-                                print("Wake word oppdaget!")
-                                return None  # Wake word, ingen direkte melding
-                    else:
-                        # Sjekk partial results for raskere respons
-                        partial = json.loads(recognizer.PartialResult())
-                        partial_text = partial.get("partial", "").lower().strip()
-                        if partial_text and any(wake_word in partial_text for wake_word in WAKE_WORDS):
-                            print(f"Wake word oppdaget i partial: {partial_text}")
-                            recognizer.Reset()  # Reset for neste deteksjon
-                            return None
-        except StopIteration:
-            return None  # Wake word oppdaget via StopIteration
-        except Exception as e:
-            print(f"Input-enhet ikke klar ennå (prøver igjen om 2s): {e}")
-            time.sleep(2)
-            continue
+                    # Sjekk om det finnes en sang-forespørsel
+                    if os.path.exists(SONG_REQUEST_FILE):
+                        try:
+                            with open(SONG_REQUEST_FILE, 'r', encoding='utf-8') as f:
+                                song_path = f.read().strip()
+                            os.remove(SONG_REQUEST_FILE)
+                            if song_path:
+                                print(f"Sang-forespørsel mottatt: {song_path}", flush=True)
+                                return f'__PLAY_SONG__{song_path}'  # Spesiell trigger for sang
+                        except Exception as e:
+                            print(f"Feil ved lesing av sang-forespørsel: {e}", flush=True)
+                    
+                    # Les audio fra mikrofon (større buffer)
+                    pcm_48k, overflowed = audio_stream.read(mic_buffer_size)
+                    # Ignorer overflow warnings - forventet ved resampling
+                    
+                    # Konverter til numpy array
+                    pcm_48k_array = np.frombuffer(pcm_48k, dtype=np.int16)
+                    
+                    # Prosesser flere frames (buffer inneholder flere porcupine frames)
+                    # Split bufferen i chunks på mic_frame_length
+                    for i in range(0, len(pcm_48k_array), mic_frame_length):
+                        chunk = pcm_48k_array[i:i+mic_frame_length]
+                        if len(chunk) < mic_frame_length:
+                            break  # Siste chunk er for liten, skip
+                        
+                        # Resample til 16000 Hz
+                        pcm_16k_array = resample(chunk, porcupine.frame_length)
+                        pcm_16k = pcm_16k_array.astype(np.int16)
+                        
+                        # Sjekk for wake word
+                        keyword_index = porcupine.process(pcm_16k)
+                        if keyword_index >= 0:
+                            print("Wake word 'Samantha' oppdaget!", flush=True)
+                            return None  # Wake word oppdaget
+                        
+            except Exception as e:
+                print(f"Input-enhet ikke klar ennå (prøver igjen om 2s): {e}", flush=True)
+                time.sleep(2)
+                continue
+                
+    finally:
+        # Cleanup
+        if audio_stream is not None:
+            audio_stream.stop()
+            audio_stream.close()
+        if porcupine is not None:
+            porcupine.delete()
 def speak(text, speech_config, beak):
     stop_blink()  # Stopp eventuell blinking
     set_red()  # LED rød FØR anda begynner å snakke
@@ -412,6 +481,240 @@ def speak(text, speech_config, beak):
                 print("Detaljer:", result.cancellation_details.reason, result.cancellation_details.error_details)
     # Ikke kall off() eller endre LED her!
 
+def play_song(song_path, beak, speech_config):
+    """Spill av en sang med synkronisert nebb-bevegelse"""
+    print(f"Spiller sang: {song_path}", flush=True)
+    stop_blink()
+    
+    # Sjekk at mappen finnes
+    if not os.path.exists(song_path):
+        print(f"Sangmappe finnes ikke: {song_path}", flush=True)
+        return
+    
+    # Finn filene
+    mix_file = os.path.join(song_path, "duck_mix.wav")
+    vocals_file = os.path.join(song_path, "vocals_duck.wav")
+    
+    if not os.path.exists(mix_file) or not os.path.exists(vocals_file):
+        print(f"Mangler duck_mix.wav eller vocals_duck.wav i {song_path}", flush=True)
+        return
+    
+    # Ekstraher artistnavn og sangtittel fra mappesti
+    # Format: "Artist - Sangtittel"
+    song_folder_name = os.path.basename(song_path)
+    
+    # Annonser sangen før avspilling
+    if ' - ' in song_folder_name:
+        artist, song_title = song_folder_name.split(' - ', 1)
+        announcement = f"Nå skal jeg synge {song_title} av {artist}!"
+    else:
+        announcement = f"Nå skal jeg synge {song_folder_name}!"
+    
+    print(f"Annonserer sang: {announcement}", flush=True)
+    speak(announcement, speech_config, beak)
+    
+    # Litt pause før sang starter
+    time.sleep(0.5)
+    
+    set_red()  # LED rød når anda synger
+    
+    # Les nebbet-status
+    beak_enabled = True
+    try:
+        if os.path.exists(BEAK_FILE):
+            with open(BEAK_FILE, 'r') as f:
+                beak_status = f.read().strip()
+                beak_enabled = (beak_status != 'off')
+    except Exception as e:
+        print(f"Feil ved lesing av nebbet-konfigurasjon: {e}, nebbet aktivert", flush=True)
+    
+    # Les volum (0-100, 50 = normal)
+    volume_value = 50
+    try:
+        if os.path.exists(VOLUME_FILE):
+            with open(VOLUME_FILE, 'r') as f:
+                vol = f.read().strip()
+                if vol:
+                    volume_value = int(vol)
+    except Exception as e:
+        print(f"Feil ved lesing av volum-konfigurasjon: {e}, bruker normal volum", flush=True)
+    
+    volume_gain = volume_value / 50.0
+    
+    print(f"Spiller sang med volum: {volume_value}% (gain: {volume_gain:.2f}), Nebbet: {'på' if beak_enabled else 'av'}", flush=True)
+    
+    try:
+        # Last inn begge filer
+        mix_sound = AudioSegment.from_wav(mix_file)
+        vocals_sound = AudioSegment.from_wav(vocals_file)
+        
+        # Sjekk at de er like lange (ca)
+        if abs(len(mix_sound) - len(vocals_sound)) > 1000:  # 1 sekund toleranse
+            print(f"Advarsel: Mix og vocals har ulik lengde ({len(mix_sound)}ms vs {len(vocals_sound)}ms)", flush=True)
+        
+        # Konverter mix til numpy array for avspilling
+        mix_samples = np.array(mix_sound.get_array_of_samples(), dtype=np.float32)
+        mix_samples = mix_samples / (2**15)  # Normaliser til -1.0 til 1.0
+        
+        # Anvend volum
+        mix_samples = mix_samples * volume_gain
+        
+        # Sjekk om audio er stereo og reshape hvis nødvendig
+        n_channels = mix_sound.channels
+        framerate = mix_sound.frame_rate
+        
+        print(f"Audio format: {framerate} Hz, {n_channels} kanal(er), {len(mix_samples)} samples", flush=True)
+        
+        # Hvis stereo, reshape til (samples, 2)
+        if n_channels == 2:
+            mix_samples = mix_samples.reshape(-1, 2)
+        else:
+            # Mono, reshape til (samples, 1) for konsistens
+            mix_samples = mix_samples.reshape(-1, 1)
+        
+        # Konverter vocals til numpy array for amplitude detection
+        vocals_samples = np.array(vocals_sound.get_array_of_samples(), dtype=np.float32)
+        vocals_samples = vocals_samples / (2**15)
+        
+        # Vocals skal alltid være mono for amplitude detection
+        if vocals_sound.channels == 2:
+            # Konverter stereo til mono (gjennomsnitt av venstre og høyre)
+            vocals_samples = vocals_samples.reshape(-1, 2).mean(axis=1)
+        
+        # Finn output device
+        output_device = find_hifiberry_output()
+        
+        # Avspilling med sounddevice
+        chunk_size = int(framerate * BEAK_CHUNK_MS / 1000.0)
+        mix_idx = 0
+        
+        # Beregn lengder for synkronisering
+        # mix_samples kan være (N, 2) for stereo eller (N, 1) for mono
+        # vocals_samples er alltid flat mono array
+        total_frames = len(mix_samples)  # Antall frames i mix
+        vocals_length = len(vocals_samples)  # Antall samples i vocals
+        
+        # Flag for stopp
+        song_stopped = False
+        
+        # Nebb-tråd
+        nebb_stop = threading.Event()
+        led_stop = threading.Event()
+        
+        def beak_controller():
+            nonlocal mix_idx, song_stopped
+            while not nebb_stop.is_set() and not song_stopped:
+                # Sjekk for stopp-forespørsel
+                if os.path.exists(SONG_STOP_FILE):
+                    try:
+                        os.remove(SONG_STOP_FILE)
+                        print("Sang stoppet av bruker", flush=True)
+                        song_stopped = True
+                        nebb_stop.set()
+                        break
+                    except:
+                        pass
+                
+                # Beregn vocals position basert på mix playback progress
+                # mix_idx er frame index, vocals trenger sample index
+                if total_frames > 0:
+                    progress = min(mix_idx / total_frames, 1.0)
+                    vocals_pos = int(progress * vocals_length)
+                    vocals_pos = min(vocals_pos, vocals_length - chunk_size)
+                    
+                    if vocals_pos >= 0 and vocals_pos < vocals_length:
+                        chunk = vocals_samples[vocals_pos:vocals_pos+chunk_size]
+                        if len(chunk) > 0:
+                            amp = np.sqrt(np.mean(chunk**2))
+                            open_pct = min(max(amp * 3.5, 0.05), 1.0)
+                            beak.open_pct(open_pct)
+                
+                time.sleep(BEAK_CHUNK_MS / 1000.0)
+        
+        def led_controller():
+            """LED blinker i takt med musikken"""
+            nonlocal mix_idx, song_stopped
+            
+            # For LED, bruk mix audio (kan være stereo)
+            # Hvis stereo, konverter til mono for amplitude
+            if n_channels == 2:
+                mix_mono = mix_samples.mean(axis=1)  # Gjennomsnitt av venstre og høyre
+            else:
+                mix_mono = mix_samples.flatten()
+            
+            while not led_stop.is_set() and mix_idx < len(mix_mono):
+                # Sjekk for stopp
+                if song_stopped:
+                    break
+                
+                # Bruk mix_idx for å lese riktig posisjon
+                # (mix_idx oppdateres av playback thread)
+                current_pos = min(mix_idx, len(mix_mono) - 1)
+                chunk = mix_mono[current_pos:current_pos+chunk_size]
+                if len(chunk) > 0:
+                    amp = np.sqrt(np.mean(np.abs(chunk)**2))
+                    # Skaler amplitude til 0.0-1.0 range, med litt boost
+                    intensity = min(amp * 4.0, 1.0)
+                    # Sett minimum intensitet så LED ikke slukker helt
+                    intensity = max(intensity, 0.1)
+                    set_intensity(intensity)
+                
+                time.sleep(BEAK_CHUNK_MS / 1000.0)
+        
+        # Start nebb og LED tråder
+        if beak_enabled and beak:
+            beak_thread = threading.Thread(target=beak_controller, daemon=True)
+            beak_thread.start()
+        
+        led_thread = threading.Thread(target=led_controller, daemon=True)
+        led_thread.start()
+        
+        # Spill av mix med sounddevice (blocking)
+        with sd.OutputStream(samplerate=framerate, channels=n_channels, device=output_device, dtype='float32') as stream:
+            while mix_idx < len(mix_samples) and not song_stopped:
+                # Sjekk for stopp-forespørsel i main thread også
+                if os.path.exists(SONG_STOP_FILE):
+                    try:
+                        os.remove(SONG_STOP_FILE)
+                        print("Sang stoppet av bruker (main thread)", flush=True)
+                        song_stopped = True
+                        break
+                    except:
+                        pass
+                
+                chunk = mix_samples[mix_idx:mix_idx+4096]
+                if len(chunk) < 4096:
+                    # Pad siste chunk med stillhet
+                    if n_channels == 2:
+                        chunk = np.pad(chunk, ((0, 4096 - len(chunk)), (0, 0)), mode='constant')
+                    else:
+                        chunk = np.pad(chunk, ((0, 4096 - len(chunk)), (0, 0)), mode='constant')
+                
+                stream.write(chunk)
+                mix_idx += 4096
+        
+        # Stopp nebb og LED tråder
+        if beak_enabled and beak:
+            nebb_stop.set()
+            beak_thread.join(timeout=1.0)
+        
+        led_stop.set()
+        led_thread.join(timeout=1.0)
+        
+        # Lukk nebbet litt og reset LED til rød
+        if beak:
+            beak.open_pct(0.05)
+        set_red()  # Tilbake til rød LED
+        if beak:
+            beak.open_pct(0.05)
+        
+        print("Sang ferdig!", flush=True)
+        
+    except Exception as e:
+        print(f"Feil ved avspilling av sang: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+
 def recognize_speech_from_mic(device_name=None):
     set_green()  # LED grønn mens bruker snakker
     stt_key = os.getenv("AZURE_STT_KEY")
@@ -501,11 +804,21 @@ def chatgpt_query(messages, api_key, model=None):
         "Content-Type": "application/json"
     }
     
-    # Legg til system-prompt hvis personlighet er valgt
+    # Hent nåværende dato og tid fra system
+    now = datetime.now()
+    date_time_info = f"Nåværende dato og tid: {now.strftime('%A %d. %B %Y, klokken %H:%M')}. "
+    
+    # Legg til dato/tid + personlighet i system-prompt
     final_messages = messages.copy()
+    system_content = date_time_info
+    
     if personality_prompt:
-        final_messages.insert(0, {"role": "system", "content": personality_prompt})
+        system_content += personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
+    else:
+        system_content += "Du er en hjelpsom assistent."
+    
+    final_messages.insert(0, {"role": "system", "content": system_content})
     
     data = {
         "model": model,
@@ -611,12 +924,17 @@ def main():
     while True:
         external_message = wait_for_wake_word()
         
-        # Hvis det er en ekstern melding, sjekk om det er en samtale-trigger
+        # Hvis det er en ekstern melding, sjekk type
         if external_message:
             if external_message == '__START_CONVERSATION__':
                 # Start samtale direkte med en kort hilsen
                 print("Starter samtale via web-interface", flush=True)
                 speak("Hei på du, hva kan jeg hjelpe deg med?", speech_config, beak)
+            elif external_message.startswith('__PLAY_SONG__'):
+                # Spill av en sang
+                song_path = external_message.replace('__PLAY_SONG__', '', 1)
+                play_song(song_path, beak, speech_config)
+                continue  # Gå tilbake til wake word etter sang
             else:
                 # Bare si meldingen og gå tilbake til wake word
                 speak(external_message, speech_config, beak)
