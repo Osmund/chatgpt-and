@@ -21,13 +21,17 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 - 🎤 **Wake Word Detection**: Porcupine wake word - si "Samantha"
 - 💬 **ChatGPT Samtaler**: Naturlig dialog med AI-personligheter
 - 🗣️ **Azure TTS**: Høykvalitets norsk talesyntese med flere stemmer
-- 👄 **Synkron Nebb-bevegelse**: Servostyrt nebb som beveger seg til lyden- 🎵 **Sang-avspilling**: Anda kan synge med synkronisert nebb og LED-pulsing- 💡 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
+- 👄 **Synkron Nebb-bevegelse**: Servostyrt nebb som beveger seg til lyden
+- 🎵 **Sang-avspilling**: Anda kan synge med synkronisert nebb og LED-pulsing
+- 🌤️ **Værmelding**: Live værdata fra yr.no for hele Norge
+- ⏰ **Dato og tid**: Anda vet alltid hva klokka er og hvilken dato det er
+- 💡 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
 - 🌐 **Web Kontrollpanel**: Komplett fjernstyring via nettleser
 - 📊 **Sanntids Logger**: Live systemlogger og statusovervåking
 - 🔧 **Justerbar Talehastighet**: Fra treg til lynrask tale
 - 🔊 **Volumkontroll**: Juster lydnivå i sanntid
-- � **Automatisk Viftekontroll**: Temperaturbasert kjøling med manuell overstyring
-- �🎭 **Flere Personligheter**: Velg mellom ulike AI-personligheter
+- 🌀 **Automatisk Viftekontroll**: Temperaturbasert kjøling med manuell overstyring
+- 🎭 **Flere Personligheter**: Velg mellom ulike AI-personligheter
 - 📱 **WiFi Portal**: Innebygd WiFi-oppsett for enkel konfigurasjon
 
 ## ⚡ Quick Start

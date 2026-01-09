@@ -8,6 +8,31 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Ny funksjonalitet
 
+#### 🌤️ Værmelding fra yr.no
+
+**Beskrivelse**: Anda kan nå svare på spørsmål om været ved å hente live data fra yr.no (Meteorologisk institutt).
+
+**Funksjoner**:
+- **Automatisk stedsgjenkjenning**: Spør om været i en spesifikk by
+- **Nåværende temperatur**: Henter live temperatur fra yr.no
+- **Værbeskrivelse**: Beskriver nåværende vær (f.eks. "klarvær", "lett regn")
+- **Prognose**: Viser temperatur utover dagen (neste 12 timer)
+- **Intelligent dialog**: Hvis du ikke nevner sted, spør anda hvor du lurer på været
+
+**Eksempler**:
+- "Hva er været i Sokndal?"
+- "Hvor varmt er det i Oslo nå?"
+- "Hvordan blir været i Bergen i dag?"
+- "Hva er været?" → Anda spør: "Hvor vil du vite været?"
+
+**Teknisk implementering**:
+- **OpenAI Function Calling**: ChatGPT bestemmer når den skal hente værdata
+- **Nominatim geocoding**: Konverterer stedsnavn til koordinater (OpenStreetMap)
+- **MET Norway API**: locationforecast/2.0 for værdata
+- **Norsk oversettelse**: Symbolkoder oversettes automatisk til norsk
+
+**Resultat**: Anda gir nøyaktige værmeldinger for hele Norge! 🌦️☀️
+
 #### ⏰ Dato og Tid Bevissthet
 
 **Beskrivelse**: ChatGPT kan nå svare på spørsmål om nåværende dato og tid ved å lese fra systemklokka.

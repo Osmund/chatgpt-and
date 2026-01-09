@@ -759,6 +759,137 @@ def recognize_speech_from_mic(device_name=None):
                 off()
                 return None
 
+def get_coordinates(location_name):
+    """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
+    try:
+        # Legg til Norge i søket for bedre nøyaktighet
+        search_query = f"{location_name}, Norge"
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            'q': search_query,
+            'format': 'json',
+            'limit': 1
+        }
+        headers = {
+            'User-Agent': 'ChatGPTDuck/2.1.2 (contact: github.com/osmund/chatgpt-and)'
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data and len(data) > 0:
+            lat = float(data[0]['lat'])
+            lon = float(data[0]['lon'])
+            display_name = data[0].get('display_name', location_name)
+            return lat, lon, display_name
+        return None
+    except Exception as e:
+        print(f"Geocoding feil for '{location_name}': {e}", flush=True)
+        return None
+
+def get_weather(location_name):
+    """
+    Hent værmelding fra yr.no (MET Norway API)
+    Returnerer nåværende temperatur og værbeskrivelse
+    """
+    try:
+        # Først: Finn koordinater for stedet
+        coords = get_coordinates(location_name)
+        if not coords:
+            return f"Beklager, jeg fant ikke stedet '{location_name}'."
+        
+        lat, lon, display_name = coords
+        print(f"Værdata for {display_name} (lat: {lat}, lon: {lon})", flush=True)
+        
+        # Hent værdata fra MET Norway locationforecast API
+        url = "https://api.met.no/weatherapi/locationforecast/2.0/compact"
+        params = {'lat': lat, 'lon': lon}
+        headers = {
+            'User-Agent': 'ChatGPTDuck/2.1.2 (contact: github.com/osmund/chatgpt-and)'
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Parse værdata
+        timeseries = data['properties']['timeseries']
+        
+        # Nåværende vær (første tidspunkt)
+        current = timeseries[0]['data']['instant']['details']
+        current_temp = current['air_temperature']
+        
+        # Finn symbolkode for nåværende vær (fra neste 1h hvis tilgjengelig)
+        current_symbol = "ukjent"
+        if 'next_1_hours' in timeseries[0]['data']:
+            current_symbol = timeseries[0]['data']['next_1_hours']['summary']['symbol_code']
+        elif 'next_6_hours' in timeseries[0]['data']:
+            current_symbol = timeseries[0]['data']['next_6_hours']['summary']['symbol_code']
+        
+        # Oversett symbolkoder til norsk
+        symbol_translations = {
+            'clearsky': 'klarvær',
+            'cloudy': 'overskyet',
+            'fair': 'lettskyet',
+            'fog': 'tåke',
+            'heavyrain': 'kraftig regn',
+            'heavyrainandthunder': 'kraftig regn og torden',
+            'heavyrainshowers': 'kraftige regnbyger',
+            'heavysleet': 'kraftig sludd',
+            'heavysleetandthunder': 'kraftig sludd og torden',
+            'heavysnow': 'kraftig snø',
+            'heavysnowandthunder': 'kraftig snø og torden',
+            'heavysnowshowers': 'kraftige snøbyger',
+            'lightrain': 'lett regn',
+            'lightrainandthunder': 'lett regn og torden',
+            'lightrainshowers': 'lette regnbyger',
+            'lightsleet': 'lett sludd',
+            'lightsleetandthunder': 'lett sludd og torden',
+            'lightsnow': 'lett snø',
+            'lightsnowandthunder': 'lett snø og torden',
+            'lightsnowshowers': 'lette snøbyger',
+            'partlycloudy': 'delvis skyet',
+            'rain': 'regn',
+            'rainandthunder': 'regn og torden',
+            'rainshowers': 'regnbyger',
+            'sleet': 'sludd',
+            'sleetandthunder': 'sludd og torden',
+            'sleetshowers': 'sluddbyger',
+            'snow': 'snø',
+            'snowandthunder': 'snø og torden',
+            'snowshowers': 'snøbyger'
+        }
+        
+        # Fjern _day/_night/_polartwilight suffix
+        symbol_base = current_symbol.split('_')[0]
+        weather_desc = symbol_translations.get(symbol_base, current_symbol)
+        
+        # Hent prognose for resten av dagen (neste 6-12 timer)
+        forecast_summary = []
+        for i in range(1, min(13, len(timeseries))):  # Neste 12 timer
+            ts = timeseries[i]
+            time_str = ts['time']
+            temp = ts['data']['instant']['details']['air_temperature']
+            
+            # Hent hver 3. time for å ikke overbelaste
+            if i % 3 == 0:
+                hour = time_str.split('T')[1][:5]
+                forecast_summary.append(f"{hour}: {temp}°C")
+        
+        # Bygg svar
+        result = f"Værmelding for {display_name}:\n"
+        result += f"Nå: {current_temp}°C, {weather_desc}\n"
+        
+        if forecast_summary:
+            result += f"Prognose i dag: {', '.join(forecast_summary[:4])}"  # Max 4 tidspunkt
+        
+        return result
+        
+    except Exception as e:
+        print(f"Værhenting feil: {e}", flush=True)
+        return f"Beklager, jeg kunne ikke hente værdata akkurat nå. Feil: {str(e)}"
+
 def chatgpt_query(messages, api_key, model=None):
     if model is None:
         # Prøv å lese modell fra konfigurasjonsfil
@@ -820,13 +951,71 @@ def chatgpt_query(messages, api_key, model=None):
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     
+    # Definer værmelding function tool
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Hent nåværende værmelding og temperatur for et spesifikt sted i Norge. Bruk denne når brukeren spør om været.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "Navnet på stedet/byen i Norge, f.eks. 'Oslo', 'Sokndal', 'Bergen'"
+                        }
+                    },
+                    "required": ["location"]
+                }
+            }
+        }
+    ]
+    
     data = {
         "model": model,
-        "messages": final_messages
+        "messages": final_messages,
+        "tools": tools,
+        "tool_choice": "auto"  # La modellen velge når den skal bruke tools
     }
+    
     response = requests.post(url, headers=headers, json=data)
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    response_data = response.json()
+    
+    # Sjekk om modellen vil kalle en funksjon
+    message = response_data["choices"][0]["message"]
+    
+    if message.get("tool_calls"):
+        # Modellen vil kalle værfunksjonen
+        tool_call = message["tool_calls"][0]
+        function_name = tool_call["function"]["name"]
+        function_args = json.loads(tool_call["function"]["arguments"])
+        
+        print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
+        
+        # Kall faktisk værfunksjon
+        if function_name == "get_weather":
+            location = function_args.get("location", "")
+            weather_result = get_weather(location)
+            
+            # Legg til function call og resultat i conversation
+            final_messages.append(message)
+            final_messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": weather_result
+            })
+            
+            # Kall API igjen med værdata
+            data["messages"] = final_messages
+            response2 = requests.post(url, headers=headers, json=data)
+            response2.raise_for_status()
+            return response2.json()["choices"][0]["message"]["content"]
+    
+    # Ingen function call, returner vanlig svar
+    return message["content"]
 
 def check_ai_queries(api_key, speech_config, beak):
     """Bakgrunnstråd som sjekker for AI-queries fra kontrollpanelet"""
