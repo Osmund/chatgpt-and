@@ -875,11 +875,11 @@ def get_weather(location_name):
             # Hent hver 3. time for å ikke overbelaste
             if i % 3 == 0:
                 hour = time_str.split('T')[1][:5]
-                forecast_summary.append(f"{hour}: {temp}°C")
+                forecast_summary.append(f"{hour}: {temp:.1f}°C")
         
         # Bygg svar
         result = f"Værmelding for {display_name}:\n"
-        result += f"Nå: {current_temp}°C, {weather_desc}\n"
+        result += f"Nå: {current_temp:.1f}°C, {weather_desc}\n"
         
         if forecast_summary:
             result += f"Prognose i dag: {', '.join(forecast_summary[:4])}"  # Max 4 tidspunkt
