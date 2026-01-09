@@ -887,6 +887,19 @@ def control_hue_lights(action, room=None, brightness=None, color=None):
         traceback.print_exc()
         return f"Beklager, jeg kunne ikke kontrollere Hue-lysene akkurat nå. Feil: {str(e)}"
 
+def control_beak(enabled):
+    """Slå nebb på eller av"""
+    try:
+        status = "on" if enabled else "off"
+        with open(BEAK_FILE, 'w') as f:
+            f.write(status)
+        
+        action = "på" if enabled else "av"
+        return f"Jeg har skrudd nebbet {action}. {'Jeg bruker LED-lys i stedet når jeg snakker.' if not enabled else 'Nå beveger nebbet seg når jeg snakker.'}"
+    except Exception as e:
+        print(f"Feil ved nebb-kontroll: {e}", flush=True)
+        return f"Beklager, jeg kunne ikke endre nebb-innstillingen. Feil: {str(e)}"
+
 def get_coordinates(location_name):
     """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
     try:
@@ -1115,7 +1128,37 @@ def chatgpt_query(messages, api_key, model=None):
     
     # Hent nåværende dato og tid fra system
     now = datetime.now()
-    date_time_info = f"Nåværende dato og tid: {now.strftime('%A %d. %B %Y, klokken %H:%M')}. "
+    
+    # Norske navn for dager og måneder
+    norwegian_days = {
+        'Monday': 'mandag',
+        'Tuesday': 'tirsdag', 
+        'Wednesday': 'onsdag',
+        'Thursday': 'torsdag',
+        'Friday': 'fredag',
+        'Saturday': 'lørdag',
+        'Sunday': 'søndag'
+    }
+    
+    norwegian_months = {
+        'January': 'januar',
+        'February': 'februar',
+        'March': 'mars',
+        'April': 'april',
+        'May': 'mai',
+        'June': 'juni',
+        'July': 'juli',
+        'August': 'august',
+        'September': 'september',
+        'October': 'oktober',
+        'November': 'november',
+        'December': 'desember'
+    }
+    
+    # Bygg norsk dato-string manuelt
+    day_name = norwegian_days[now.strftime('%A')]
+    month_name = norwegian_months[now.strftime('%B')]
+    date_time_info = f"Nåværende dato og tid: {day_name} {now.day}. {month_name} {now.year}, klokken {now.strftime('%H:%M')}. "
     
     # Legg til dato/tid + personlighet i system-prompt
     final_messages = messages.copy()
@@ -1184,6 +1227,23 @@ def chatgpt_query(messages, api_key, model=None):
                     "required": ["action"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_beak",
+                "description": "Skru nebbet på eller av. Når nebbet er av, brukes LED-lys i stedet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "true for å skru på nebbet, false for å skru det av"
+                        }
+                    },
+                    "required": ["enabled"]
+                }
+            }
         }
     ]
     
@@ -1220,6 +1280,9 @@ def chatgpt_query(messages, api_key, model=None):
             brightness = function_args.get("brightness")
             color = function_args.get("color")
             result = control_hue_lights(action, room, brightness, color)
+        elif function_name == "control_beak":
+            enabled = function_args.get("enabled")
+            result = control_beak(enabled)
         else:
             result = "Ukjent funksjon"
         

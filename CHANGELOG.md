@@ -102,7 +102,30 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Resultat**: Anda gir alltid visuell feedback - enten med nebb eller LED! 💫🎤
 
-#### 🌤️ Værmelding fra yr.no
+#### �️ Stemme-kontroll av Nebb
+
+**Beskrivelse**: Du kan nå skru nebbet av eller på ved å snakke med anda!
+
+**Funksjoner**:
+- **Stemme-kommandoer**: Si "nebb av" eller "nebb på" direkte til anda
+- **OpenAI Function Calling**: ChatGPT gjenkjenner kommandoen automatisk
+- **Bekreftelse**: Anda bekrefter endringen og forklarer hva som skjer
+- **Umiddelbar effekt**: Endringen gjelder fra neste gang anda snakker
+- **Persistens**: Innstillingen lagres i `/tmp/duck_beak.txt`
+
+**Eksempler**:
+- "Samantha, nebb av" → Anda: "Jeg har skrudd nebbet av. Jeg bruker LED-lys i stedet når jeg snakker."
+- "Samantha, nebb på" → Anda: "Jeg har skrudd nebbet på. Nå beveger nebbet seg når jeg snakker."
+
+**Teknisk implementering**:
+- Ny funksjon: `control_beak(enabled)` skriver til `BEAK_FILE`
+- OpenAI tool: `control_beak` med boolean parameter `enabled`
+- Integrert i function calling handler i `chatgpt_query()`
+- Fungerer sammen med LED-fallback funksjonen
+
+**Resultat**: Sømløs kontroll av nebb - både via web og stemme! 🎙️🔧
+
+#### �🌤️ Værmelding fra yr.no
 
 **Beskrivelse**: Anda kan nå svare på spørsmål om været ved å hente live data fra yr.no (Meteorologisk institutt).
 
@@ -147,11 +170,13 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Teknisk implementering**:
 - `datetime.now()` henter systemtid ved hver ChatGPT-forespørsel
-- Formateres med `strftime('%A %d. %B %Y, klokken %H:%M')`
+- **Norsk oversettelse**: Manuell mapping av engelske dag/månednavn til norsk
+- Formateres som: "torsdag 9. januar 2026, klokken 13:57"
 - Legges til i system prompt før personlighet
 - Implementert i både `chatgpt_voice.py` og `duck-control.py`
+- Dictionary-mapping for alle 7 dager og 12 måneder
 
-**Resultat**: Anda vet alltid nøyaktig hvilken dato og tid det er! 🕐📅
+**Resultat**: Anda vet alltid nøyaktig hvilken dato og tid det er - på norsk! 🕐📅
 
 #### 🎵 Sang-avspilling med Nebb og LED Synkronisering
 
