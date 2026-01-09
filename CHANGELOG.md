@@ -14,24 +14,29 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Funksjoner**:
 - **Automatisk stedsgjenkjenning**: Spør om været i en spesifikk by
+- **Tidsramme-støtte**: "nå", "i dag" eller "i morgen"
 - **Nåværende temperatur**: Henter live temperatur fra yr.no
 - **Værbeskrivelse**: Beskriver nåværende vær (f.eks. "klarvær", "lett regn")
 - **Prognose**: Viser temperatur utover dagen (neste 12 timer)
+- **Morgendagens vær**: Min/max temperatur og værtype for hele morgendagen
 - **Intelligent dialog**: Hvis du ikke nevner sted, spør anda hvor du lurer på været
 
 **Eksempler**:
-- "Hva er været i Sokndal?"
-- "Hvor varmt er det i Oslo nå?"
-- "Hvordan blir været i Bergen i dag?"
+- "Hva er været i Sokndal?" → Nåværende vær + prognose i dag
+- "Hva er været i Oslo i morgen?" → Min/max temp + værtype for morgendagen
+- "Hvor varmt er det i Oslo nå?" → Nåværende temperatur
+- "Hvordan blir været i Bergen i dag?" → Dagens prognose
 - "Hva er været?" → Anda spør: "Hvor vil du vite været?"
 
 **Teknisk implementering**:
 - **OpenAI Function Calling**: ChatGPT bestemmer når den skal hente værdata
+- **Tidsramme-parameter**: "now", "today", "tomorrow" - automatisk detektert
 - **Nominatim geocoding**: Konverterer stedsnavn til koordinater (OpenStreetMap)
 - **MET Norway API**: locationforecast/2.0 for værdata
 - **Norsk oversettelse**: Symbolkoder oversettes automatisk til norsk
+- **Morgendagsprognose**: Beregner min/max temp og mest vanlige værtype
 
-**Resultat**: Anda gir nøyaktige værmeldinger for hele Norge! 🌦️☀️
+**Resultat**: Anda gir nøyaktige værmeldinger for hele Norge - både nå og i morgen! 🌦️☀️
 
 #### ⏰ Dato og Tid Bevissthet
 

@@ -18,7 +18,7 @@ import signal
 import atexit
 import struct
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -788,10 +788,14 @@ def get_coordinates(location_name):
         print(f"Geocoding feil for '{location_name}': {e}", flush=True)
         return None
 
-def get_weather(location_name):
+def get_weather(location_name, timeframe="now"):
     """
     Hent værmelding fra yr.no (MET Norway API)
-    Returnerer nåværende temperatur og værbeskrivelse
+    Returnerer temperatur og værbeskrivelse for angitt tidsramme
+    
+    Args:
+        location_name: Navn på stedet
+        timeframe: "now" (nå), "today" (i dag), "tomorrow" (i morgen)
     """
     try:
         # Først: Finn koordinater for stedet
@@ -800,7 +804,7 @@ def get_weather(location_name):
             return f"Beklager, jeg fant ikke stedet '{location_name}'."
         
         lat, lon, display_name = coords
-        print(f"Værdata for {display_name} (lat: {lat}, lon: {lon})", flush=True)
+        print(f"Værdata for {display_name} (lat: {lat}, lon: {lon}), tidsramme: {timeframe}", flush=True)
         
         # Hent værdata fra MET Norway locationforecast API
         url = "https://api.met.no/weatherapi/locationforecast/2.0/compact"
@@ -815,17 +819,6 @@ def get_weather(location_name):
         
         # Parse værdata
         timeseries = data['properties']['timeseries']
-        
-        # Nåværende vær (første tidspunkt)
-        current = timeseries[0]['data']['instant']['details']
-        current_temp = current['air_temperature']
-        
-        # Finn symbolkode for nåværende vær (fra neste 1h hvis tilgjengelig)
-        current_symbol = "ukjent"
-        if 'next_1_hours' in timeseries[0]['data']:
-            current_symbol = timeseries[0]['data']['next_1_hours']['summary']['symbol_code']
-        elif 'next_6_hours' in timeseries[0]['data']:
-            current_symbol = timeseries[0]['data']['next_6_hours']['summary']['symbol_code']
         
         # Oversett symbolkoder til norsk
         symbol_translations = {
@@ -861,33 +854,90 @@ def get_weather(location_name):
             'snowshowers': 'snøbyger'
         }
         
-        # Fjern _day/_night/_polartwilight suffix
-        symbol_base = current_symbol.split('_')[0]
-        weather_desc = symbol_translations.get(symbol_base, current_symbol)
+        def get_weather_desc(symbol_code):
+            symbol_base = symbol_code.split('_')[0]
+            return symbol_translations.get(symbol_base, symbol_code)
         
-        # Hent prognose for resten av dagen (neste 6-12 timer)
-        forecast_summary = []
-        for i in range(1, min(13, len(timeseries))):  # Neste 12 timer
-            ts = timeseries[i]
-            time_str = ts['time']
-            temp = ts['data']['instant']['details']['air_temperature']
+        now = datetime.now()
+        
+        if timeframe == "tomorrow":
+            # Finn værdatafor i morgen
+            tomorrow_date = (now + timedelta(days=1)).date()
             
-            # Hent hver 3. time for å ikke overbelaste
-            if i % 3 == 0:
-                hour = time_str.split('T')[1][:5]
-                forecast_summary.append(f"{hour}: {temp:.1f}°C")
-        
-        # Bygg svar
-        result = f"Værmelding for {display_name}:\n"
-        result += f"Nå: {current_temp:.1f}°C, {weather_desc}\n"
-        
-        if forecast_summary:
-            result += f"Prognose i dag: {', '.join(forecast_summary[:4])}"  # Max 4 tidspunkt
+            # Samle data for morgendagen
+            tomorrow_temps = []
+            tomorrow_symbols = []
+            
+            for ts in timeseries:
+                ts_time = datetime.fromisoformat(ts['time'].replace('Z', '+00:00'))
+                if ts_time.date() == tomorrow_date:
+                    temp = ts['data']['instant']['details']['air_temperature']
+                    tomorrow_temps.append(temp)
+                    
+                    # Hent værsymbol hvis tilgjengelig
+                    if 'next_1_hours' in ts['data']:
+                        tomorrow_symbols.append(ts['data']['next_1_hours']['summary']['symbol_code'])
+                    elif 'next_6_hours' in ts['data']:
+                        tomorrow_symbols.append(ts['data']['next_6_hours']['summary']['symbol_code'])
+            
+            if not tomorrow_temps:
+                return f"Beklager, jeg har ikke værdata for i morgen for {display_name}."
+            
+            # Beregn min/max temp
+            min_temp = min(tomorrow_temps)
+            max_temp = max(tomorrow_temps)
+            
+            # Finn mest vanlige værsymbol
+            most_common_symbol = "ukjent"
+            if tomorrow_symbols:
+                from collections import Counter
+                most_common_symbol = Counter(tomorrow_symbols).most_common(1)[0][0]
+            
+            weather_desc = get_weather_desc(most_common_symbol)
+            
+            result = f"Værmelding for {display_name} i morgen:\n"
+            result += f"Temperatur: {min_temp:.1f}°C til {max_temp:.1f}°C\n"
+            result += f"Vær: {weather_desc}"
+            
+        else:  # "now" eller "today"
+            # Nåværende vær (første tidspunkt)
+            current = timeseries[0]['data']['instant']['details']
+            current_temp = current['air_temperature']
+            
+            # Finn symbolkode for nåværende vær
+            current_symbol = "ukjent"
+            if 'next_1_hours' in timeseries[0]['data']:
+                current_symbol = timeseries[0]['data']['next_1_hours']['summary']['symbol_code']
+            elif 'next_6_hours' in timeseries[0]['data']:
+                current_symbol = timeseries[0]['data']['next_6_hours']['summary']['symbol_code']
+            
+            weather_desc = get_weather_desc(current_symbol)
+            
+            # Hent prognose for resten av dagen (neste 6-12 timer)
+            forecast_summary = []
+            for i in range(1, min(13, len(timeseries))):  # Neste 12 timer
+                ts = timeseries[i]
+                time_str = ts['time']
+                temp = ts['data']['instant']['details']['air_temperature']
+                
+                # Hent hver 3. time for å ikke overbelaste
+                if i % 3 == 0:
+                    hour = time_str.split('T')[1][:5]
+                    forecast_summary.append(f"{hour}: {temp:.1f}°C")
+            
+            # Bygg svar
+            result = f"Værmelding for {display_name}:\n"
+            result += f"Nå: {current_temp:.1f}°C, {weather_desc}\n"
+            
+            if forecast_summary:
+                result += f"Prognose i dag: {', '.join(forecast_summary[:4])}"  # Max 4 tidspunkt
         
         return result
         
     except Exception as e:
         print(f"Værhenting feil: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return f"Beklager, jeg kunne ikke hente værdata akkurat nå. Feil: {str(e)}"
 
 def chatgpt_query(messages, api_key, model=None):
@@ -957,13 +1007,19 @@ def chatgpt_query(messages, api_key, model=None):
             "type": "function",
             "function": {
                 "name": "get_weather",
-                "description": "Hent nåværende værmelding og temperatur for et spesifikt sted i Norge. Bruk denne når brukeren spør om været.",
+                "description": "Hent værmelding og temperatur for et spesifikt sted i Norge. Kan hente vær for nå, i dag eller i morgen.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "location": {
                             "type": "string",
                             "description": "Navnet på stedet/byen i Norge, f.eks. 'Oslo', 'Sokndal', 'Bergen'"
+                        },
+                        "timeframe": {
+                            "type": "string",
+                            "description": "Tidsramme for værmeldingen",
+                            "enum": ["now", "today", "tomorrow"],
+                            "default": "now"
                         }
                     },
                     "required": ["location"]
@@ -997,7 +1053,8 @@ def chatgpt_query(messages, api_key, model=None):
         # Kall faktisk værfunksjon
         if function_name == "get_weather":
             location = function_args.get("location", "")
-            weather_result = get_weather(location)
+            timeframe = function_args.get("timeframe", "now")
+            weather_result = get_weather(location, timeframe)
             
             # Legg til function call og resultat i conversation
             final_messages.append(message)
