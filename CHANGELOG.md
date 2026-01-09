@@ -8,6 +8,73 @@ Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Ny funksjonalitet
 
+#### 💡 Philips Hue Smart Lys-integrasjon
+
+**Beskrivelse**: Anda kan nå kontrollere Philips Hue smarte lys med stemmen!
+
+**Funksjoner**:
+- **På/Av kontroll**: Skru lys på eller av med stemmen
+- **Lysstyrke**: Dimm eller skru opp lyset (0-100%)
+- **8 farger**: rød, blå, grønn, gul, hvit, rosa, lilla, oransje
+- **Rom-støtte**: Styr spesifikke lys eller alle samtidig
+- **Intelligent matching**: Anda finner riktig lys basert på navn
+- **Lokal API**: Alt skjer lokalt på nettverket (ingen sky)
+
+**Eksempler**:
+- "Skru på lyset" → Alle lys skrus på
+- "Skru av lyset midt" → Lyset "Midt" skrus av
+- "Gjør lyset rødt" → Endrer farge til rødt
+- "Dimm lyset til 30 prosent" → Setter lysstyrke til 30%
+- "Gjør lyset i stua grønt" → Endrer farge på stue-lys
+- "Skru opp lyset" → Øker lysstyrke
+
+**Teknisk implementering**:
+- **OpenAI Function Calling**: ChatGPT bestemmer når den skal kontrollere lys
+- **Philips Hue Bridge API**: Lokal REST API (ikke cloud-avhengig)
+- **Hue color space**: Konverterer norske fargenavn til Hue/Sat verdier
+- **Brightness mapping**: 0-100% → 0-254 (Hue-format)
+- **Fuzzy matching**: Finner lys ved navn (case-insensitive substring search)
+- **Multi-light support**: Kan styre flere lys samtidig
+
+**Oppsett**:
+1. Finn Bridge IP: `nmap -sn 192.168.x.0/24 | grep -B 2 Philips`
+2. Generer API-nøkkel: Trykk link-knappen på Bridge, så:
+   ```bash
+   curl -X POST http://<bridge-ip>/api -d '{"devicetype":"duck_assistant"}'
+   ```
+3. Legg til i `.env`:
+   ```
+   HUE_BRIDGE_IP=192.168.10.120
+   HUE_API_KEY=<din-api-key>
+   ```
+
+**Resultat**: Anda kan nå kontrollere alle dine smarte lys! 💡🎨
+
+#### 👋 Automatisk retur til Wake Word ved takk
+
+**Beskrivelse**: Når du takker anda for hjelpen, avslutter samtalen automatisk etter at anda har svart.
+
+**Funksjoner**:
+- **Intelligent takk-deteksjon**: Gjenkjenner "takk", "tusen takk", "mange takk" og "takker"
+- **Høflig avslutning**: Anda svarer på takken før samtalen avsluttes
+- **Automatisk wake word-modus**: Går direkte tilbake til å vente på "Samantha"
+- **Naturlig samtaleflyt**: Slipper å si "stopp" for å avslutte
+
+**Eksempel**:
+- Du: "Hva er klokka?"
+- Anda: "Klokken er 13:30"
+- Du: "Takk!"
+- Anda: "Bare hyggelig!"
+- *Går automatisk tilbake til wake word-modus*
+
+**Teknisk implementering**:
+- Deteksjon i `chatgpt_query()` etter svar fra ChatGPT
+- Returnerer tuple `(svar, is_thank_you)` i stedet for bare svar
+- Main loop bryter ut av samtale når `is_thank_you=True`
+- Case-insensitive matching på norske takk-uttrykk
+
+**Resultat**: Mer naturlige samtaler - ingen behov for eksplisitt "stopp"-kommando! 👋
+
 #### 🌤️ Værmelding fra yr.no
 
 **Beskrivelse**: Anda kan nå svare på spørsmål om været ved å hente live data fra yr.no (Meteorologisk institutt).

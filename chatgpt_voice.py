@@ -759,6 +759,125 @@ def recognize_speech_from_mic(device_name=None):
                 off()
                 return None
 
+def control_hue_lights(action, room=None, brightness=None, color=None):
+    """
+    Kontroller Philips Hue smarte lys
+    
+    Args:
+        action: "on", "off", "dim", "brighten" 
+        room: Navnet på rommet/lyset (None = alle lys)
+        brightness: 0-100 (prosent)
+        color: "rød", "blå", "grønn", "gul", "hvit", "rosa", "lilla", "oransje"
+    """
+    try:
+        bridge_ip = os.getenv("HUE_BRIDGE_IP")
+        api_key = os.getenv("HUE_API_KEY")
+        
+        if not bridge_ip or not api_key:
+            return "Philips Hue er ikke konfigurert. Legg til HUE_BRIDGE_IP og HUE_API_KEY i .env"
+        
+        base_url = f"http://{bridge_ip}/api/{api_key}"
+        
+        # Hent alle lys
+        response = requests.get(f"{base_url}/lights", timeout=5)
+        response.raise_for_status()
+        lights = response.json()
+        
+        if not lights:
+            return "Fant ingen Philips Hue-lys på nettverket."
+        
+        # Finn hvilke lys som skal styres
+        target_lights = []
+        if room:
+            # Søk etter lys som matcher romnavnet
+            room_lower = room.lower()
+            for light_id, light_data in lights.items():
+                light_name = light_data.get('name', '').lower()
+                if room_lower in light_name:
+                    target_lights.append((light_id, light_data['name']))
+            
+            if not target_lights:
+                return f"Fant ingen lys som matcher '{room}'. Tilgjengelige lys: {', '.join([lights[lid]['name'] for lid in lights])}"
+        else:
+            # Alle lys
+            target_lights = [(lid, lights[lid]['name']) for lid in lights]
+        
+        # Fargekart (Hue format: 0-65535)
+        color_map = {
+            'rød': {'hue': 0, 'sat': 254},
+            'oransje': {'hue': 5000, 'sat': 254},
+            'gul': {'hue': 12000, 'sat': 254},
+            'grønn': {'hue': 25500, 'sat': 254},
+            'cyan': {'hue': 35000, 'sat': 254},
+            'blå': {'hue': 46920, 'sat': 254},
+            'lilla': {'hue': 50000, 'sat': 254},
+            'rosa': {'hue': 56100, 'sat': 254},
+            'hvit': {'sat': 0, 'ct': 366}  # Varm hvit
+        }
+        
+        # Bygg state-objektet
+        state = {}
+        
+        if action == "on":
+            state['on'] = True
+            if brightness is not None:
+                state['bri'] = int(brightness * 254 / 100)  # Konverter 0-100 til 0-254
+            if color and color.lower() in color_map:
+                state.update(color_map[color.lower()])
+        
+        elif action == "off":
+            state['on'] = False
+        
+        elif action == "dim":
+            current_bri = 100  # Default
+            state['on'] = True
+            if brightness:
+                state['bri'] = int(brightness * 254 / 100)
+            else:
+                state['bri'] = 50  # 20% lysstyrke
+        
+        elif action == "brighten":
+            state['on'] = True
+            if brightness:
+                state['bri'] = int(brightness * 254 / 100)
+            else:
+                state['bri'] = 254  # Full lysstyrke
+        
+        # Utfør kommandoen på alle target lys
+        results = []
+        for light_id, light_name in target_lights:
+            try:
+                url = f"{base_url}/lights/{light_id}/state"
+                resp = requests.put(url, json=state, timeout=5)
+                resp.raise_for_status()
+                results.append(light_name)
+            except Exception as e:
+                print(f"Feil ved kontroll av {light_name}: {e}", flush=True)
+        
+        # Bygg svar
+        action_desc = {
+            'on': 'skrudd på',
+            'off': 'skrudd av',
+            'dim': 'dimmet',
+            'brighten': 'gjort lysere'
+        }.get(action, action)
+        
+        if results:
+            result_msg = f"Jeg har {action_desc} {len(results)} lys: {', '.join(results)}"
+            if brightness:
+                result_msg += f" til {brightness}%"
+            if color:
+                result_msg += f" ({color} farge)"
+            return result_msg
+        else:
+            return f"Kunne ikke kontrollere noen lys."
+        
+    except Exception as e:
+        print(f"Hue-kontroll feil: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return f"Beklager, jeg kunne ikke kontrollere Hue-lysene akkurat nå. Feil: {str(e)}"
+
 def get_coordinates(location_name):
     """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
     try:
@@ -1001,7 +1120,7 @@ def chatgpt_query(messages, api_key, model=None):
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     
-    # Definer værmelding function tool
+    # Definer function tools
     tools = [
         {
             "type": "function",
@@ -1025,6 +1144,37 @@ def chatgpt_query(messages, api_key, model=None):
                     "required": ["location"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_hue_lights",
+                "description": "Kontroller Philips Hue smarte lys i hjemmet. Kan skru på/av, dimme, eller endre farge.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["on", "off", "dim", "brighten"],
+                            "description": "Hva som skal gjøres med lysene"
+                        },
+                        "room": {
+                            "type": "string",
+                            "description": "Navnet på rommet eller lyset (f.eks. 'stue', 'soverom'). La være None for alle lys."
+                        },
+                        "brightness": {
+                            "type": "integer",
+                            "description": "Lysstyrke i prosent (0-100). Valgfritt."
+                        },
+                        "color": {
+                            "type": "string",
+                            "enum": ["rød", "blå", "grønn", "gul", "hvit", "rosa", "lilla", "oransje"],
+                            "description": "Farge på lyset. Valgfritt."
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
         }
     ]
     
@@ -1043,36 +1193,53 @@ def chatgpt_query(messages, api_key, model=None):
     message = response_data["choices"][0]["message"]
     
     if message.get("tool_calls"):
-        # Modellen vil kalle værfunksjonen
+        # Modellen vil kalle værfunksjonen eller Hue-funksjonen
         tool_call = message["tool_calls"][0]
         function_name = tool_call["function"]["name"]
         function_args = json.loads(tool_call["function"]["arguments"])
         
         print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
         
-        # Kall faktisk værfunksjon
+        # Kall faktisk funksjon
         if function_name == "get_weather":
             location = function_args.get("location", "")
             timeframe = function_args.get("timeframe", "now")
-            weather_result = get_weather(location, timeframe)
-            
-            # Legg til function call og resultat i conversation
-            final_messages.append(message)
-            final_messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call["id"],
-                "name": function_name,
-                "content": weather_result
-            })
-            
-            # Kall API igjen med værdata
-            data["messages"] = final_messages
-            response2 = requests.post(url, headers=headers, json=data)
-            response2.raise_for_status()
-            return response2.json()["choices"][0]["message"]["content"]
+            result = get_weather(location, timeframe)
+        elif function_name == "control_hue_lights":
+            action = function_args.get("action")
+            room = function_args.get("room")
+            brightness = function_args.get("brightness")
+            color = function_args.get("color")
+            result = control_hue_lights(action, room, brightness, color)
+        else:
+            result = "Ukjent funksjon"
+        
+        # Legg til function call og resultat i conversation
+        final_messages.append(message)
+        final_messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call["id"],
+            "name": function_name,
+            "content": result
+        })
+        
+        # Kall API igjen med værdata
+        data["messages"] = final_messages
+        response2 = requests.post(url, headers=headers, json=data)
+        response2.raise_for_status()
+        reply_content = response2.json()["choices"][0]["message"]["content"]
+        
+        # Sjekk om brukerens opprinnelige melding var en takk
+        user_message = messages[-1]["content"].lower() if messages else ""
+        is_thank_you = any(word in user_message for word in ["takk", "tusen takk", "mange takk", "takker"])
+        
+        return (reply_content, is_thank_you)
     
     # Ingen function call, returner vanlig svar
-    return message["content"]
+    user_message = messages[-1]["content"].lower() if messages else ""
+    is_thank_you = any(word in user_message for word in ["takk", "tusen takk", "mange takk", "takker"])
+    
+    return (message["content"], is_thank_you)
 
 def check_ai_queries(api_key, speech_config, beak):
     """Bakgrunnstråd som sjekker for AI-queries fra kontrollpanelet"""
@@ -1214,11 +1381,25 @@ def main():
             messages.append({"role": "user", "content": prompt})
             try:
                 blink_yellow_purple()  # Start blinkende gul LED under tenkepause
-                reply = chatgpt_query(messages, api_key)
+                result = chatgpt_query(messages, api_key)
                 off()           # Slå av blinking når svaret er klart
+                
+                # Håndter tuple-retur (svar, is_thank_you)
+                if isinstance(result, tuple):
+                    reply, is_thank_you = result
+                else:
+                    # Fallback for gammel kode
+                    reply = result
+                    is_thank_you = False
+                
                 print("ChatGPT svar:", reply, flush=True)
                 speak(reply, speech_config, beak)
                 messages.append({"role": "assistant", "content": reply})
+                
+                # Hvis brukeren takket, gå tilbake til wake word
+                if is_thank_you:
+                    print("Bruker takket - går tilbake til wake word", flush=True)
+                    break
             except Exception as e:
                 off()
                 print("Feil:", e)

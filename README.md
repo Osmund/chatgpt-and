@@ -25,7 +25,8 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 - 🎵 **Sang-avspilling**: Anda kan synge med synkronisert nebb og LED-pulsing
 - 🌤️ **Værmelding**: Live værdata fra yr.no for hele Norge
 - ⏰ **Dato og tid**: Anda vet alltid hva klokka er og hvilken dato det er
-- 💡 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
+- 💡 **Philips Hue**: Styr smarte lys med stemmen (på/av, dimming, 8 farger)
+- 🔴 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
 - 🌐 **Web Kontrollpanel**: Komplett fjernstyring via nettleser
 - 📊 **Sanntids Logger**: Live systemlogger og statusovervåking
 - 🔧 **Justerbar Talehastighet**: Fra treg til lynrask tale
