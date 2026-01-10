@@ -18,7 +18,7 @@ ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer 
 │  duck-control.service │ │     chatgpt-duck.service             │
 │  (Web Kontrollpanel)  │ │     (Hovedapplikasjon)               │
 │                       │ │                                      │
-│  - HTTP Server        │ │  - Wake Word Detection (Vosk)       │
+│  - HTTP Server        │ │  - Wake Word Detection (Porcupine)  │
 │  - REST API           │ │  - Speech Recognition (Azure STT)   │
 │  - Service Control    │ │  - ChatGPT Integration              │
 │  - Real-time Logs     │ │  - Text-to-Speech (Azure TTS)       │
@@ -318,7 +318,7 @@ class RGBDuck:
 
 ```
 1. Bruker sier "alexa"
-   └─> Vosk detekterer wake word
+   └─> Porcupine detekterer wake word
        └─> RGB: Blå → Grønn
            └─> Azure STT lytter
                └─> RGB: Gul (blinker)
@@ -555,7 +555,7 @@ try {
 
 | Komponent | Latency | Optimalisering |
 |-----------|---------|----------------|
-| Wake Word Detection | <100ms | Offline (Vosk) |
+| Wake Word Detection | <100ms | Offline (Porcupine) |
 | Speech-to-Text | 1-2s | Azure streaming |
 | ChatGPT Response | 2-5s | Avhenger av modell og lengde |
 | Text-to-Speech | 1-2s | Azure neural |
@@ -563,7 +563,7 @@ try {
 
 ### Memory Usage
 
-- chatgpt_voice.py: ~200-300 MB (inkl. Vosk model)
+- chatgpt_voice.py: ~200-300 MB (inkl. Porcupine engine)
 - duck-control.py: ~20-30 MB (minimal HTTP server)
 - Total: ~250-350 MB
 
@@ -575,7 +575,7 @@ try {
 
 ### Storage
 
-- Vosk model: ~40 MB
+- Porcupine models: ~1-2 MB
 - Python packages: ~500 MB
 - Logs (rotert): max 100 MB
 
@@ -663,7 +663,7 @@ curl http://localhost:3000/duck-status
 
 | Problem | Diagnose | Løsning |
 |---------|----------|---------|
-| No wake word detection | Vosk model missing | Download model |
+| No wake word detection | Porcupine model missing | Check .ppn files |
 | No audio output | Wrong audio device | Configure ALSA |
 | Servo jittering | Voltage drop | Separate power supply |
 | RGB not working | Wrong GPIO pins | Check wiring |
@@ -688,7 +688,7 @@ curl http://localhost:3000/duck-status
 - Atomic writes
 - Lett å debugge
 
-### Vosk vs andre wake word engines
+### Porcupine vs andre wake word engines
 - Fully offline
 - Gratis (ingen cloud-costs)
 - God nok accuracy

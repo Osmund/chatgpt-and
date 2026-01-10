@@ -1359,9 +1359,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
         
         elif self.path == '/wake-words':
-            # Returner liste over aktive wake words
+            # Returner liste over aktive wake words (Porcupine)
             try:
-                wake_words = ['anda', 'vakna', 'hej', 'hallå', 'assistent', 'alfred', 'alexa', 'ulrika', 'siri', 'oskar']
+                wake_words = ['Samantha', 'quack quack']
                 response = {'wake_words': wake_words}
             except Exception as e:
                 response = {'error': str(e), 'wake_words': []}

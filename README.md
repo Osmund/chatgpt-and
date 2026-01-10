@@ -202,11 +202,11 @@ Prosjektet trenger disse Python-filene:
 - `duck_beak.py` (servo-kontroll for nebb)
 - `rgb_duck.py` (RGB LED-kontroll)
 
-## Wake Word med Vosk
+## Wake Word med Porcupine
 
-Prosjektet bruker **Vosk** for offline wake word detection (svensk modell).
+Prosjektet bruker **Porcupine** fra Picovoice for offline wake word detection.
 
-**Standard wake words er "alexa" eller "ulrika"** – du kan endre dette i `wait_for_wake_word()`-funksjonen.
+**Standard wake word er "Samantha"** (definert i `samantha_en_raspberry-pi_v4_0_0.ppn`). Du kan laste ned andre wake words fra [Picovoice Console](https://console.picovoice.ai/).
 
 ## Web Kontrollpanel
 
@@ -376,8 +376,8 @@ pip install lgpio
 - Test høyttaler: `speaker-test -t wav -c 2`
 - Sjekk mikrofon: `arecord -l`
 
-### Vosk finner ikke modell
-- Sjekk at `vosk-model-small-sv-rhasspy-0.15/` finnes i prosjektmappen
+### Porcupine finner ikke wake word model
+- Sjekk at `.ppn` filer finnes i `porcupine/` mappen
 - Verifiser at mappen inneholder `am/`, `graph/`, etc.
 
 ## Tips
@@ -385,7 +385,7 @@ pip install lgpio
 - Hvis LED eller Pi flikrer/rebooter: **bruk separat strøm til servoen!**
 - For å endre LED-blink, juster i `rgb_duck.py`.
 - For å endre wake words, endre sjekken i `wait_for_wake_word()`-funksjonen.
-- Vosk støtter flere språk – last ned norsk modell (`vosk-model-small-no-0.22`) hvis du vil bruke norske wake words.
+- Porcupine støtter flere språk – last ned custom wake words fra [Picovoice Console](https://console.picovoice.ai/) hvis du vil bruke andre ord.
 
 ## Arkitektur og Kommunikasjon
 
@@ -497,7 +497,8 @@ ssml = f"""
 ├── test-hotspot.sh                   # Test hotspot
 │
 ├── Quack-quack.ppn                   # Porcupine wake word modell
-└── vosk-model-small-sv-rhasspy-0.15/ # Vosk svensk modell
+└── porcupine/                         # Porcupine wake word models
+    └── samantha_en_raspberry-pi_v4_0_0.ppn
     ├── README
     ├── am/                            # Akustisk modell
     ├── conf/                          # Konfigurasjon

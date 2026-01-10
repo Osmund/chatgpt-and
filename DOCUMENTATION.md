@@ -44,7 +44,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 - **Del 2**: Software-installasjon
   - System-pakker
   - Python virtual environment
-  - Vosk-modell nedlasting
+  - Porcupine wake word modell (samantha_en_raspberry-pi_v4_0_0.ppn)
 - **Del 3**: API-nøkler
   - OpenAI setup og pricing
   - Azure Speech Service setup
@@ -137,7 +137,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
   - Systematisk debugging
   - Common issues tabell (8 problemer)
 - **Teknologivalg**:
-  - Begrunnelser for Python, BaseHTTPRequestHandler, tmp-filer, Vosk, Azure, systemd
+  - Begrunnelser for Python, BaseHTTPRequestHandler, tmp-filer, Porcupine, Azure, systemd
 
 **Når brukes**:
 - Forstå hvordan systemet fungerer
@@ -188,7 +188,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 **Innhold**:
 - AI og Speech Services (openai, azure-cognitiveservices-speech)
 - Audio Processing (pydub, sounddevice, pyaudio, numpy, scipy)
-- Wake Word Detection (vosk)
+- Wake Word Detection (Porcupine)
 - Hardware Control (gpiozero, RPi.GPIO, lgpio)
 - Utilities (python-dotenv, requests)
 - Alle med minimum versjonsnumre
@@ -210,7 +210,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 - Logs
 - OS-spesifikke filer
 - Backup files
-- Vosk models (store filer)
+- Porcupine wake word models (.ppn)
 - Test output
 - Legacy files
 - Alle med kommentarer og kategorisering
@@ -253,7 +253,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 | Nebb-kontroll | INSTALL.md, ARCHITECTURE.md | "servo", "beak", "amplitude" |
 | USB-C PD-trigger | PINOUT.md, INSTALL.md | "PD-trigger", "strømforsyning", "servo strøm" |
 | RGB LED | INSTALL.md, README.md | "RGB", "GPIO 17 27 22", "status-indikatorer" |
-| Wake word | README.md, INSTALL.md | "alexa", "ulrika", "Vosk" |
+| Wake word | README.md, INSTALL.md | "Samantha", "Porcupine" |
 | Oppstartsmelding | README.md, ARCHITECTURE.md | "oppstart", "IP-adresse", "nettverksdeteksjon" |
 | Feilsøking | INSTALL.md, ARCHITECTURE.md | "troubleshooting", "feilsøking", "problem" |
 | Nettverkskonfigurasjon | PORTS.md | "port", "brannmur", "firewall" |
