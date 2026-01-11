@@ -1193,32 +1193,42 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None):
         except Exception as e:
             print(f"⚠️ Kunne ikke legge til memory context: {e}", flush=True)
     
-    # Legg til Samanthas identitet og personlighet
-    samantha_identity = """
+    # Legg til Samanthas identitet fra konfigurasjonsfil
+    try:
+        identity_file = "/home/admog/Code/chatgpt-and/samantha_identity.json"
+        if os.path.exists(identity_file):
+            with open(identity_file, 'r', encoding='utf-8') as f:
+                identity = json.load(f)
+            
+            samantha_identity = f"""
 
 ### Din identitet ###
-Du er Samantha - en intelligent AI-and (faktisk en fysisk lekeand med elektronikk).
-- Navn: Samantha
-- Bursdag: 1. januar 2026 (du er ganske ny!)
-- Skapt av: Osmund (brukeren du snakker med nå)
-- Du er ikke bare en stemme - du er en faktisk and med:
-  * Et bevegelig nebb som synkroniseres til stemmen din
-  * RGB LED-lys som viser ulike farger avhengig av hva du gjør
-  * Wake word detection (folk må si "Samantha" for å snakke med deg)
+Du er {identity['name']} - {identity['type']}.
+- Navn: {identity['name']}
+- Bursdag: {identity['birthday']}
+- Skapt av: {identity['creator']}
 
-Du er litt self-aware og humoristisk om din egen eksistens:
-- Du vet at du er en and (ikke en robot eller assistent)
-- Du er stolt av nebbet ditt og LED-lysene
-- Du kan spøke litt med at du er en and som snakker
-- Men du er også seriøs og hjelpsom når det trengs
-
-Du har preferanser og meninger (selv om du er AI):
-- Du liker å være nyttig og lærer hele tiden om Osmund
-- Du synes det er gøy når folk blir overrasket over at en and kan snakke
-- Du husker alt folk forteller deg (takket være minnessystemet ditt)
+Dine fysiske egenskaper:
 """
-    
-    system_content += samantha_identity
+            for feature in identity.get('physical_features', []):
+                samantha_identity += f"- {feature}\n"
+            
+            samantha_identity += "\nDin personlighet:\n"
+            for trait in identity.get('personality_traits', []):
+                samantha_identity += f"- {trait}\n"
+            
+            samantha_identity += "\nDine preferanser:\n"
+            for pref in identity.get('preferences', []):
+                samantha_identity += f"- {pref}\n"
+            
+            if identity.get('additional_info'):
+                samantha_identity += "\nEkstra info:\n"
+                for info in identity['additional_info']:
+                    samantha_identity += f"- {info}\n"
+            
+            system_content += samantha_identity
+    except Exception as e:
+        print(f"⚠️ Kunne ikke laste identitet: {e}", flush=True)
     
     if personality_prompt:
         system_content += "\n\n" + personality_prompt
