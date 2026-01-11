@@ -5,15 +5,15 @@
   },
   
   "conversation": {
-    "greeting": "Hei på du, hva kan jeg hjelpe deg med?",
+    "greeting": "Hei, {name}. Hva kan jeg hjelpe deg med?",
     "no_response_timeout": "Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.",
     "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen.",
     "goodbye": "Da venter jeg til du sier navnet mitt igjen."
   },
   
   "web_interface": {
-    "start_conversation": "Hei på du, hva kan jeg hjelpe deg med?"
+    "start_conversation": "Hei, {name}. Hva kan jeg hjelpe deg med?"
   },
   
-  "_comment": "Bruk {ip} som placeholder for IP-adresse i startup_messages. Alle andre meldinger brukes direkte."
+  "_comment": "Bruk {ip} som placeholder for IP-adresse i startup_messages, og {name} for brukernavn i conversation og web_interface. Alle andre meldinger brukes direkte."
 }

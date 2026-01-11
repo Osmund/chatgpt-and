@@ -1527,7 +1527,28 @@ def main():
             if external_message == '__START_CONVERSATION__':
                 # Start samtale direkte med en kort hilsen
                 print("Starter samtale via web-interface", flush=True)
-                speak(messages_config['web_interface']['start_conversation'], speech_config, beak)
+                greeting_msg = messages_config['web_interface']['start_conversation']
+                
+                # Hent brukernavn fra database hvis tilgjengelig
+                if memory_manager:
+                    try:
+                        conn = memory_manager._get_connection()
+                        c = conn.cursor()
+                        c.execute("SELECT value FROM profile_facts WHERE key = 'user_name' LIMIT 1")
+                        row = c.fetchone()
+                        if row:
+                            user_name = row['value']
+                            greeting_msg = greeting_msg.replace('{name}', user_name)
+                        else:
+                            greeting_msg = greeting_msg.replace('{name}', 'på du')
+                        conn.close()
+                    except Exception as e:
+                        print(f"Kunne ikke hente brukernavn: {e}", flush=True)
+                        greeting_msg = greeting_msg.replace('{name}', 'på du')
+                else:
+                    greeting_msg = greeting_msg.replace('{name}', 'på du')
+                
+                speak(greeting_msg, speech_config, beak)
             elif external_message.startswith('__PLAY_SONG__'):
                 # Spill av en sang
                 song_path = external_message.replace('__PLAY_SONG__', '', 1)
@@ -1539,7 +1560,28 @@ def main():
                 continue
         else:
             # Normal wake word - si hilsen
-            speak(messages_config['conversation']['greeting'], speech_config, beak)
+            greeting_msg = messages_config['conversation']['greeting']
+            
+            # Hent brukernavn fra database hvis tilgjengelig
+            if memory_manager:
+                try:
+                    conn = memory_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("SELECT value FROM profile_facts WHERE key = 'user_name' LIMIT 1")
+                    row = c.fetchone()
+                    if row:
+                        user_name = row['value']
+                        greeting_msg = greeting_msg.replace('{name}', user_name)
+                    else:
+                        greeting_msg = greeting_msg.replace('{name}', 'på du')
+                    conn.close()
+                except Exception as e:
+                    print(f"Kunne ikke hente brukernavn: {e}", flush=True)
+                    greeting_msg = greeting_msg.replace('{name}', 'på du')
+            else:
+                greeting_msg = greeting_msg.replace('{name}', 'på du')
+            
+            speak(greeting_msg, speech_config, beak)
         
         # Start samtale (enten fra wake word eller samtale-trigger)
         messages = []
