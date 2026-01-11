@@ -1,0 +1,29 @@
+[Unit]
+Description=ChatGPT Duck Memory Worker
+Documentation=https://github.com/Osmund/chatgpt-and
+After=network.target chatgpt-duck.service
+Wants=chatgpt-duck.service
+
+[Service]
+Type=simple
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Kjør memory worker
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/duck_memory_worker.py
+
+# Restart automatisk ved feil
+Restart=always
+RestartSec=10
+
+# Lav CPU prioritet (ikke konkurer med hovedapp)
+Nice=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=duck-memory-worker
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=ChatGPT Duck Memory Hygiene
+Documentation=https://github.com/Osmund/chatgpt-and
+After=network.target
+
+[Service]
+Type=oneshot
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Kjør maintenance
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/duck_memory_hygiene.py
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=duck-memory-hygiene

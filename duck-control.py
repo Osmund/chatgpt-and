@@ -9,6 +9,7 @@ import subprocess
 import json
 import os
 from datetime import datetime
+from duck_memory import MemoryManager
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -364,6 +365,55 @@ HTML_TEMPLATE = """
             <button class="btn-start" onclick="playSong()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #e91e63; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">🎤 Syng!</button>
             <button class="btn-stop" onclick="stopSong()" style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='scale(1)'">⏹ Stopp syng</button>
             <div id="song-status" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.9); border-radius: 8px; display: none; color: #333;"></div>
+        </div>
+        
+        <div class="speak-section" style="background: linear-gradient(135deg, #00bcd4 0%, #009688 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+            <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🧠 Andas Minne</h3>
+            
+            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="text-align: center; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold; color: #00bcd4;" id="memory-stats-facts">-</div>
+                        <div style="font-size: 12px; color: #666;">Fakta</div>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold; color: #009688;" id="memory-stats-memories">-</div>
+                        <div style="font-size: 12px; color: #666;">Minner</div>
+                    </div>
+                    <div style="text-align: center; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold; color: #4caf50;" id="memory-stats-messages">-</div>
+                        <div style="font-size: 12px; color: #666;">Meldinger</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn-start" onclick="toggleMemoryView()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 16px; font-weight: bold; background: white; color: #00bcd4; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
+                <span id="memory-toggle-text">👁️ Vis minner</span>
+            </button>
+            
+            <div id="memory-view" style="display: none; margin-top: 15px;">
+                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
+                    <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
+                        Laster...
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 15px 0; color: #009688;">💭 Episodiske Minner</h4>
+                    <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" onkeypress="if(event.key==='Enter') searchMemories()">
+                    <div id="memory-memories-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
+                        Laster...
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px;">
+                    <h4 style="margin: 0 0 15px 0; color: #4caf50;">📊 Populære Emner</h4>
+                    <div id="memory-topics-list" style="font-size: 14px;">
+                        Laster...
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="speak-section">
@@ -1088,6 +1138,234 @@ HTML_TEMPLATE = """
             }
         }
 
+        // ==================== MEMORY FUNCTIONS ====================
+        
+        let memoryViewVisible = false;
+        
+        async function loadMemoryStats() {
+            try {
+                const response = await fetch('/api/memory/stats');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    document.getElementById('memory-stats-facts').textContent = data.stats.total_facts;
+                    document.getElementById('memory-stats-memories').textContent = data.stats.total_memories;
+                    document.getElementById('memory-stats-messages').textContent = data.stats.total_messages;
+                }
+            } catch (error) {
+                console.error('Memory stats error:', error);
+            }
+        }
+        
+        async function toggleMemoryView() {
+            const view = document.getElementById('memory-view');
+            const toggleText = document.getElementById('memory-toggle-text');
+            
+            memoryViewVisible = !memoryViewVisible;
+            
+            if (memoryViewVisible) {
+                view.style.display = 'block';
+                toggleText.textContent = '🙈 Skjul minner';
+                await loadMemoryFacts();
+                await loadMemoryMemories();
+                await loadMemoryTopics();
+            } else {
+                view.style.display = 'none';
+                toggleText.textContent = '👁️ Vis minner';
+            }
+        }
+        
+        async function loadMemoryFacts() {
+            const list = document.getElementById('memory-facts-list');
+            list.innerHTML = '<p style="color: #999; text-align: center;">Laster fakta...</p>';
+            
+            try {
+                const response = await fetch('/api/memory/profile');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.facts.length > 0) {
+                    let html = '';
+                    data.facts.forEach(fact => {
+                        const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+                        html += `
+                            <div style="padding: 10px 35px 10px 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor}; position: relative;">
+                                <div>
+                                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${fact.key}</div>
+                                    <div style="color: #666;">${fact.value}</div>
+                                    <div style="margin-top: 5px; font-size: 12px; color: #999;">
+                                        📊 Confidence: ${(fact.confidence * 100).toFixed(0)}% | 
+                                        🔢 Nevnt: ${fact.frequency}x | 
+                                        🏷️ ${fact.topic}
+                                    </div>
+                                </div>
+                                <button onclick="deleteFact('${fact.key}')" style="position: absolute; top: 8px; right: 8px; background: transparent; color: #999; border: none; padding: 4px; cursor: pointer; font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='#f44336'" onmouseout="this.style.color='#999'" title="Slett">🗑️</button>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    list.innerHTML = '<p style="color: #999; text-align: center;">Ingen fakta lagret ennå</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av fakta</p>';
+                console.error('Memory facts error:', error);
+            }
+        }
+        
+        async function loadMemoryMemories(query = '') {
+            const list = document.getElementById('memory-memories-list');
+            list.innerHTML = '<p style="color: #999; text-align: center;">Laster minner...</p>';
+            
+            try {
+                const url = query ? `/api/memory/memories?q=${encodeURIComponent(query)}` : '/api/memory/memories';
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.memories.length > 0) {
+                    let html = '';
+                    data.memories.forEach(mem => {
+                        const topicColors = {
+                            'family': '#e91e63',
+                            'hobby': '#9c27b0',
+                            'work': '#3f51b5',
+                            'projects': '#00bcd4',
+                            'technical': '#009688',
+                            'health': '#4caf50',
+                            'pets': '#ff9800',
+                            'preferences': '#ff5722'
+                        };
+                        const topicColor = topicColors[mem.topic] || '#757575';
+                        
+                        html += `
+                            <div style="padding: 10px 35px 10px 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor}; position: relative;">
+                                <div>
+                                    <div style="color: #333; margin-bottom: 5px;">${mem.text}</div>
+                                    <div style="font-size: 12px; color: #999;">
+                                        🏷️ ${mem.topic} | 
+                                        🔢 ${mem.frequency}x | 
+                                        📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}
+                                        ${mem.score ? ` | ⭐ ${mem.score.toFixed(2)}` : ''}
+                                    </div>
+                                </div>
+                                <button onclick="deleteMemory(${mem.id})" style="position: absolute; top: 8px; right: 8px; background: transparent; color: #999; border: none; padding: 4px; cursor: pointer; font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='#f44336'" onmouseout="this.style.color='#999'" title="Slett">🗑️</button>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    list.innerHTML = '<p style="color: #999; text-align: center;">Ingen minner funnet</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av minner</p>';
+                console.error('Memory memories error:', error);
+            }
+        }
+        
+        async function searchMemories() {
+            const query = document.getElementById('memory-search').value;
+            await loadMemoryMemories(query);
+        }
+        
+        async function loadMemoryTopics() {
+            const list = document.getElementById('memory-topics-list');
+            list.innerHTML = '<p style="color: #999; text-align: center;">Laster emner...</p>';
+            
+            try {
+                const response = await fetch('/api/memory/topics');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.topics.length > 0) {
+                    const total = data.topics.reduce((sum, t) => sum + t.mention_count, 0);
+                    
+                    let html = '';
+                    data.topics.forEach(topic => {
+                        const percentage = (topic.mention_count / total * 100).toFixed(1);
+                        const barWidth = Math.min(percentage, 100);
+                        
+                        const topicEmojis = {
+                            'family': '👨‍👩‍👧‍👦',
+                            'hobby': '🎨',
+                            'work': '💼',
+                            'projects': '🚀',
+                            'technical': '💻',
+                            'health': '❤️',
+                            'pets': '🐾',
+                            'preferences': '⭐',
+                            'weather': '🌤️',
+                            'general': '💬'
+                        };
+                        const emoji = topicEmojis[topic.topic] || '📌';
+                        
+                        html += `
+                            <div style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+                                    <span>${emoji} ${topic.topic}</span>
+                                    <span style="color: #666;">${topic.mention_count} (${percentage}%)</span>
+                                </div>
+                                <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, #00bcd4, #009688); transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    list.innerHTML = '<p style="color: #999; text-align: center;">Ingen emner ennå</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av emner</p>';
+                console.error('Memory topics error:', error);
+            }
+        }
+        
+        async function deleteFact(key) {
+            if (!confirm(`Er du sikker på at du vil slette "${key}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/memory/profile/${encodeURIComponent(key)}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('✅ ' + data.message);
+                    await loadMemoryFacts();
+                    await loadMemoryStats();
+                } else {
+                    alert('❌ Feil: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Feil ved sletting: ' + error.message);
+                console.error('Delete fact error:', error);
+            }
+        }
+        
+        async function deleteMemory(id) {
+            if (!confirm(`Er du sikker på at du vil slette dette minnet?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/memory/memories/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('✅ ' + data.message);
+                    await loadMemoryMemories();
+                    await loadMemoryStats();
+                } else {
+                    alert('❌ Feil: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Feil ved sletting: ' + error.message);
+                console.error('Delete memory error:', error);
+            }
+        }
+
         // Load current settings on page load
         window.onload = function() {
             updateStatus();
@@ -1101,10 +1379,12 @@ HTML_TEMPLATE = """
             loadFanStatus();
             getWiFiNetworks();
             loadSongs();  // Last sanger
+            loadMemoryStats();  // Last memory stats
             
             // Oppdater status automatisk hvert 5. sekund
             setInterval(updateStatus, 5000);
             setInterval(loadFanStatus, 5000);
+            setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
         };
     </script>
 </body>
@@ -1451,6 +1731,218 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 response = {'status': 'success', 'networks': networks}
             except Exception as e:
                 response = {'status': 'error', 'networks': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        # ==================== MEMORY API ====================
+        elif self.path == '/api/memory/stats':
+            # Get memory system statistics
+            try:
+                memory_manager = MemoryManager()
+                stats = memory_manager.get_stats()
+                response = {'status': 'success', 'stats': stats}
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/profile':
+            # Get all profile facts
+            try:
+                memory_manager = MemoryManager()
+                facts = memory_manager.get_profile_facts(limit=50)
+                facts_list = [
+                    {
+                        'key': f.key,
+                        'value': f.value,
+                        'topic': f.topic,
+                        'confidence': f.confidence,
+                        'frequency': f.frequency,
+                        'source': f.source,
+                        'last_updated': f.last_updated
+                    }
+                    for f in facts
+                ]
+                response = {'status': 'success', 'facts': facts_list}
+            except Exception as e:
+                response = {'status': 'error', 'facts': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path.startswith('/api/memory/memories'):
+            # Get memories with optional search
+            try:
+                memory_manager = MemoryManager()
+                query_params = self.path.split('?')[1] if '?' in self.path else ''
+                
+                # Parse query parameter
+                search_query = ''
+                if 'q=' in query_params:
+                    search_query = query_params.split('q=')[1].split('&')[0]
+                    search_query = search_query.replace('+', ' ')
+                
+                if search_query:
+                    # Search memories
+                    results = memory_manager.search_memories(search_query, limit=20)
+                    memories_list = [
+                        {
+                            'id': m.id,
+                            'text': m.text,
+                            'topic': m.topic,
+                            'frequency': m.frequency,
+                            'confidence': m.confidence,
+                            'score': score,
+                            'first_seen': m.first_seen,
+                            'last_accessed': m.last_accessed
+                        }
+                        for m, score in results
+                    ]
+                else:
+                    # Get recent memories
+                    conn = memory_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("""
+                        SELECT * FROM memories 
+                        ORDER BY last_accessed DESC 
+                        LIMIT 20
+                    """)
+                    memories_list = []
+                    for row in c.fetchall():
+                        memories_list.append({
+                            'id': row['id'],
+                            'text': row['text'],
+                            'topic': row['topic'],
+                            'frequency': row['frequency'],
+                            'confidence': row['confidence'],
+                            'first_seen': row['first_seen'],
+                            'last_accessed': row['last_accessed']
+                        })
+                    conn.close()
+                
+                response = {'status': 'success', 'memories': memories_list}
+            except Exception as e:
+                response = {'status': 'error', 'memories': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/topics':
+            # Get topic statistics
+            try:
+                memory_manager = MemoryManager()
+                topics = memory_manager.get_topic_stats(limit=20)
+                response = {'status': 'success', 'topics': topics}
+            except Exception as e:
+                response = {'status': 'error', 'topics': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/conversations':
+            # Get recent conversations
+            try:
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                # Group messages by date
+                c.execute("""
+                    SELECT 
+                        date(timestamp) as date,
+                        COUNT(*) as message_count,
+                        MIN(timestamp) as first_msg,
+                        MAX(timestamp) as last_msg
+                    FROM messages
+                    GROUP BY date(timestamp)
+                    ORDER BY date DESC
+                    LIMIT 30
+                """)
+                
+                conversations = []
+                for row in c.fetchall():
+                    conversations.append({
+                        'date': row['date'],
+                        'message_count': row['message_count'],
+                        'first_msg': row['first_msg'],
+                        'last_msg': row['last_msg']
+                    })
+                
+                conn.close()
+                response = {'status': 'success', 'conversations': conversations}
+            except Exception as e:
+                response = {'status': 'error', 'conversations': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def do_DELETE(self):
+        """Handle DELETE requests for memory management"""
+        
+        # Delete profile fact
+        if self.path.startswith('/api/memory/profile/'):
+            try:
+                key = self.path.split('/api/memory/profile/')[1]
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                c.execute("DELETE FROM profile_facts WHERE key=?", (key,))
+                conn.commit()
+                deleted = c.rowcount > 0
+                conn.close()
+                
+                if deleted:
+                    response = {'status': 'success', 'message': f'Fact "{key}" slettet'}
+                else:
+                    response = {'status': 'error', 'message': f'Fact "{key}" ikke funnet'}
+                    
+            except Exception as e:
+                response = {'status': 'error', 'message': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        # Delete memory
+        elif self.path.startswith('/api/memory/memories/'):
+            try:
+                memory_id = int(self.path.split('/api/memory/memories/')[1])
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                c.execute("DELETE FROM memories WHERE id=?", (memory_id,))
+                conn.commit()
+                deleted = c.rowcount > 0
+                conn.close()
+                
+                if deleted:
+                    response = {'status': 'success', 'message': f'Memory #{memory_id} slettet'}
+                else:
+                    response = {'status': 'error', 'message': f'Memory #{memory_id} ikke funnet'}
+                    
+            except Exception as e:
+                response = {'status': 'error', 'message': str(e)}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')

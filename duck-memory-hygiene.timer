@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily memory hygiene timer
+Documentation=https://github.com/Osmund/chatgpt-and
+
+[Timer]
+# Kjør hver dag kl 03:00
+OnCalendar=03:00
+# Persistent = kjør med en gang hvis vi misset et scheduled run
+Persistent=true
+
+[Install]
+WantedBy=timers.target

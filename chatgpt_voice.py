@@ -19,6 +19,7 @@ import atexit
 import struct
 import traceback
 from datetime import datetime, timedelta
+from duck_memory import MemoryManager
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -1081,7 +1082,7 @@ def get_weather(location_name, timeframe="now"):
         traceback.print_exc()
         return f"Beklager, jeg kunne ikke hente værdata akkurat nå. Feil: {str(e)}"
 
-def chatgpt_query(messages, api_key, model=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None):
     if model is None:
         # Prøv å lese modell fra konfigurasjonsfil
         try:
@@ -1164,11 +1165,43 @@ def chatgpt_query(messages, api_key, model=None):
     final_messages = messages.copy()
     system_content = date_time_info
     
+    # Legg til memory context hvis tilgjengelig
+    if memory_manager:
+        try:
+            # Hent brukerens siste melding for relevant søk
+            user_query = messages[-1]["content"] if messages else ""
+            context = memory_manager.build_context_for_ai(user_query, recent_messages=3)
+            
+            # Bygg memory section
+            memory_section = "\n\n### Ditt Minne ###\n"
+            
+            # Profile facts
+            if context['profile_facts']:
+                memory_section += "Fakta om brukeren:\n"
+                for fact in context['profile_facts'][:8]:  # Top 8 facts
+                    memory_section += f"- {fact['key']}: {fact['value']}\n"
+            
+            # Relevant memories
+            if context['relevant_memories']:
+                memory_section += "\nRelevante minner:\n"
+                for mem_text, score in context['relevant_memories'][:5]:  # Top 5 memories
+                    memory_section += f"- {mem_text}\n"
+            
+            # Recent topics
+            if context['recent_topics']:
+                topics = [t['topic'] for t in context['recent_topics'][:3]]
+                memory_section += f"\nSiste emner vi har snakket om: {', '.join(topics)}\n"
+            
+            system_content += memory_section
+            print(f"✅ Memory context lagt til ({len(context['profile_facts'])} facts, {len(context['relevant_memories'])} minner)", flush=True)
+        except Exception as e:
+            print(f"⚠️ Kunne ikke legge til memory context: {e}", flush=True)
+    
     if personality_prompt:
-        system_content += personality_prompt
+        system_content += "\n\n" + personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
     else:
-        system_content += "Du er en hjelpsom assistent."
+        system_content += "\n\nDu er en hjelpsom assistent."
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     
@@ -1313,7 +1346,7 @@ def chatgpt_query(messages, api_key, model=None):
     
     return (message["content"], is_thank_you)
 
-def check_ai_queries(api_key, speech_config, beak):
+def check_ai_queries(api_key, speech_config, beak, memory_manager=None):
     """Bakgrunnstråd som sjekker for AI-queries fra kontrollpanelet"""
     import threading
     while True:
@@ -1330,11 +1363,17 @@ def check_ai_queries(api_key, speech_config, beak):
                     
                     # Spør ChatGPT
                     messages = [{"role": "user", "content": query}]
-                    response = chatgpt_query(messages, api_key)
+                    response = chatgpt_query(messages, api_key, memory_manager=memory_manager)
+                    
+                    # Håndter tuple response
+                    if isinstance(response, tuple):
+                        response_text = response[0]
+                    else:
+                        response_text = response
                     
                     # Skriv respons til fil
                     with open(AI_RESPONSE_FILE, 'w', encoding='utf-8') as f:
-                        f.write(response)
+                        f.write(response_text)
                     
                     # Si svaret
                     speak(response, speech_config, beak)
@@ -1355,6 +1394,14 @@ def main():
         print(f"Advarsel: Kunne ikke initialisere servo (fortsetter uten): {e}", flush=True)
         beak = None
     
+    # Initialiser memory manager
+    try:
+        memory_manager = MemoryManager()
+        print("✅ Memory system initialisert", flush=True)
+    except Exception as e:
+        print(f"⚠️ Memory system feilet (fortsetter uten): {e}", flush=True)
+        memory_manager = None
+    
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     tts_key = os.getenv("AZURE_TTS_KEY")
@@ -1364,7 +1411,7 @@ def main():
 
     # Start bakgrunnstråd for AI-queries fra kontrollpanelet
     import threading
-    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak), daemon=True)
+    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager), daemon=True)
     ai_thread.start()
     print("AI-query tråd startet", flush=True)
 
@@ -1453,7 +1500,7 @@ def main():
             messages.append({"role": "user", "content": prompt})
             try:
                 blink_yellow_purple()  # Start blinkende gul LED under tenkepause
-                result = chatgpt_query(messages, api_key)
+                result = chatgpt_query(messages, api_key, memory_manager=memory_manager)
                 off()           # Slå av blinking når svaret er klart
                 
                 # Håndter tuple-retur (svar, is_thank_you)
@@ -1467,6 +1514,13 @@ def main():
                 print("ChatGPT svar:", reply, flush=True)
                 speak(reply, speech_config, beak)
                 messages.append({"role": "assistant", "content": reply})
+                
+                # Lagre melding til memory database (asynkront prosessert av worker)
+                if memory_manager:
+                    try:
+                        memory_manager.save_message(prompt, reply)
+                    except Exception as e:
+                        print(f"⚠️ Kunne ikke lagre melding: {e}", flush=True)
                 
                 # Hvis brukeren takket, gå tilbake til wake word
                 if is_thank_you:
