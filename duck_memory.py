@@ -16,6 +16,14 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import math
+import pickle
+import numpy as np
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
+# Last environment variables
+load_dotenv()
 
 
 @dataclass
@@ -153,6 +161,9 @@ class MemoryManager:
     def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
         self.db_path = db_path
         self.metrics = MemoryMetrics()
+        
+        # OpenAI client for embeddings
+        self.openai_client = OpenAI()
         
         # In-memory cache
         self._cache = {
@@ -428,6 +439,9 @@ class MemoryManager:
         conn.commit()
         conn.close()
         
+        # Generer embedding for ny/oppdatert fact
+        self.update_fact_embedding(fact.key)
+        
         # Invalidate cache
         self._cache['top_facts'] = None
         
@@ -508,7 +522,21 @@ class MemoryManager:
             'alder': 'age',
             'år': 'age',
             'hvor': 'location',
-            'bor': 'location'
+            'bor': 'location',
+            'samler': 'collection',
+            'samling': 'collection',
+            'hobby': 'hobby',
+            'hobbyer': 'hobby',
+            'interesse': 'hobby',
+            'datamaskin': 'computer',
+            'datamaskiner': 'computer',
+            'pc': 'computer',
+            'maskin': 'computer',
+            'niese': 'niece',
+            'nieser': 'niece',
+            'nevø': 'nephew',
+            'nevøer': 'nephew',
+            'barn': 'child'
         }
         
         # Finn relevante nøkkelord
@@ -518,7 +546,8 @@ class MemoryManager:
         
         # Hvis vi fant nøkkelord, prøv FTS søk først
         if keywords:
-            keyword_query = ' OR '.join(keywords)
+            # Legg til wildcard for å matche f.eks. "niece" med "nieces_count"
+            keyword_query = ' OR '.join([f'{kw}*' for kw in keywords])
             try:
                 c.execute("""
                     SELECT pf.*, bm25(profile_facts_fts) as score
@@ -605,6 +634,112 @@ class MemoryManager:
         
         conn.close()
         return facts
+    
+    # ==================== EMBEDDINGS ====================
+    
+    def generate_embedding(self, text: str) -> np.ndarray:
+        """Generer embedding for tekst med OpenAI API"""
+        try:
+            response = self.openai_client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            return np.array(response.data[0].embedding, dtype=np.float32)
+        except Exception as e:
+            print(f"⚠️ Embedding feil: {e}")
+            return None
+    
+    def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Beregn cosine similarity mellom to vektorer"""
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    
+    def search_by_embedding(self, query: str, limit: int = 10, threshold: float = 0.25) -> List[ProfileFact]:
+        """Søk facts basert på semantic similarity"""
+        # Generer query embedding
+        query_embedding = self.generate_embedding(query)
+        if query_embedding is None:
+            # Fallback til keyword search
+            return self.search_profile_facts(query, limit)
+        
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Hent alle facts med embeddings
+        c.execute("""
+            SELECT key, value, topic, confidence, frequency, source, last_updated, embedding
+            FROM profile_facts
+            WHERE embedding IS NOT NULL
+        """)
+        
+        results = []
+        for row in c.fetchall():
+            fact_embedding = pickle.loads(row[7])
+            similarity = self.cosine_similarity(query_embedding, fact_embedding)
+            
+            if similarity >= threshold:
+                results.append((
+                    similarity,
+                    ProfileFact(
+                        key=row[0],
+                        value=row[1],
+                        topic=row[2],
+                        confidence=row[3],
+                        frequency=row[4],
+                        source=row[5],
+                        last_updated=row[6]
+                    )
+                ))
+        
+        conn.close()
+        
+        # Sorter etter similarity (høyest først)
+        results.sort(key=lambda x: x[0], reverse=True)
+        
+        # Returner top N facts
+        return [fact for _, fact in results[:limit]]
+    
+    def update_fact_embedding(self, key: str):
+        """Generer og lagre embedding for en fact"""
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Hent fact
+        c.execute("SELECT key, value, topic FROM profile_facts WHERE key = ?", (key,))
+        row = c.fetchone()
+        
+        if not row:
+            conn.close()
+            return
+        
+        # Generer embedding fra key + value + topic
+        text = f"{row[0]}: {row[1]} ({row[2]})"
+        embedding = self.generate_embedding(text)
+        
+        if embedding is not None:
+            # Serialiser og lagre
+            embedding_blob = pickle.dumps(embedding)
+            c.execute("UPDATE profile_facts SET embedding = ? WHERE key = ?", 
+                     (embedding_blob, key))
+            conn.commit()
+        
+        conn.close()
+    
+    def rebuild_all_embeddings(self):
+        """Generer embeddings for alle facts"""
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        c.execute("SELECT key FROM profile_facts")
+        keys = [row[0] for row in c.fetchall()]
+        conn.close()
+        
+        print(f"Genererer embeddings for {len(keys)} facts...")
+        for i, key in enumerate(keys, 1):
+            self.update_fact_embedding(key)
+            if i % 10 == 0:
+                print(f"  {i}/{len(keys)} ferdig")
+        
+        print("✅ Alle embeddings generert")
     
     # ==================== MEMORIES ====================
     
@@ -768,11 +903,14 @@ class MemoryManager:
         - recent_topics: Hva snakker vi om?
         - conversation_summary: Hvis tilgjengelig
         """
-        # 1. Søk etter relevante facts basert på query
-        searched_facts = self.search_profile_facts(query, limit=8)
+        # 1. Søk etter relevante facts basert på query (EMBEDDING SEARCH)
+        searched_facts = self.search_by_embedding(query, limit=10)
         
-        # 2. Hent også de mest frekvente facts
-        frequent_facts = self.get_top_facts_cached(limit=10)
+        # 2. Hvis embedding søk gir få resultater, hent også de mest frekvente facts
+        if len(searched_facts) < 5:
+            frequent_facts = self.get_top_facts_cached(limit=10)
+        else:
+            frequent_facts = []
         
         # 3. Kombiner og dedupliser (prioriter søkte facts)
         seen_keys = set()

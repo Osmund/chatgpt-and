@@ -61,7 +61,7 @@ Analyser følgende samtale mellom bruker og AI-assistent.
 Identifiser og ekstraher:
 
 1. **Profile Facts**: Fakta om brukeren som bør lagres strukturert
-   - Navn, bopel, jobb, familie, hobbyer, preferanser, etc.
+   - Navn, bopel, jobb, familie, hobbyer, preferanser, samlinger, etc.
    - Kun faktiske fakta som brukeren eksplisitt sier
    - Ikke anta eller infer ting
    
@@ -70,27 +70,43 @@ Identifiser og ekstraher:
      * father_name, mother_name, sister_1_name, sister_2_name, brother_1_name, etc.
    - Lagre bursdager: sister_1_birthday, father_birthday (format: DD-MM eller "31. januar")
    - Lagre antall søsken: sibling_count (verdi: 3)
+   - Lagre antall nieser/nevøer: nieces_count, nephews_count
+   - Lagre barn til søsken: sister_1_child_1_name, sister_2_child_1_name, etc.
+   - Lagre antall barn: sister_1_children_count, sister_2_children_count
    - Lagre alder-relasjoner: sister_1_age_relation (verdier: "eldste", "yngste", "mellomste")
    - Lagre lokasjon: father_location, sister_1_location
    - Lagre relasjonsinfo: father_neighbor=true, father_birthplace=Sokndal
    
-   Eksempler:
+   **SPESIELT VIKTIG FOR HOBBYER OG SAMLINGER:**
+   - Lagre hva brukeren samler på: collection_1, collection_2, etc.
+   - Lagre spesifikke modeller/typer: computer_collection, toy_collection, etc.
+   - Lagre hobbyaktiviteter: hobby_programming, hobby_gaming, etc.
+   - Eksempler:
+     * collection_retro_computers = "Commodore og Amiga"
+     * collection_toys = "Kenneth Star Wars figurer"
+     * hobby_programming_platform = "Amiga assembler"
+     * computer_model_1 = "Amiga 32"
+   
+   Eksempler familie:
    {{"key": "father_name", "value": "Arvid", "topic": "family", "confidence": 1.0, "source": "user"}}
    {{"key": "sister_1_name", "value": "Miriam", "topic": "family", "confidence": 1.0, "source": "user"}}
    {{"key": "sister_1_birthday", "value": "31-01", "topic": "family", "confidence": 1.0, "source": "user"}}
    {{"key": "sister_1_age_relation", "value": "eldste", "topic": "family", "confidence": 0.9, "source": "user"}}
-   {{"key": "sister_2_name", "value": "Astrid", "topic": "family", "confidence": 1.0, "source": "user"}}
-   {{"key": "sister_2_age_relation", "value": "yngste", "topic": "family", "confidence": 0.9, "source": "user"}}
-   {{"key": "sibling_count", "value": "3", "topic": "family", "confidence": 0.9, "source": "inferred"}}
+   
+   Eksempler hobbyer:
+   {{"key": "collection_retro_computers", "value": "Commodore og Amiga", "topic": "hobby", "confidence": 1.0, "source": "user"}}
+   {{"key": "collection_toys", "value": "Kenneth Star Wars figurer", "topic": "hobby", "confidence": 1.0, "source": "user"}}
+   {{"key": "hobby_programming", "value": "Amiga assembler", "topic": "hobby", "confidence": 0.9, "source": "user"}}
 
 2. **Memories**: Episodiske minner verdt å huske
    - Hendelser, planer, samtaleemner
    - Ting som kan være nyttig i fremtidige samtaler
    - Kort og konsist (1-2 setninger)
    - Inkluder familieinteraksjoner og spesielle hendelser
+   - Inkluder nostalgiske minner om hobbyer og samlinger
 
 3. **Topics**: Emne-kategorier
-   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general
+   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection
 
 4. **Importance**: Hvor viktig er denne samtalen? (1-5)
    - 1: Triviell (vær, tid, small talk)
@@ -130,6 +146,7 @@ AI: "{ai_response}"
 - Vær konservativ: bedre å ikke lagre enn å lagre feil info
 - confidence: 0.5-1.0 (høyere = mer sikker)
 - For familiemedlemmer: bruk alltid unike keys (sister_1, sister_2, etc.)
+- For samlinger: vær spesifikk (collection_retro_computers, ikke bare "hobby")
 """
         
         try:
@@ -232,6 +249,10 @@ class MemoryWorker:
                     source=fact_data.get('source', 'extracted')
                 )
                 self.memory_manager.save_profile_fact(fact)
+                
+                # Generer embedding for ny fact
+                self.memory_manager.update_fact_embedding(fact.key)
+                
                 print(f"  ✅ Fact: {fact.key} = {fact.value}", flush=True)
             except Exception as e:
                 print(f"  ⚠️ Kunne ikke lagre fact: {e}", flush=True)
