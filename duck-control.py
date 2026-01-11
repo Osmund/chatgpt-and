@@ -1507,7 +1507,7 @@ HTML_TEMPLATE = """
                         html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
                         html += '<span>|</span>';
                         html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
-                        html += '<button onclick="deleteFact(\'' + fact.key + '\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\'#c62828\'" onmouseout="this.style.color=\'#f44336\'" title="Slett">🗑️</button>';
+                        html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
                         html += '</div></div>';
                     });
                     
@@ -1520,20 +1520,17 @@ HTML_TEMPLATE = """
                 let html = '';
                 facts.forEach(fact => {
                     const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
-                    html += `
-                        <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
-                            <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
-                            <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
-                            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
-                                <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
-                                <span>|</span>
-                                <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
-                                <span>|</span>
-                                <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
-                                <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
-                            </div>
-                        </div>
-                    `;
+                    html += '<div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ' + confidenceColor + ';">';
+                    html += '<div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">' + fact.key + '</div>';
+                    html += '<div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">' + fact.value + '</div>';
+                    html += '<div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">';
+                    html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
+                    html += '<span>|</span>';
+                    html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
+                    html += '<span>|</span>';
+                    html += '<span style="white-space: nowrap;">🏷️ ' + fact.topic + '</span>';
+                    html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
+                    html += '</div></div>';
                 });
                 list.innerHTML = html;
             }
