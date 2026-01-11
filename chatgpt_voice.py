@@ -1478,40 +1478,45 @@ def main():
 
     # Oppstartshilsen (ikke la en TTS-feil stoppe tjenesten ved boot)
     time.sleep(3)  # Vent litt lenger for at systemet skal være klart
-    try:
-        # Hent IP-adresse (prøv flere ganger)
-        import socket
-        ip_address = None
-        for attempt in range(5):  # Prøv 5 ganger
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.settimeout(2)
-                s.connect(("8.8.8.8", 80))
-                ip_address = s.getsockname()[0]
-                s.close()
-                if ip_address and ip_address != "127.0.0.1":
-                    break  # Vellykket, avslutt loop
-            except:
-                if attempt < 4:  # Ikke vent etter siste forsøk
-                    time.sleep(2)  # Vent 2 sekunder før neste forsøk
-        
-        if ip_address and ip_address != "127.0.0.1":
-            greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
-            print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
-        else:
-            greeting = messages_config['startup_messages']['without_network']
-            print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
-        
-        speak(greeting, speech_config, beak)
-        print("Oppstartshilsen ferdig", flush=True)
-    except Exception as e:
-        print(f"Oppstartshilsen mislyktes (audio ikke klar ennå): {e}", flush=True)
-        # Prøv en enklere hilsen uten TTS
+    
+    # Hent IP-adresse (prøv flere ganger)
+    import socket
+    ip_address = None
+    for attempt in range(5):  # Prøv 5 ganger
         try:
-            print("Prøver forenklet oppstart...", flush=True)
-            time.sleep(2)
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(2)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+            if ip_address and ip_address != "127.0.0.1":
+                break  # Vellykket, avslutt loop
         except:
-            pass
+            if attempt < 4:  # Ikke vent etter siste forsøk
+                time.sleep(2)  # Vent 2 sekunder før neste forsøk
+    
+    if ip_address and ip_address != "127.0.0.1":
+        greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
+        print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
+    else:
+        greeting = messages_config['startup_messages']['without_network']
+        print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
+    
+    # Prøv å si oppstartshilsen flere ganger hvis TTS/nettverk ikke er klart
+    greeting_success = False
+    for greeting_attempt in range(3):  # Prøv opptil 3 ganger
+        try:
+            speak(greeting, speech_config, beak)
+            print("Oppstartshilsen ferdig", flush=True)
+            greeting_success = True
+            break
+        except Exception as e:
+            print(f"Oppstartshilsen mislyktes (forsøk {greeting_attempt + 1}/3): {e}", flush=True)
+            if greeting_attempt < 2:  # Ikke vent etter siste forsøk
+                time.sleep(5)  # Vent 5 sekunder før neste forsøk
+    
+    if not greeting_success:
+        print("Oppstartshilsen kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
     print("Anda venter på wake word... (si 'quack quack')", flush=True)
     while True:
