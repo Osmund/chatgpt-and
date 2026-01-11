@@ -132,6 +132,12 @@ secrets/
 *.sqlite
 *.sqlite3
 
+# Messages (inneholder samtalehistorikk)
+messages.json
+
+# Documentation with personal data
+DATABASE_CLEANUP_*.md
+
 # ============ Cache ============
 .cache/
 *.cache
