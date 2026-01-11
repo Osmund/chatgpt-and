@@ -215,6 +215,49 @@ HTML_TEMPLATE = """
             color: #666;
             font-style: italic;
         }
+        .collapsible {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .collapsible-header {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: background 0.3s;
+        }
+        .collapsible-header:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #654089 100%);
+        }
+        .collapsible-header .arrow {
+            transition: transform 0.3s;
+            font-size: 1.2em;
+        }
+        .collapsible-header.active .arrow {
+            transform: rotate(180deg);
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: white;
+        }
+        .collapsible-content.active {
+            max-height: 5000px;
+            transition: max-height 0.5s ease-in;
+        }
+        .collapsible-body {
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -240,71 +283,105 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
-        <div class="speak-section">
-            <h3>🎙️ Wake Words</h3>
-            <div id="wake-words-list" class="info" style="background: #e8f5e9; border-left-color: #4caf50;">
-                <p style="margin: 0; color: #2e7d32;">Laster wake words...</p>
+        <!-- Grunninnstillinger -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎛️ Grunninnstillinger</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section">
+                        <h3>🤖 AI Modell</h3>
+                        <select id="model-select" onchange="changeModel()">
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini</option>
+                            <option value="o1-preview">O1 Preview</option>
+                            <option value="o1-mini">O1 Mini</option>
+                        </select>
+                        <span id="model-status"></span>
+                    </div>
+                    
+                    <div class="speak-section">
+                        <h3>🎭 Personlighet</h3>
+                        <select id="personality-select" onchange="changePersonality()">
+                            <option value="normal">Normal 🦆</option>
+                            <option value="frekk">Frekk & Sarkastisk 😏</option>
+                            <option value="vennlig">Vennlig & Entusiastisk 😊</option>
+                            <option value="akademisk">Akademisk & Detaljert 🎓</option>
+                            <option value="filosof">Filosofisk & Reflekterende 🤔</option>
+                            <option value="barnlig">Barnlig & Leken 🎉</option>
+                            <option value="senior">Senior & Sur 👴</option>
+                        </select>
+                        <span id="personality-status"></span>
+                    </div>
+                    
+                    <div class="speak-section">
+                        <h3>🎤 Stemme</h3>
+                        <select id="voice-select" onchange="changeVoice()">
+                            <option value="nb-NO-FinnNeural">Finn (Mann) 👨</option>
+                            <option value="nb-NO-IselinNeural">Iselin (Kvinne) 👩</option>
+                        </select>
+                        <span id="voice-status"></span>
+                    </div>
+                    
+                    <div class="speak-section">
+                        <h3>🦆 Nebbet</h3>
+                        <select id="beak-select" onchange="changeBeak()">
+                            <option value="on">Nebbet beveger seg 👄</option>
+                            <option value="off">Nebbet av 🔇</option>
+                        </select>
+                        <span id="beak-status"></span>
+                    </div>
+                    
+                    <div class="speak-section">
+                        <h3>🎚️ Talehastighet</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span>🐌 Sakte</span>
+                            <input type="range" id="speed-slider" min="0" max="100" value="50" 
+                                   oninput="updateSpeedLabel()" onchange="changeSpeed()" 
+                                   style="flex: 1;">
+                            <span>🐇 Raskt</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px; font-weight: bold;" id="speed-label">Normal hastighet</div>
+                        <span id="speed-status"></span>
+                    </div>
+                    
+                    <div class="speak-section">
+                        <h3>🔊 Volum</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span>🔉 Lavt</span>
+                            <input type="range" id="volume-slider" min="0" max="100" value="50" 
+                                   oninput="updateVolumeValue()" onchange="changeVolume()" 
+                                   style="flex: 1;">
+                            <span>🔊 Høyt</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <span id="volume-value" style="font-weight: bold;">50%</span>
+                            <span id="volume-status"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="speak-section">
-            <h3>🤖 AI Modell</h3>
-            <select id="model-select" onchange="changeModel()">
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                <option value="gpt-4">GPT-4</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                <option value="o1-preview">O1 Preview</option>
-                <option value="o1-mini">O1 Mini</option>
-            </select>
-            <span id="model-status"></span>
-        </div>
-        
-        <div class="speak-section">
-            <h3>🎭 Personlighet</h3>
-            <select id="personality-select" onchange="changePersonality()">
-                <option value="normal">Normal 🦆</option>
-                <option value="frekk">Frekk & Sarkastisk 😏</option>
-                <option value="vennlig">Vennlig & Entusiastisk 😊</option>
-                <option value="akademisk">Akademisk & Detaljert 🎓</option>
-                <option value="filosof">Filosofisk & Reflekterende 🤔</option>
-                <option value="barnlig">Barnlig & Leken 🎉</option>
-                <option value="senior">Senior & Sur 👴</option>
-            </select>
-            <span id="personality-status"></span>
-        </div>
-        
-        <div class="speak-section">
-            <h3>🎤 Stemme</h3>
-            <select id="voice-select" onchange="changeVoice()">
-                <option value="nb-NO-FinnNeural">Finn (Mann) 👨</option>
-                <option value="nb-NO-IselinNeural">Iselin (Kvinne) 👩</option>
-            </select>
-            <span id="voice-status"></span>
-        </div>
-        
-        <div class="speak-section">
-            <h3>🦆 Nebbet</h3>
-            <select id="beak-select" onchange="changeBeak()">
-                <option value="on">Nebbet beveger seg 👄</option>
-                <option value="off">Nebbet av 🔇</option>
-            </select>
-            <span id="beak-status"></span>
-        </div>
-        
-        <div class="speak-section">
-            <h3>🎚️ Talehastighet</h3>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span>🐌 Sakte</span>
-                <input type="range" id="speed-slider" min="0" max="100" value="50" 
-                       oninput="updateSpeedLabel()" onchange="changeSpeed()" 
-                       style="flex: 1;">
-                <span>🐇 Raskt</span>
+        <!-- Kommunikasjon -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>💬 Kommunikasjon</span>
+                <span class="arrow">▼</span>
             </div>
-            <div style="text-align: center; margin-top: 10px; font-weight: bold;" id="speed-label">Normal hastighet</div>
-            <span id="speed-status"></span>
-        </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section">
+                        <h3>🎙️ Wake Words</h3>
+                        <div id="wake-words-list" class="info" style="background: #e8f5e9; border-left-color: #4caf50;">
+                            <p style="margin: 0; color: #2e7d32;">Laster wake words...</p>
+                        </div>
+                    </div>
         
         <div class="speak-section">
             <h3>🦆💬 Start samtale</h3>
@@ -322,28 +399,105 @@ HTML_TEMPLATE = """
             </div>
             <textarea id="speak-text" rows="6" placeholder="Skriv din melding her..." style="width: 100%; padding: 15px; border-radius: 10px; border: 2px solid white; font-size: 16px; resize: vertical; min-height: 120px; font-family: Arial, sans-serif; box-sizing: border-box;"></textarea>
             <button class="btn-send" onclick="sendMessage()" style="width: 100%; margin-top: 15px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #667eea; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">📤 Send melding</button>
-            <div id="ai-response" style="margin-top: 20px; padding: 20px; background-color: rgba(255,255,255,0.95); border-radius: 10px; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                <strong style="color: #667eea; font-size: 16px;">🤖 AI Svar:</strong>
-                <div id="response-text" style="margin-top: 10px; color: #333; line-height: 1.6;"></div>
-            </div>
-        </div>
-
-        <div class="speak-section">
-            <h3>🔊 Volum</h3>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span>🔉 Lavt</span>
-                <input type="range" id="volume-slider" min="0" max="100" value="50" 
-                       oninput="updateVolumeValue()" onchange="changeVolume()" 
-                       style="flex: 1;">
-                <span>🔊 Høyt</span>
-            </div>
-            <div style="text-align: center; margin-top: 10px;">
-                <span id="volume-value" style="font-weight: bold;">50%</span>
-                <span id="volume-status"></span>
+                        <div id="ai-response" style="margin-top: 20px; padding: 20px; background-color: rgba(255,255,255,0.95); border-radius: 10px; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                            <strong style="color: #667eea; font-size: 16px;">🤖 AI Svar:</strong>
+                            <div id="response-text" style="margin-top: 10px; color: #333; line-height: 1.6;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="speak-section">
+        <!-- Musikk -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎵 Musikk</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section" style="background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎵 La anda synge!</h3>
+                        <select id="song-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; background: white; margin-bottom: 15px; box-sizing: border-box;">
+                            <option value="">Velg en sang...</option>
+                        </select>
+                        <button class="btn-start" onclick="playSong()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #e91e63; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">🎤 Syng!</button>
+                        <button class="btn-stop" onclick="stopSong()" style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='scale(1)'">⏹ Stopp syng</button>
+                        <div id="song-status" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.9); border-radius: 8px; display: none; color: #333;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Minne -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🧠 Andas Minne</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section" style="background: linear-gradient(135deg, #00bcd4 0%, #009688 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🧠 Andas Minne</h3>
+                        
+                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #00bcd4;" id="memory-stats-facts">-</div>
+                                    <div style="font-size: 12px; color: #666;">Fakta</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #009688;" id="memory-stats-memories">-</div>
+                                    <div style="font-size: 12px; color: #666;">Minner</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="font-size: 24px; font-weight: bold; color: #4caf50;" id="memory-stats-messages">-</div>
+                                    <div style="font-size: 12px; color: #666;">Meldinger</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn-start" onclick="toggleMemoryView()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 16px; font-weight: bold; background: white; color: #00bcd4; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
+                            <span id="memory-toggle-text">👁️ Vis minner</span>
+                        </button>
+                        
+                        <div id="memory-view" style="display: none; margin-top: 15px;">
+                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                                <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
+                                <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
+                                    Laster...
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                                <h4 style="margin: 0 0 15px 0; color: #009688;">💭 Episodiske Minner</h4>
+                                <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" onkeypress="if(event.key==='Enter') searchMemories()">
+                                <div id="memory-memories-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
+                                    Laster...
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px;">
+                                <h4 style="margin: 0 0 15px 0; color: #4caf50;">📊 Populære Emner</h4>
+                                <div id="memory-topics-list" style="font-size: 14px;">
+                                    Laster...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>⚙️ System</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section">
             <h3>🌀 Viftekontroll</h3>
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button class="btn" onclick="setFanMode('auto')" style="flex: 1;">🤖 Auto</button>
@@ -355,83 +509,34 @@ HTML_TEMPLATE = """
                 <div id="fan-temp" style="font-size: 24px; margin: 10px 0;">🌡️ --°C</div>
                 <div id="fan-running">Status: Laster...</div>
             </div>
-        </div>
-        
-        <div class="speak-section" style="background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-            <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎵 La anda synge!</h3>
-            <select id="song-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; background: white; margin-bottom: 15px; box-sizing: border-box;">
-                <option value="">Velg en sang...</option>
-            </select>
-            <button class="btn-start" onclick="playSong()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #e91e63; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">🎤 Syng!</button>
-            <button class="btn-stop" onclick="stopSong()" style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='scale(1)'">⏹ Stopp syng</button>
-            <div id="song-status" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.9); border-radius: 8px; display: none; color: #333;"></div>
-        </div>
-        
-        <div class="speak-section" style="background: linear-gradient(135deg, #00bcd4 0%, #009688 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-            <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🧠 Andas Minne</h3>
-            
-            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <div style="text-align: center; flex: 1;">
-                        <div style="font-size: 24px; font-weight: bold; color: #00bcd4;" id="memory-stats-facts">-</div>
-                        <div style="font-size: 12px; color: #666;">Fakta</div>
                     </div>
-                    <div style="text-align: center; flex: 1;">
-                        <div style="font-size: 24px; font-weight: bold; color: #009688;" id="memory-stats-memories">-</div>
-                        <div style="font-size: 12px; color: #666;">Minner</div>
+                    
+                    <div class="speak-section">
+                        <h3>📊 Status og tester</h3>
+                        <button class="btn" onclick="getStatus()">🔍 Sjekk status</button>
+                        <button class="btn" onclick="testBeak()">🧪 Test nebbet</button>
+                        <div id="test-result"></div>
                     </div>
-                    <div style="text-align: center; flex: 1;">
-                        <div style="font-size: 24px; font-weight: bold; color: #4caf50;" id="memory-stats-messages">-</div>
-                        <div style="font-size: 12px; color: #666;">Meldinger</div>
+                    
+                    <div class="status-section">
+                        <h3>🌐 WiFi nettverk</h3>
+                        <div id="wifi-list">Laster...</div>
+                        <button class="btn" onclick="getWiFiNetworks()">🔄 Oppdater liste</button>
                     </div>
                 </div>
             </div>
-            
-            <button class="btn-start" onclick="toggleMemoryView()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 16px; font-weight: bold; background: white; color: #00bcd4; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
-                <span id="memory-toggle-text">👁️ Vis minner</span>
-            </button>
-            
-            <div id="memory-view" style="display: none; margin-top: 15px;">
-                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                    <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
-                    <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
-                        Laster...
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                    <h4 style="margin: 0 0 15px 0; color: #009688;">💭 Episodiske Minner</h4>
-                    <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" onkeypress="if(event.key==='Enter') searchMemories()">
-                    <div id="memory-memories-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
-                        Laster...
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px;">
-                    <h4 style="margin: 0 0 15px 0; color: #4caf50;">📊 Populære Emner</h4>
-                    <div id="memory-topics-list" style="font-size: 14px;">
-                        Laster...
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="speak-section">
-            <h3>📊 Status og tester</h3>
-            <button class="btn" onclick="getStatus()">🔍 Sjekk status</button>
-            <button class="btn" onclick="testBeak()">🧪 Test nebbet</button>
-            <div id="test-result"></div>
-        </div>
-        
-        <div class="status-section">
-            <h3>🌐 WiFi nettverk</h3>
-            <div id="wifi-list">Laster...</div>
-            <button class="btn" onclick="getWiFiNetworks()">🔄 Oppdater liste</button>
         </div>
         
     </div>
     
     <script>
+        // Toggle collapsible sections
+        function toggleCollapsible(header) {
+            header.classList.toggle('active');
+            const content = header.nextElementSibling;
+            content.classList.toggle('active');
+        }
+        
         function updateVolumeValue() {
             const slider = document.getElementById('volume-slider');
             document.getElementById('volume-value').textContent = slider.value + '%';
@@ -1188,17 +1293,17 @@ HTML_TEMPLATE = """
                     data.facts.forEach(fact => {
                         const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
                         html += `
-                            <div style="padding: 10px 35px 10px 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor}; position: relative;">
-                                <div>
-                                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">${fact.key}</div>
-                                    <div style="color: #666;">${fact.value}</div>
-                                    <div style="margin-top: 5px; font-size: 12px; color: #999;">
-                                        📊 Confidence: ${(fact.confidence * 100).toFixed(0)}% | 
-                                        🔢 Nevnt: ${fact.frequency}x | 
-                                        🏷️ ${fact.topic}
-                                    </div>
+                            <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
+                                <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
+                                <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
+                                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                                    <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
+                                    <span>|</span>
+                                    <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
+                                    <span>|</span>
+                                    <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
+                                    <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
                                 </div>
-                                <button onclick="deleteFact('${fact.key}')" style="position: absolute; top: 8px; right: 8px; background: transparent; color: #999; border: none; padding: 4px; cursor: pointer; font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='#f44336'" onmouseout="this.style.color='#999'" title="Slett">🗑️</button>
                             </div>
                         `;
                     });
@@ -1236,18 +1341,19 @@ HTML_TEMPLATE = """
                         };
                         const topicColor = topicColors[mem.topic] || '#757575';
                         
+                        const scoreHtml = mem.score ? `<span>|</span><span style="white-space: nowrap;">⭐ ${mem.score.toFixed(2)}</span>` : '';
                         html += `
-                            <div style="padding: 10px 35px 10px 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor}; position: relative;">
-                                <div>
-                                    <div style="color: #333; margin-bottom: 5px;">${mem.text}</div>
-                                    <div style="font-size: 12px; color: #999;">
-                                        🏷️ ${mem.topic} | 
-                                        🔢 ${mem.frequency}x | 
-                                        📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}
-                                        ${mem.score ? ` | ⭐ ${mem.score.toFixed(2)}` : ''}
-                                    </div>
+                            <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor};">
+                                <div style="color: #333; margin-bottom: 8px; word-wrap: break-word;">${mem.text}</div>
+                                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                                    <span style="white-space: nowrap;">🏷️ ${mem.topic}</span>
+                                    <span>|</span>
+                                    <span style="white-space: nowrap;">🔢 ${mem.frequency}x</span>
+                                    <span>|</span>
+                                    <span style="white-space: nowrap;">📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}</span>
+                                    ${scoreHtml}
+                                    <button onclick="deleteMemory(${mem.id})" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
                                 </div>
-                                <button onclick="deleteMemory(${mem.id})" style="position: absolute; top: 8px; right: 8px; background: transparent; color: #999; border: none; padding: 4px; cursor: pointer; font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='#f44336'" onmouseout="this.style.color='#999'" title="Slett">🗑️</button>
                             </div>
                         `;
                     });
