@@ -501,6 +501,51 @@ echo "60" > /tmp/duck_speed.txt
 echo "gpt-4-turbo" > /tmp/duck_model.txt
 ```
 
+### 6.5 Personaliserte hilsener
+
+Anda vil nå bruke navnet ditt i hilsener! Når du første gang forteller Anda hva du heter, lagres navnet i databasen og brukes i fremtidige hilsener.
+
+**Eksempel**:
+- Du: "Jeg heter Osmund"
+- Anda: "Ok, jeg har lagret at du heter Osmund"
+- Neste gang du sier wake word: **"Hei, Osmund. Hva kan jeg hjelpe deg med?"**
+
+**Slik fungerer det**:
+1. Fortell Anda navnet ditt: "Jeg heter [navn]"
+2. Memory system lagrer `user_name` i databasen
+3. Ved neste wake word bruker Anda navnet ditt i hilsenen
+
+**For flere brukere (flere ander)**:
+Dette gjør det enkelt å sette opp flere duck-assistenter for forskjellige personer:
+
+```bash
+# Lag ny duck-konfigurasjon for en annen person
+cd /home/admog/Code/chatgpt-and
+
+# 1. Kopier databasen til backup
+cp duck_memory.db duck_memory_backup.db
+
+# 2. Slett eksisterende database (eller start fra scratch)
+rm duck_memory.db
+
+# 3. Start anda og si: "Jeg heter [nytt navn]"
+# Nå vil denne anda-instansen hilse med det nye navnet!
+```
+
+**Meldingskonfigurasjon** i `messages.json`:
+```json
+{
+  "conversation": {
+    "greeting": "Hei, {name}. Hva kan jeg hjelpe deg med?"
+  },
+  "web_interface": {
+    "start_conversation": "Hei, {name}. Hva kan jeg hjelpe deg med?"
+  }
+}
+```
+
+Hvis ingen navn er funnet i databasen, faller systemet tilbake til: "Hei, på du. Hva kan jeg hjelpe deg med?"
+
 ## Del 7: Autostart ved oppstart
 
 Services er allerede konfigurert for autostart, men verifiser:
