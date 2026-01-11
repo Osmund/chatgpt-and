@@ -1176,7 +1176,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None):
             # Profile facts
             if context['profile_facts']:
                 memory_section += "Fakta om brukeren:\n"
-                for fact in context['profile_facts'][:8]:  # Top 8 facts
+                for fact in context['profile_facts'][:15]:  # Top 15 facts
                     memory_section += f"- {fact['key']}: {fact['value']}\n"
             
             # Relevant memories

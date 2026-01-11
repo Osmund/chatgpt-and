@@ -237,13 +237,19 @@ class MemoryManager:
             )
         """)
         
-        # FTS5 virtual table for full-text search
+        # FTS5 virtual table for full-text search on memories
         c.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts 
             USING fts5(text, content='memories', content_rowid='id')
         """)
         
-        # Triggers for FTS sync
+        # FTS5 virtual table for profile_facts
+        c.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS profile_facts_fts 
+            USING fts5(key, value, topic, content='profile_facts', content_rowid='rowid')
+        """)
+        
+        # Triggers for memories FTS sync
         c.execute("""
             CREATE TRIGGER IF NOT EXISTS memories_ai 
             AFTER INSERT ON memories BEGIN
@@ -267,6 +273,33 @@ class MemoryManager:
                 VALUES('delete', old.id, old.text);
                 INSERT INTO memories_fts(rowid, text) 
                 VALUES (new.id, new.text);
+            END
+        """)
+        
+        # Triggers for profile_facts FTS sync
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS profile_facts_ai 
+            AFTER INSERT ON profile_facts BEGIN
+                INSERT INTO profile_facts_fts(rowid, key, value, topic) 
+                VALUES (new.rowid, new.key, new.value, new.topic);
+            END
+        """)
+        
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS profile_facts_ad 
+            AFTER DELETE ON profile_facts BEGIN
+                INSERT INTO profile_facts_fts(profile_facts_fts, rowid, key, value, topic) 
+                VALUES('delete', old.rowid, old.key, old.value, old.topic);
+            END
+        """)
+        
+        c.execute("""
+            CREATE TRIGGER IF NOT EXISTS profile_facts_au 
+            AFTER UPDATE ON profile_facts BEGIN
+                INSERT INTO profile_facts_fts(profile_facts_fts, rowid, key, value, topic) 
+                VALUES('delete', old.rowid, old.key, old.value, old.topic);
+                INSERT INTO profile_facts_fts(rowid, key, value, topic) 
+                VALUES (new.rowid, new.key, new.value, new.topic);
             END
         """)
         
@@ -427,6 +460,61 @@ class MemoryManager:
         
         return facts
     
+    def search_profile_facts(self, query: str, limit: int = 10) -> List[ProfileFact]:
+        """Søk etter relevante profile facts basert på query"""
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        try:
+            # FTS søk med ranking - prøv direkte søk først
+            c.execute("""
+                SELECT pf.*, bm25(profile_facts_fts) as score
+                FROM profile_facts_fts
+                JOIN profile_facts pf ON pf.rowid = profile_facts_fts.rowid
+                WHERE profile_facts_fts MATCH ?
+                ORDER BY score
+                LIMIT ?
+            """, (query, limit))
+            
+            facts = []
+            for row in c.fetchall():
+                facts.append(ProfileFact(
+                    key=row['key'],
+                    value=row['value'],
+                    topic=row['topic'],
+                    confidence=row['confidence'],
+                    frequency=row['frequency'],
+                    source=row['source'],
+                    last_updated=row['last_updated']
+                ))
+            
+            conn.close()
+            return facts
+            
+        except Exception:
+            # Hvis FTS feiler (f.eks. pga spesialtegn), prøv LIKE-søk
+            c.execute("""
+                SELECT * FROM profile_facts
+                WHERE key LIKE ? OR value LIKE ? OR topic LIKE ?
+                ORDER BY frequency DESC, confidence DESC
+                LIMIT ?
+            """, (f'%{query}%', f'%{query}%', f'%{query}%', limit))
+            
+            facts = []
+            for row in c.fetchall():
+                facts.append(ProfileFact(
+                    key=row['key'],
+                    value=row['value'],
+                    topic=row['topic'],
+                    confidence=row['confidence'],
+                    frequency=row['frequency'],
+                    source=row['source'],
+                    last_updated=row['last_updated']
+                ))
+            
+            conn.close()
+            return facts
+    
     # ==================== MEMORIES ====================
     
     def save_memory(self, memory: Memory) -> int:
@@ -584,21 +672,43 @@ class MemoryManager:
         Bygg komplett context for AI-prompt
         
         Returnerer dict med:
-        - profile_facts: Top fakta om bruker
+        - profile_facts: Top fakta om bruker (kombinasjon av søkte + frekvente)
         - relevant_memories: Søkte minner
         - recent_topics: Hva snakker vi om?
         - conversation_summary: Hvis tilgjengelig
         """
-        # 1. Top profile facts (cached)
-        profile_facts = self.get_top_facts_cached(limit=10)
+        # 1. Søk etter relevante facts basert på query
+        searched_facts = self.search_profile_facts(query, limit=8)
         
-        # 2. Relevant memories (FTS søk)
+        # 2. Hent også de mest frekvente facts
+        frequent_facts = self.get_top_facts_cached(limit=10)
+        
+        # 3. Kombiner og dedupliser (prioriter søkte facts)
+        seen_keys = set()
+        combined_facts = []
+        
+        # Legg til søkte facts først
+        for fact in searched_facts:
+            if fact.key not in seen_keys:
+                combined_facts.append(fact)
+                seen_keys.add(fact.key)
+        
+        # Legg til frekvente facts
+        for fact in frequent_facts:
+            if fact.key not in seen_keys:
+                combined_facts.append(fact)
+                seen_keys.add(fact.key)
+        
+        # Begrens til max 15 facts totalt
+        profile_facts = combined_facts[:15]
+        
+        # 4. Relevant memories (FTS søk)
         relevant_memories = self.search_memories(query, limit=8)
         
-        # 3. Recent topics
+        # 5. Recent topics
         topic_stats = self.get_topic_stats(limit=5)
         
-        # 4. Recent conversation (siste N meldinger)
+        # 6. Recent conversation (siste N meldinger)
         conn = self._get_connection()
         c = conn.cursor()
         c.execute("""

@@ -464,6 +464,7 @@ HTML_TEMPLATE = """
                         <div id="memory-view" style="display: none; margin-top: 15px;">
                             <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                                 <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
+                                <input type="text" id="facts-search" placeholder="🔍 Søk i fakta..." style="width: 100%; padding: 10px; border: 2px solid #00bcd4; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" oninput="filterFacts()">
                                 <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
                                     Laster...
                                 </div>
@@ -1289,25 +1290,9 @@ HTML_TEMPLATE = """
                 const data = await response.json();
                 
                 if (data.status === 'success' && data.facts.length > 0) {
-                    let html = '';
-                    data.facts.forEach(fact => {
-                        const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
-                        html += `
-                            <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
-                                <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
-                                <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
-                                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
-                                    <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
-                                    <span>|</span>
-                                    <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
-                                    <span>|</span>
-                                    <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
-                                    <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    list.innerHTML = html;
+                    // Lagre facts globalt for filtrering
+                    window.memoryFacts = data.facts;
+                    displayFacts(data.facts);
                 } else {
                     list.innerHTML = '<p style="color: #999; text-align: center;">Ingen fakta lagret ennå</p>';
                 }
@@ -1315,6 +1300,56 @@ HTML_TEMPLATE = """
                 list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av fakta</p>';
                 console.error('Memory facts error:', error);
             }
+        }
+        
+        function displayFacts(facts) {
+            const list = document.getElementById('memory-facts-list');
+            if (facts.length === 0) {
+                list.innerHTML = '<p style="color: #999; text-align: center;">Ingen treff</p>';
+                return;
+            }
+            
+            let html = '';
+            facts.forEach(fact => {
+                const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+                html += `
+                    <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
+                        <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
+                        <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                            <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
+                            <span>|</span>
+                            <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
+                            <span>|</span>
+                            <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
+                            <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        }
+        
+        function filterFacts() {
+            const searchInput = document.getElementById('facts-search');
+            const searchTerm = searchInput.value.toLowerCase();
+            
+            if (!window.memoryFacts) {
+                return;
+            }
+            
+            if (searchTerm === '') {
+                displayFacts(window.memoryFacts);
+                return;
+            }
+            
+            const filtered = window.memoryFacts.filter(fact => 
+                fact.key.toLowerCase().includes(searchTerm) ||
+                fact.value.toLowerCase().includes(searchTerm) ||
+                fact.topic.toLowerCase().includes(searchTerm)
+            );
+            
+            displayFacts(filtered);
         }
         
         async function loadMemoryMemories(query = '') {
