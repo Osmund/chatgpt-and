@@ -405,12 +405,12 @@ duck-memory-hygiene.timer   # Systemd timer
 ### 3. Systemd Services
 ```bash
 # Run installation script
-./install-services.sh
+./scripts/install-services.sh
 
 # Or manually:
-sudo cp duck-memory-worker.service /etc/systemd/system/
-sudo cp duck-memory-hygiene.service /etc/systemd/system/
-sudo cp duck-memory-hygiene.timer /etc/systemd/system/
+sudo cp services/duck-memory-worker.service /etc/systemd/system/
+sudo cp services/duck-memory-hygiene.service /etc/systemd/system/
+sudo cp services/duck-memory-hygiene.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable duck-memory-worker.service
 sudo systemctl enable duck-memory-hygiene.timer

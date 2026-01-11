@@ -2,19 +2,20 @@
 
 Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services, fysisk nebb-bevegelse, RGB LED-status og web-basert kontrollpanel.
 
-[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](docs/CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](requirements.txt)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-**[English documentation](README_EN.md)** | **[Norsk dokumentasjon](README.md)**
+**[English documentation](docs/README_EN.md)** | **[Norsk dokumentasjon](README.md)**
 
 ## 📚 Dokumentasjon
 
-- **[DOCUMENTATION.md](DOCUMENTATION.md)** - 📋 Oversikt over all dokumentasjon
-- **[INSTALL.md](INSTALL.md)** - 🔧 Komplett installasjonsveiledning (start her!)
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - 🏗️ Teknisk arkitektur og design
-- **[PORTS.md](PORTS.md)** - 🌐 Nettverks- og port-konfigurasjon
-- **[CHANGELOG.md](CHANGELOG.md)** - 📝 Versionshistorikk og nye funksjoner
+- **[DOCUMENTATION.md](docs/DOCUMENTATION.md)** - 📋 Oversikt over all dokumentasjon
+- **[INSTALL.md](docs/INSTALL.md)** - 🔧 Komplett installasjonsveiledning (start her!)
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - 🏗️ Teknisk arkitektur og design
+- **[PORTS.md](docs/PORTS.md)** - 🌐 Nettverks- og port-konfigurasjon
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - 📝 Versionshistorikk og nye funksjoner
+- **[MEMORY_SYSTEM.md](docs/MEMORY_SYSTEM.md)** - 🧠 Persistent minnessystem
 
 ## Hovedfunksjoner
 
@@ -59,7 +60,7 @@ PICOVOICE_API_KEY=your-picovoice-key
 EOF
 
 # 4. Installer og start services
-sudo ./install-services.sh
+sudo ./scripts/install-services.sh
 sudo systemctl start chatgpt-duck.service
 sudo systemctl start duck-control.service
 
@@ -67,7 +68,7 @@ sudo systemctl start duck-control.service
 # http://<pi-ip>:3000
 ```
 
-**For detaljert guide, se [INSTALL.md](INSTALL.md)**
+**For detaljert guide, se [INSTALL.md](docs/INSTALL.md)**
 
 ## Maskinvare
 
@@ -165,7 +166,7 @@ sudo apt-get install -y python3-pip python3-venv portaudio19-dev libportaudio2 f
 ### 2. Opprett virtuelt miljø
 
 ```bash
-cd /home/admog/Code/MyFirst
+cd /home/admog/Code/chatgpt-and
 python3 -m venv .venv
 source .venv/bin/activate
 ```
@@ -179,7 +180,7 @@ pip install -r requirements.txt
 
 ### 4. Opprett `.env`-fil
 
-Opprett filen `/home/admog/Code/MyFirst/.env` med følgende innhold:
+Opprett filen `/home/admog/Code/chatgpt-and/.env` med følgende innhold:
 
 ```
 OPENAI_API_KEY=din_openai_nøkkel
@@ -303,10 +304,10 @@ Prosjektet kjører som systemd-services for automatisk oppstart og administrasjo
 
 ```bash
 cd /home/admog/Code/chatgpt-and
-sudo ./install-services.sh
+sudo ./scripts/install-services.sh
 ```
 
-Dette installerer:
+This installerer:
 - `chatgpt-duck.service` - Hovedapplikasjonen (port: standard lyd)
 - `duck-control.service` - Web kontrollpanel (port: 3000)
 - `auto-hotspot.service` - WiFi hotspot ved behov
@@ -469,41 +470,68 @@ ssml = f"""
 ├── .env                                # API-nøkler (IKKE commit til git!)
 ├── .gitignore
 ├── requirements.txt                    # Python dependencies
-├── README.md
-├── PORTS.md                           # Port-dokumentasjon
+├── README.md                           # Denne filen
 │
-├── chatgpt_voice.py                   # Hovedapplikasjon
-├── duck-control.py                    # Web kontrollpanel (HTTP server)
-├── duck_beak.py                       # Servo-kontroll for nebb
-├── duck_beak_gpiozero.py             # Alternativ nebb-implementering
-├── rgb_duck.py                        # RGB LED-kontroll
-├── oww_models.py                      # Wake word modeller
-├── wifi-portal.py                     # WiFi-oppsett portal
+├── docs/                               # 📚 Dokumentasjon
+│   ├── ARCHITECTURE.md                # Teknisk arkitektur
+│   ├── CHANGELOG.md                   # Versionshistorikk
+│   ├── DOCUMENTATION.md               # Dokumentasjonsoversikt
+│   ├── INSTALL.md                     # Installasjonsveiledning
+│   ├── MEMORY_SYSTEM.md               # Minnessystem dokumentasjon
+│   ├── PINOUT.md                      # Pin-konfigurasjon
+│   ├── PORTS.md                       # Port-dokumentasjon
+│   └── README_EN.md                   # Engelsk README
 │
-├── chatgpt-duck.service               # Systemd service for hovedapp
-├── duck-control.service               # Systemd service for kontrollpanel
-├── auto-hotspot.service               # Systemd service for WiFi hotspot
-├── install-services.sh                # Installasjonsskript for services
+├── scripts/                            # 🔧 Shell scripts
+│   ├── auto-hotspot.sh                # WiFi hotspot
+│   ├── duck.sh                        # Start-skript
+│   ├── emergency-stop.sh              # Nødstopp
+│   ├── install-services.sh            # Service installasjon
+│   ├── setup_max98357a.sh             # Audio setup
+│   ├── wait-for-network.sh            # Network wait helper
+│   └── wifi-setup.sh                  # WiFi konfigurasjon
 │
-├── duck.sh                            # Start-skript
-├── emergency-stop.sh                  # Nødstopp-skript
-├── wifi-setup.sh                      # WiFi-konfigurasjonsskript
-├── wait-for-network.sh               # Nettverks-wait helper
-├── auto-hotspot.sh                    # Hotspot-oppstartsskript
+├── tests/                              # 🧪 Test-filer
+│   ├── test                           # Test-skript
+│   ├── test_beak_amplitude.py         # Nebb amplitude test
+│   ├── test_servo.py                  # Servo test
+│   ├── test-boot-sequence.sh          # Boot sekvens test
+│   └── test-hotspot.sh                # Hotspot test
 │
-├── test/                              # Test-filer
-├── test_beak_amplitude.py            # Test nebb-amplitude
-├── test-boot-sequence.sh             # Test boot-sekvens
-├── test-hotspot.sh                   # Test hotspot
+├── services/                           # ⚙️ Systemd services
+│   ├── auto-hotspot.service           # WiFi hotspot service
+│   ├── chatgpt-duck.service           # Hovedapplikasjon
+│   ├── duck-control.service           # Web kontrollpanel
+│   ├── duck-memory-hygiene.service    # Memory maintenance
+│   ├── duck-memory-hygiene.timer      # Memory maintenance timer
+│   ├── duck-memory-worker.service     # Memory worker
+│   └── fan-control.service            # Viftekontroll
 │
-├── Quack-quack.ppn                   # Porcupine wake word modell
-└── porcupine/                         # Porcupine wake word models
-    └── samantha_en_raspberry-pi_v4_0_0.ppn
-    ├── README
-    ├── am/                            # Akustisk modell
-    ├── conf/                          # Konfigurasjon
-    ├── graph/                         # Språkmodell
-    └── ivector/                       # i-vector ekstraktor
+├── chatgpt_voice.py                   # 🦆 Hovedapplikasjon
+├── duck-control.py                    # 🌐 Web kontrollpanel (HTTP server)
+├── duck_beak.py                       # 👄 Servo-kontroll for nebb
+├── duck_beak_gpiozero.py             # 👄 Alternativ nebb-implementering
+├── duck_memory.py                     # 🧠 Memory manager
+├── duck_memory_worker.py              # 🧠 Memory worker
+├── duck_memory_hygiene.py             # 🧠 Memory hygiene
+├── duck_speak.py                      # 🗣️ TTS helper
+├── fan_control.py                     # 🌀 Viftekontroll
+├── main.py                            # 🚀 Main entry point
+├── oww_models.py                      # 🎤 Wake word modeller
+├── rgb_duck.py                        # 💡 RGB LED-kontroll
+├── wifi-portal.py                     # 📱 WiFi-oppsett portal
+│
+├── Quack-quack.ppn                    # 🎤 Porcupine wake word modell
+├── porcupine/                         # 🎤 Porcupine wake word models
+│   └── samantha_en_raspberry-pi_v4_0_0.ppn
+│       ├── README
+│       ├── am/                        # Akustisk modell
+│       ├── conf/                      # Konfigurasjon
+│       ├── graph/                     # Språkmodell
+│       └── ivector/                   # i-vector ekstraktor
+│
+├── musikk/                            # 🎵 Musikkfiler
+└── vosk-model-small-sv-rhasspy-0.15/ # 🎤 Vosk modell
 ```
 
 ## Systemkrav

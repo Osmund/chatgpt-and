@@ -1,18 +1,18 @@
 #!/bin/bash
 # Trygg installasjon av duck-tjenester
-# Kjør dette manuelt når du er klar: ./install-services.sh
+# Kjør dette manuelt når du er klar: ./scripts/install-services.sh
 
 echo "=== Installerer Duck-tjenester ==="
 
 # Kopier service-filer
 echo "Kopierer service-filer..."
-sudo cp /home/admog/Code/chatgpt-and/chatgpt-duck.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/auto-hotspot.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/duck-control.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/fan-control.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/duck-memory-worker.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/duck-memory-hygiene.service /etc/systemd/system/
-sudo cp /home/admog/Code/chatgpt-and/duck-memory-hygiene.timer /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/chatgpt-duck.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/auto-hotspot.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-control.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/fan-control.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-worker.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-hygiene.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-hygiene.timer /etc/systemd/system/
 
 # Reload systemd
 echo "Reloader systemd..."
@@ -38,7 +38,7 @@ echo "  sudo systemctl start fan-control.service"
 echo "  sudo systemctl start duck-memory-worker.service"
 echo ""
 echo "For å teste auto-hotspot (simuler boot uten WiFi):"
-echo "  sudo /home/admog/Code/chatgpt-and/auto-hotspot.sh"
+echo "  sudo /home/admog/Code/chatgpt-and/scripts/auto-hotspot.sh"
 echo ""
 echo "For å se logger:"
 echo "  sudo journalctl -u chatgpt-duck.service -f"

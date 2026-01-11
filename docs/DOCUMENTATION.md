@@ -13,7 +13,7 @@ Denne filen gir en oversikt over all prosjektdokumentasjon for ChatGPT Duck.
 
 ### Brukerdokumentasjon
 
-#### 1. [README.md](README.md) - 📖 Hovedveiledning (15 KB, ~400 linjer)
+#### 1. [README.md](../README.md) - 📖 Hovedveiledning (15 KB, ~400 linjer)
 **Målgruppe**: Alle brukere
 
 **Innhold**:

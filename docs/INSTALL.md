@@ -348,10 +348,10 @@ sudo visudo -c -f /etc/sudoers.d/duck-control
 cd /home/admog/Code/chatgpt-and
 
 # Gjør install-script executable
-chmod +x install-services.sh
+chmod +x scripts/install-services.sh
 
 # Kjør installasjon
-sudo ./install-services.sh
+sudo ./scripts/install-services.sh
 ```
 
 Dette vil:
@@ -737,7 +737,7 @@ Systemet skal nå være fullt funksjonelt. Test alt grundig før du tar det i da
 
 **Neste steg**:
 - Les [ARCHITECTURE.md](ARCHITECTURE.md) for teknisk forståelse
-- Les [README.md](README.md) for brukerveiledning
+- Les [README.md](../README.md) for brukerveiledning
 - Tilpass personligheter og innstillinger etter dine preferanser
 
 **Ved problemer**: Sjekk logger og sammenlign med denne guiden. De fleste problemer skyldes:

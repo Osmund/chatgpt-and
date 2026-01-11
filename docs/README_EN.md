@@ -6,7 +6,7 @@ A complete AI-based voice assistant system with ChatGPT, Azure Speech Services, 
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](requirements.txt)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-**[English documentation](README_EN.md)** | **[Norsk dokumentasjon](README.md)**
+**[English documentation](docs/README_EN.md)** | **[Norsk dokumentasjon](../README.md)**
 
 ## 📚 Documentation
 
@@ -58,7 +58,7 @@ wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
 unzip vosk-model-small-sv-rhasspy-0.15.zip
 
 # 5. Install and start services
-sudo ./install-services.sh
+sudo ./scripts/install-services.sh
 sudo systemctl start chatgpt-duck.service
 sudo systemctl start duck-control.service
 
@@ -226,7 +226,7 @@ The project runs as systemd services for automatic startup and management.
 
 ```bash
 cd /home/admog/Code/chatgpt-and
-sudo ./install-services.sh
+sudo ./scripts/install-services.sh
 ```
 
 This installs:
