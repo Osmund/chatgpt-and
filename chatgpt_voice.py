@@ -47,6 +47,8 @@ VOLUME_FILE = "/tmp/duck_volume.txt"
 # Filer for AI-query fra kontrollpanel
 AI_QUERY_FILE = "/tmp/duck_ai_query.txt"
 AI_RESPONSE_FILE = "/tmp/duck_ai_response.txt"
+# Konfigurasjonsfiler
+MESSAGES_FILE = "/home/admog/Code/chatgpt-and/messages.json"
 # Filer for sang-forespørsler
 SONG_REQUEST_FILE = "/tmp/duck_song_request.txt"
 SONG_STOP_FILE = "/tmp/duck_song_stop.txt"
@@ -1440,6 +1442,34 @@ def main():
     speech_config = speechsdk.SpeechConfig(subscription=tts_key, region=tts_region)
     speech_config.speech_synthesis_voice_name = "nb-NO-FinnNeural"
 
+    # Last meldinger fra konfigurasjonsfil
+    messages_config = {}
+    try:
+        if os.path.exists(MESSAGES_FILE):
+            with open(MESSAGES_FILE, 'r', encoding='utf-8') as f:
+                messages_config = json.load(f)
+                print("✅ Lastet meldinger fra messages.json", flush=True)
+    except Exception as e:
+        print(f"⚠️ Kunne ikke laste messages.json: {e}", flush=True)
+    
+    # Fallback til hardkodede meldinger hvis fil mangler
+    if not messages_config:
+        messages_config = {
+            "startup_messages": {
+                "with_network": "Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er {ip}. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!",
+                "without_network": "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+            },
+            "conversation": {
+                "greeting": "Hei på du, hva kan jeg hjelpe deg med?",
+                "no_response_timeout": "Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.",
+                "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen.",
+                "goodbye": "Da venter jeg til du sier navnet mitt igjen."
+            },
+            "web_interface": {
+                "start_conversation": "Hei på du, hva kan jeg hjelpe deg med?"
+            }
+        }
+
     # Start bakgrunnstråd for AI-queries fra kontrollpanelet
     import threading
     ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager), daemon=True)
@@ -1466,10 +1496,10 @@ def main():
                     time.sleep(2)  # Vent 2 sekunder før neste forsøk
         
         if ip_address and ip_address != "127.0.0.1":
-            greeting = f"Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er {ip_address.replace('.', ' punkt ')}. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!"
+            greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
             print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
         else:
-            greeting = "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+            greeting = messages_config['startup_messages']['without_network']
             print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
         
         speak(greeting, speech_config, beak)
@@ -1492,7 +1522,7 @@ def main():
             if external_message == '__START_CONVERSATION__':
                 # Start samtale direkte med en kort hilsen
                 print("Starter samtale via web-interface", flush=True)
-                speak("Hei på du, hva kan jeg hjelpe deg med?", speech_config, beak)
+                speak(messages_config['web_interface']['start_conversation'], speech_config, beak)
             elif external_message.startswith('__PLAY_SONG__'):
                 # Spill av en sang
                 song_path = external_message.replace('__PLAY_SONG__', '', 1)
@@ -1504,7 +1534,7 @@ def main():
                 continue
         else:
             # Normal wake word - si hilsen
-            speak("Hei på du, hva kan jeg hjelpe deg med?", speech_config, beak)
+            speak(messages_config['conversation']['greeting'], speech_config, beak)
         
         # Start samtale (enten fra wake word eller samtale-trigger)
         messages = []
@@ -1515,9 +1545,9 @@ def main():
             if not prompt:
                 no_response_count += 1
                 if no_response_count >= 2:
-                    speak("Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.", speech_config, beak)
+                    speak(messages_config['conversation']['no_response_timeout'], speech_config, beak)
                     break
-                speak("Beklager, jeg hørte ikke hva du sa. Prøv igjen.", speech_config, beak)
+                speak(messages_config['conversation']['no_response_retry'], speech_config, beak)
                 continue
             
             # Reset teller når vi får svar
@@ -1526,7 +1556,7 @@ def main():
             # Sjekk for stopp-kommando (fjern tegnsetting først)
             prompt_clean = prompt.strip().lower().replace(".", "").replace(",", "").replace("!", "")
             if "stopp" in prompt_clean:
-                speak("Da venter jeg til du sier navnet mitt igjen.", speech_config, beak)
+                speak(messages_config['conversation']['goodbye'], speech_config, beak)
                 break
             messages.append({"role": "user", "content": prompt})
             try:

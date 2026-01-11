@@ -1,0 +1,19 @@
+{
+  "startup_messages": {
+    "with_network": "Kvakk kvakk! Jeg er nå klar for andeprat. Min IP-adresse er {ip}. Du finner kontrollpanelet på port 3000. Si navnet mitt for å starte en samtale!",
+    "without_network": "Kvakk kvakk! Jeg er klar, men jeg klarte ikke å koble til nettverket og har ingen IP-adresse ennå. Sjekk wifi-tilkoblingen din. Si navnet mitt for å starte en samtale!"
+  },
+  
+  "conversation": {
+    "greeting": "Hei på du, hva kan jeg hjelpe deg med?",
+    "no_response_timeout": "Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.",
+    "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen.",
+    "goodbye": "Da venter jeg til du sier navnet mitt igjen."
+  },
+  
+  "web_interface": {
+    "start_conversation": "Hei på du, hva kan jeg hjelpe deg med?"
+  },
+  
+  "_comment": "Bruk {ip} som placeholder for IP-adresse i startup_messages. Alle andre meldinger brukes direkte."
+}
