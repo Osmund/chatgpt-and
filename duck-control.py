@@ -440,6 +440,15 @@ HTML_TEMPLATE = """
                     <div class="speak-section" style="background: linear-gradient(135deg, #00bcd4 0%, #009688 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
                         <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🧠 Andas Minne</h3>
                         
+                        <!-- Quick Facts -->
+                        <div id="quick-facts" style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; color: #00bcd4;">⚡ Nøkkelfakta</h4>
+                            <div id="quick-facts-content" style="font-size: 14px; color: #333;">
+                                <p style="margin: 5px 0;">Laster...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Memory Stats -->
                         <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                                 <div style="text-align: center; flex: 1;">
@@ -455,16 +464,45 @@ HTML_TEMPLATE = """
                                     <div style="font-size: 12px; color: #666;">Meldinger</div>
                                 </div>
                             </div>
+                            
+                            <!-- Embedding Status -->
+                            <div id="embedding-status" style="padding: 10px; background: #e3f2fd; border-radius: 8px; text-align: center; font-size: 13px; color: #1976d2;">
+                                <span id="embedding-status-text">Laster...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Worker Status -->
+                        <div id="worker-status" style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; color: #009688;">🤖 Memory Worker</h4>
+                            <div id="worker-status-content" style="font-size: 14px; color: #333;">
+                                <p style="margin: 5px 0;">Laster...</p>
+                            </div>
                         </div>
                         
                         <button class="btn-start" onclick="toggleMemoryView()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 16px; font-weight: bold; background: white; color: #00bcd4; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
-                            <span id="memory-toggle-text">👁️ Vis minner</span>
+                            <span id="memory-toggle-text">👁️ Vis detaljert minne</span>
                         </button>
                         
                         <div id="memory-view" style="display: none; margin-top: 15px;">
+                            <!-- Recent Updates Timeline -->
+                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                                <h4 style="margin: 0 0 10px 0; color: #ff9800;">📅 Siste Oppdateringer</h4>
+                                <div id="recent-updates-list" style="font-size: 13px; max-height: 200px; overflow-y: auto;">
+                                    Laster...
+                                </div>
+                            </div>
+                            
                             <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                                 <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
                                 <input type="text" id="facts-search" placeholder="🔍 Søk i fakta..." style="width: 100%; padding: 10px; border: 2px solid #00bcd4; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" oninput="filterFacts()">
+                                
+                                <!-- Category View Toggle -->
+                                <div style="margin-bottom: 10px; text-align: center;">
+                                    <button onclick="toggleFactsView()" id="facts-view-toggle" style="padding: 8px 16px; background: #00bcd4; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                        📁 Vis etter kategori
+                                    </button>
+                                </div>
+                                
                                 <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
                                     Laster...
                                 </div>
@@ -1247,6 +1285,7 @@ HTML_TEMPLATE = """
         // ==================== MEMORY FUNCTIONS ====================
         
         let memoryViewVisible = false;
+        let factsViewMode = 'list'; // 'list' or 'category'
         
         async function loadMemoryStats() {
             try {
@@ -1261,6 +1300,81 @@ HTML_TEMPLATE = """
             } catch (error) {
                 console.error('Memory stats error:', error);
             }
+            
+            // Load quick facts
+            loadQuickFacts();
+            
+            // Load embedding status
+            loadEmbeddingStatus();
+            
+            // Load worker status
+            loadWorkerStatus();
+        }
+        
+        async function loadQuickFacts() {
+            try {
+                const response = await fetch('/api/memory/quick-facts');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const content = document.getElementById('quick-facts-content');
+                    let html = '<p style="margin: 5px 0;"><strong>Navn:</strong> ' + data.name + '</p>';
+                    
+                    if (data.sisters && data.sisters.length > 0) {
+                        html += '<p style="margin: 5px 0;"><strong>Søstre:</strong> ' + data.sisters.join(', ') + ' (' + data.sisters_count + ')</p>';
+                    }
+                    
+                    html += '<p style="margin: 5px 0;"><strong>Nieser:</strong> ' + data.nieces_count + ' | <strong>Nevøer:</strong> ' + data.nephews_count + '</p>';
+                    
+                    content.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Quick facts error:', error);
+                document.getElementById('quick-facts-content').innerHTML = '<p style="color: #999;">Kunne ikke laste nøkkelfakta</p>';
+            }
+        }
+        
+        async function loadEmbeddingStatus() {
+            try {
+                const response = await fetch('/api/memory/embedding-status');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const statusText = document.getElementById('embedding-status-text');
+                    const percentage = Math.round(data.percentage);
+                    const emoji = percentage === 100 ? '✅' : percentage >= 80 ? '⚠️' : '❌';
+                    statusText.textContent = emoji + ' Embeddings: ' + data.with_embedding + '/' + data.total_facts + ' (' + percentage + '%)';
+                }
+            } catch (error) {
+                console.error('Embedding status error:', error);
+            }
+        }
+        
+        async function loadWorkerStatus() {
+            try {
+                const response = await fetch('/api/memory/worker-status');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const content = document.getElementById('worker-status-content');
+                    const statusEmoji = data.is_active ? '🟢' : '🔴';
+                    const statusText = data.is_active ? 'Aktiv' : 'Inaktiv';
+                    
+                    let html = '<p style="margin: 5px 0;">' + statusEmoji + ' <strong>Status:</strong> ' + statusText + '</p>';
+                    html += '<p style="margin: 5px 0;"><strong>Uprosesserte:</strong> ' + data.unprocessed_messages + ' meldinger</p>';
+                    
+                    if (data.last_processed) {
+                        const date = new Date(data.last_processed);
+                        const timeStr = date.toLocaleString('no-NO');
+                        html += '<p style="margin: 5px 0; font-size: 12px; color: #666;"><strong>Sist:</strong> ' + timeStr + '</p>';
+                    }
+                    
+                    content.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Worker status error:', error);
+                document.getElementById('worker-status-content').innerHTML = '<p style="color: #999;">Kunne ikke hente status</p>';
+            }
         }
         
         async function toggleMemoryView() {
@@ -1271,13 +1385,59 @@ HTML_TEMPLATE = """
             
             if (memoryViewVisible) {
                 view.style.display = 'block';
-                toggleText.textContent = '🙈 Skjul minner';
+                toggleText.textContent = '🙈 Skjul detaljert minne';
+                await loadRecentUpdates();
                 await loadMemoryFacts();
                 await loadMemoryMemories();
                 await loadMemoryTopics();
             } else {
                 view.style.display = 'none';
-                toggleText.textContent = '👁️ Vis minner';
+                toggleText.textContent = '👁️ Vis detaljert minne';
+            }
+        }
+        
+        async function loadRecentUpdates() {
+            const list = document.getElementById('recent-updates-list');
+            list.innerHTML = '<p style="color: #999; text-align: center;">Laster...</p>';
+            
+            try {
+                const response = await fetch('/api/memory/recent-updates');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.updates.length > 0) {
+                    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+                    
+                    data.updates.forEach(update => {
+                        const date = new Date(update.last_updated);
+                        const timeStr = date.toLocaleTimeString('no-NO', {hour: '2-digit', minute: '2-digit'});
+                        const dateStr = date.toLocaleDateString('no-NO', {day: '2-digit', month: '2-digit'});
+                        
+                        html += '<div style="padding: 8px; background: #f5f5f5; border-radius: 6px; border-left: 3px solid #ff9800;">';
+                        html += '<div style="font-weight: bold; color: #333;">' + update.key + '</div>';
+                        html += '<div style="font-size: 12px; color: #666; margin-top: 2px;">' + update.value + '</div>';
+                        html += '<div style="font-size: 11px; color: #999; margin-top: 4px;">📅 ' + dateStr + ' ' + timeStr;
+                        if (update.topic) html += ' • ' + update.topic;
+                        html += '</div></div>';
+                    });
+                    
+                    html += '</div>';
+                    list.innerHTML = html;
+                } else {
+                    list.innerHTML = '<p style="color: #999; text-align: center;">Ingen oppdateringer</p>';
+                }
+            } catch (error) {
+                list.innerHTML = '<p style="color: #f44336;">Feil ved lasting</p>';
+                console.error('Recent updates error:', error);
+            }
+        }
+        
+        function toggleFactsView() {
+            factsViewMode = factsViewMode === 'list' ? 'category' : 'list';
+            const button = document.getElementById('facts-view-toggle');
+            button.textContent = factsViewMode === 'list' ? '📁 Vis etter kategori' : '📄 Vis som liste';
+            
+            if (window.memoryFacts) {
+                displayFacts(window.memoryFacts);
             }
         }
         
@@ -1309,25 +1469,74 @@ HTML_TEMPLATE = """
                 return;
             }
             
-            let html = '';
-            facts.forEach(fact => {
-                const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
-                html += `
-                    <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
-                        <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
-                        <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
-                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
-                            <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
-                            <span>|</span>
-                            <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
-                            <span>|</span>
-                            <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
-                            <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
+            if (factsViewMode === 'category') {
+                // Group by topic
+                const grouped = {};
+                facts.forEach(fact => {
+                    if (!grouped[fact.topic]) {
+                        grouped[fact.topic] = [];
+                    }
+                    grouped[fact.topic].push(fact);
+                });
+                
+                let html = '';
+                Object.keys(grouped).sort().forEach(topic => {
+                    const topicFacts = grouped[topic];
+                    const topicColors = {
+                        'family': '#e91e63',
+                        'identity': '#9c27b0',
+                        'preferences': '#ff5722',
+                        'work': '#3f51b5',
+                        'projects': '#00bcd4',
+                        'technical': '#009688',
+                        'health': '#4caf50',
+                        'pets': '#ff9800',
+                        'hobby': '#795548'
+                    };
+                    const color = topicColors[topic] || '#757575';
+                    
+                    html += '<div style="margin-bottom: 15px;">';
+                    html += '<div style="font-weight: bold; color: ' + color + '; margin-bottom: 8px; padding: 6px 10px; background: rgba(0,0,0,0.05); border-radius: 6px;">📁 ' + topic + ' (' + topicFacts.length + ')</div>';
+                    
+                    topicFacts.forEach(fact => {
+                        const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+                        html += '<div style="padding: 10px; margin-bottom: 8px; margin-left: 15px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ' + confidenceColor + ';">';
+                        html += '<div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">' + fact.key + '</div>';
+                        html += '<div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">' + fact.value + '</div>';
+                        html += '<div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">';
+                        html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
+                        html += '<span>|</span>';
+                        html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
+                        html += '<button onclick="deleteFact(\'' + fact.key + '\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\'#c62828\'" onmouseout="this.style.color=\'#f44336\'" title="Slett">🗑️</button>';
+                        html += '</div></div>';
+                    });
+                    
+                    html += '</div>';
+                });
+                
+                list.innerHTML = html;
+            } else {
+                // List view
+                let html = '';
+                facts.forEach(fact => {
+                    const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+                    html += `
+                        <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${confidenceColor};">
+                            <div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">${fact.key}</div>
+                            <div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">${fact.value}</div>
+                            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                                <span style="white-space: nowrap;">📊 ${(fact.confidence * 100).toFixed(0)}%</span>
+                                <span>|</span>
+                                <span style="white-space: nowrap;">🔢 ${fact.frequency}x</span>
+                                <span>|</span>
+                                <span style="white-space: nowrap;">🏷️ ${fact.topic}</span>
+                                <button onclick="deleteFact('${fact.key}')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
+                            </div>
                         </div>
-                    </div>
-                `;
-            });
-            list.innerHTML = html;
+                    `;
+                });
+                list.innerHTML = html;
+            }
         }
         
         function filterFacts() {
@@ -2025,6 +2234,149 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 response = {'status': 'success', 'conversations': conversations}
             except Exception as e:
                 response = {'status': 'error', 'conversations': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/embedding-status':
+            # Get embedding status
+            try:
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                c.execute("SELECT COUNT(*) as total FROM profile_facts")
+                total = c.fetchone()['total']
+                
+                c.execute("SELECT COUNT(*) as with_embedding FROM profile_facts WHERE embedding IS NOT NULL")
+                with_embedding = c.fetchone()['with_embedding']
+                
+                conn.close()
+                response = {
+                    'status': 'success',
+                    'total_facts': total,
+                    'with_embedding': with_embedding,
+                    'percentage': round((with_embedding / total * 100) if total > 0 else 0, 1)
+                }
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/worker-status':
+            # Get memory worker status
+            try:
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                # Count unprocessed messages
+                c.execute("SELECT COUNT(*) as unprocessed FROM messages WHERE processed = 0")
+                unprocessed = c.fetchone()['unprocessed']
+                
+                # Get last processed timestamp
+                c.execute("SELECT MAX(timestamp) as last_processed FROM messages WHERE processed = 1")
+                last_row = c.fetchone()
+                last_processed = last_row['last_processed'] if last_row['last_processed'] else None
+                
+                # Check if worker service is running
+                try:
+                    result = subprocess.run(['systemctl', 'is-active', 'duck-memory-worker.service'], 
+                                          capture_output=True, text=True, check=False)
+                    is_active = result.stdout.strip() == 'active'
+                except:
+                    is_active = False
+                
+                conn.close()
+                response = {
+                    'status': 'success',
+                    'is_active': is_active,
+                    'unprocessed_messages': unprocessed,
+                    'last_processed': last_processed
+                }
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/recent-updates':
+            # Get recently updated facts
+            try:
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                c.execute("""
+                    SELECT key, value, topic, last_updated
+                    FROM profile_facts
+                    ORDER BY last_updated DESC
+                    LIMIT 10
+                """)
+                
+                updates = []
+                for row in c.fetchall():
+                    updates.append({
+                        'key': row['key'],
+                        'value': row['value'],
+                        'topic': row['topic'],
+                        'last_updated': row['last_updated']
+                    })
+                
+                conn.close()
+                response = {'status': 'success', 'updates': updates}
+            except Exception as e:
+                response = {'status': 'error', 'updates': [], 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/memory/quick-facts':
+            # Get most important quick facts
+            try:
+                memory_manager = MemoryManager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                
+                # Get key facts
+                quick_facts = {}
+                
+                # Name
+                c.execute("SELECT value FROM profile_facts WHERE key = 'user_name' LIMIT 1")
+                row = c.fetchone()
+                if row:
+                    quick_facts['name'] = row['value']
+                else:
+                    quick_facts['name'] = 'Ukjent'
+                
+                # Sisters (only sister_1_name, sister_2_name, sister_3_name exactly)
+                c.execute("SELECT key, value FROM profile_facts WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name') ORDER BY key")
+                sisters = [row['value'] for row in c.fetchall()]
+                quick_facts['sisters'] = sisters
+                quick_facts['sisters_count'] = len(sisters)
+                
+                # Nieces/Nephews
+                c.execute("SELECT value FROM profile_facts WHERE key = 'nieces_count' LIMIT 1")
+                row = c.fetchone()
+                quick_facts['nieces_count'] = int(row['value']) if row else 0
+                
+                c.execute("SELECT value FROM profile_facts WHERE key = 'nephews_count' LIMIT 1")
+                row = c.fetchone()
+                quick_facts['nephews_count'] = int(row['value']) if row else 0
+                
+                conn.close()
+                response = {'status': 'success', **quick_facts}
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e), 'name': 'Ukjent', 'sisters': [], 'sisters_count': 0, 'nieces_count': 0, 'nephews_count': 0}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
