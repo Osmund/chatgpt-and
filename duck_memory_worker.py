@@ -105,9 +105,9 @@ AI: "{ai_response}"
 {{
     "profile_facts": [
         {{
-            "key": "home_city",
-            "value": "Oslo",
-            "topic": "personal",
+            "key": "hobby_name",
+            "value": "fotografi",
+            "topic": "hobby",
             "confidence": 0.9,
             "source": "user"
         }}
