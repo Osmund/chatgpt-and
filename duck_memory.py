@@ -238,15 +238,25 @@ class MemoryManager:
         """)
         
         # FTS5 virtual table for full-text search on memories
+        # unicode61 tokenizer for bedre håndtering av æøå
         c.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts 
-            USING fts5(text, content='memories', content_rowid='id')
+            USING fts5(text, content='memories', content_rowid='id', 
+                      tokenize='unicode61 remove_diacritics 0')
         """)
         
-        # FTS5 virtual table for profile_facts
+        # FTS5 virtual table for profile_facts med unicode61 og trigram
         c.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS profile_facts_fts 
-            USING fts5(key, value, topic, content='profile_facts', content_rowid='rowid')
+            USING fts5(key, value, topic, content='profile_facts', content_rowid='rowid',
+                      tokenize='unicode61 remove_diacritics 0')
+        """)
+        
+        # Trigram-tabell for fuzzy matching av norske ord
+        c.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS profile_facts_trigram
+            USING fts5(key, value, topic, content='profile_facts', content_rowid='rowid',
+                      tokenize='trigram')
         """)
         
         # Triggers for memories FTS sync
@@ -282,6 +292,8 @@ class MemoryManager:
             AFTER INSERT ON profile_facts BEGIN
                 INSERT INTO profile_facts_fts(rowid, key, value, topic) 
                 VALUES (new.rowid, new.key, new.value, new.topic);
+                INSERT INTO profile_facts_trigram(rowid, key, value, topic) 
+                VALUES (new.rowid, new.key, new.value, new.topic);
             END
         """)
         
@@ -289,6 +301,8 @@ class MemoryManager:
             CREATE TRIGGER IF NOT EXISTS profile_facts_ad 
             AFTER DELETE ON profile_facts BEGIN
                 INSERT INTO profile_facts_fts(profile_facts_fts, rowid, key, value, topic) 
+                VALUES('delete', old.rowid, old.key, old.value, old.topic);
+                INSERT INTO profile_facts_trigram(profile_facts_trigram, rowid, key, value, topic) 
                 VALUES('delete', old.rowid, old.key, old.value, old.topic);
             END
         """)
@@ -299,6 +313,10 @@ class MemoryManager:
                 INSERT INTO profile_facts_fts(profile_facts_fts, rowid, key, value, topic) 
                 VALUES('delete', old.rowid, old.key, old.value, old.topic);
                 INSERT INTO profile_facts_fts(rowid, key, value, topic) 
+                VALUES (new.rowid, new.key, new.value, new.topic);
+                INSERT INTO profile_facts_trigram(profile_facts_trigram, rowid, key, value, topic) 
+                VALUES('delete', old.rowid, old.key, old.value, old.topic);
+                INSERT INTO profile_facts_trigram(rowid, key, value, topic) 
                 VALUES (new.rowid, new.key, new.value, new.topic);
             END
         """)
@@ -465,16 +483,80 @@ class MemoryManager:
         conn = self._get_connection()
         c = conn.cursor()
         
+        # Ekstraher nøkkelord fra norsk query
+        keywords = []
+        query_lower = query.lower()
+        
+        # Mapping fra norske ord til database keys
+        keyword_map = {
+            'søster': 'sister',
+            'søstre': 'sister', 
+            'søsken': 'sister',
+            'bror': 'brother',
+            'far': 'father',
+            'mor': 'mother',
+            'pappa': 'father',
+            'mamma': 'mother',
+            'familie': 'family',
+            'jobb': 'job',
+            'arbeid': 'job',
+            'bolig': 'home',
+            'hus': 'home',
+            'navn': 'name',
+            'heter': 'name',
+            'bursdag': 'birthday',
+            'alder': 'age',
+            'år': 'age',
+            'hvor': 'location',
+            'bor': 'location'
+        }
+        
+        # Finn relevante nøkkelord
+        for norsk, engelsk in keyword_map.items():
+            if norsk in query_lower:
+                keywords.append(engelsk)
+        
+        # Hvis vi fant nøkkelord, prøv FTS søk først
+        if keywords:
+            keyword_query = ' OR '.join(keywords)
+            try:
+                c.execute("""
+                    SELECT pf.*, bm25(profile_facts_fts) as score
+                    FROM profile_facts_fts
+                    JOIN profile_facts pf ON pf.rowid = profile_facts_fts.rowid
+                    WHERE profile_facts_fts MATCH ?
+                    ORDER BY score
+                    LIMIT ?
+                """, (keyword_query, limit))
+                
+                facts = []
+                for row in c.fetchall():
+                    facts.append(ProfileFact(
+                        key=row['key'],
+                        value=row['value'],
+                        topic=row['topic'],
+                        confidence=row['confidence'],
+                        frequency=row['frequency'],
+                        source=row['source'],
+                        last_updated=row['last_updated']
+                    ))
+                
+                if facts:
+                    conn.close()
+                    return facts
+            except Exception:
+                pass  # Fall through
+        
+        # Prøv trigram fuzzy matching for norske ord
         try:
-            # FTS søk med ranking - prøv direkte søk først
             c.execute("""
-                SELECT pf.*, bm25(profile_facts_fts) as score
-                FROM profile_facts_fts
-                JOIN profile_facts pf ON pf.rowid = profile_facts_fts.rowid
-                WHERE profile_facts_fts MATCH ?
+                SELECT pf.*, bm25(profile_facts_trigram) as score
+                FROM profile_facts_trigram
+                JOIN profile_facts pf ON pf.rowid = profile_facts_trigram.rowid
+                WHERE profile_facts_trigram MATCH ?
                 ORDER BY score
                 LIMIT ?
-            """, (query, limit))
+            """, (query_lower, limit // 2))
             
             facts = []
             for row in c.fetchall():
@@ -488,32 +570,41 @@ class MemoryManager:
                     last_updated=row['last_updated']
                 ))
             
-            conn.close()
-            return facts
-            
+            if facts:
+                conn.close()
+                return facts
         except Exception:
-            # Hvis FTS feiler (f.eks. pga spesialtegn), prøv LIKE-søk
-            c.execute("""
-                SELECT * FROM profile_facts
-                WHERE key LIKE ? OR value LIKE ? OR topic LIKE ?
-                ORDER BY frequency DESC, confidence DESC
-                LIMIT ?
-            """, (f'%{query}%', f'%{query}%', f'%{query}%', limit))
-            
-            facts = []
-            for row in c.fetchall():
-                facts.append(ProfileFact(
-                    key=row['key'],
-                    value=row['value'],
-                    topic=row['topic'],
-                    confidence=row['confidence'],
-                    frequency=row['frequency'],
-                    source=row['source'],
-                    last_updated=row['last_updated']
-                ))
-            
-            conn.close()
-            return facts
+            pass  # Fall through
+        
+        # Fallback: LIKE-søk med både original query og keywords
+        search_terms = [query] + keywords
+        placeholders = ' OR '.join(['key LIKE ? OR value LIKE ? OR topic LIKE ?'] * len(search_terms))
+        params = []
+        for term in search_terms:
+            params.extend([f'%{term}%', f'%{term}%', f'%{term}%'])
+        params.append(limit)
+        
+        c.execute(f"""
+            SELECT * FROM profile_facts
+            WHERE {placeholders}
+            ORDER BY frequency DESC, confidence DESC
+            LIMIT ?
+        """, params)
+        
+        facts = []
+        for row in c.fetchall():
+            facts.append(ProfileFact(
+                key=row['key'],
+                value=row['value'],
+                topic=row['topic'],
+                confidence=row['confidence'],
+                frequency=row['frequency'],
+                source=row['source'],
+                last_updated=row['last_updated']
+            ))
+        
+        conn.close()
+        return facts
     
     # ==================== MEMORIES ====================
     
