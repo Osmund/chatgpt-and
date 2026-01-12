@@ -912,7 +912,53 @@ class MemoryManager:
         else:
             frequent_facts = []
         
-        # 3. Kombiner og dedupliser (prioriter søkte facts)
+        # 3. Spesialbehandling: Hvis query handler om søstre, sørg for at alle søsternavn er inkludert
+        query_lower = query.lower()
+        if any(word in query_lower for word in ['søster', 'sister', 'søstre', 'sisters']):
+            conn = self._get_connection()
+            c = conn.cursor()
+            c.execute("""
+                SELECT * FROM profile_facts 
+                WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name')
+            """)
+            for row in c.fetchall():
+                fact = ProfileFact(
+                    key=row['key'],
+                    value=row['value'],
+                    topic=row['topic'],
+                    confidence=row['confidence'],
+                    frequency=row['frequency'],
+                    source=row['source'],
+                    last_updated=row['last_updated']
+                )
+                # Legg til først i listen hvis ikke allerede der
+                if fact not in searched_facts:
+                    searched_facts.insert(0, fact)
+            conn.close()
+        
+        # 3b. Spesialbehandling: Hvis query handler om barn/nieser/nevøer, inkluder alle barnenavn
+        if any(word in query_lower for word in ['barn', 'child', 'children', 'niese', 'niece', 'nevø', 'nephew']):
+            conn = self._get_connection()
+            c = conn.cursor()
+            c.execute("""
+                SELECT * FROM profile_facts 
+                WHERE key LIKE '%child%name' OR key LIKE '%child%_name'
+            """)
+            for row in c.fetchall():
+                fact = ProfileFact(
+                    key=row['key'],
+                    value=row['value'],
+                    topic=row['topic'],
+                    confidence=row['confidence'],
+                    frequency=row['frequency'],
+                    source=row['source'],
+                    last_updated=row['last_updated']
+                )
+                if fact not in searched_facts:
+                    searched_facts.insert(0, fact)
+            conn.close()
+        
+        # 4. Kombiner og dedupliser (prioriter søkte facts)
         seen_keys = set()
         combined_facts = []
         
@@ -920,9 +966,7 @@ class MemoryManager:
         for fact in searched_facts:
             if fact.key not in seen_keys:
                 combined_facts.append(fact)
-                seen_keys.add(fact.key)
-        
-        # Legg til frekvente facts
+                seen_keys.add(fact.key)        # Legg til frekvente facts
         for fact in frequent_facts:
             if fact.key not in seen_keys:
                 combined_facts.append(fact)
