@@ -43,9 +43,14 @@ class MemoryExtractor:
         self.api_key = api_key
         self.extraction_count = 0
         
-    def extract_from_conversation(self, user_text: str, ai_response: str) -> Dict:
+    def extract_from_conversation(self, user_text: str, ai_response: str, context: List[tuple] = None) -> Dict:
         """
-        Ekstraher minner fra én utveksling
+        Ekstraher minner fra én utveksling (med kontekst)
+        
+        Args:
+            user_text: Brukerens melding
+            ai_response: AI-assistentens svar
+            context: Liste av (user_text, ai_response) fra tidligere meldinger
         
         Returnerer:
         {
@@ -55,6 +60,15 @@ class MemoryExtractor:
             'importance': 1-5
         }
         """
+        
+        # Bygg kontekst-seksjon hvis tilgjengelig
+        context_section = ""
+        if context:
+            context_section = "\n**Tidligere samtale (kontekst):**\n"
+            for i, (prev_user, prev_ai) in enumerate(context, 1):
+                context_section += f"\nMelding {i}:\n"
+                context_section += f"Bruker: {prev_user}\n"
+                context_section += f"AI: {prev_ai[:100]}...\n" if len(prev_ai) > 100 else f"AI: {prev_ai}\n"
         
         prompt = f"""
 Analyser følgende samtale mellom bruker og AI-assistent.
@@ -69,6 +83,8 @@ Identifiser og ekstraher:
    - Lagre hvert familiemedlem individuelt med unike keys:
      * father_name, mother_name, sister_1_name, sister_2_name, brother_1_name, etc.
    - Lagre bursdager: sister_1_birthday, father_birthday (format: DD-MM eller "31. januar")
+   - Lagre fødselsår: father_birth_year, mother_birth_year, sister_1_birth_year (format: YYYY f.eks. "1949")
+   - Lagre alder: father_age, sister_1_age (kun tall)
    - Lagre antall søsken: sibling_count (verdi: 3)
    - Lagre antall nieser/nevøer: nieces_count, nephews_count
    - Lagre barn til søsken: sister_1_child_1_name, sister_2_child_1_name, etc.
@@ -104,18 +120,62 @@ Identifiser og ekstraher:
    - Kort og konsist (1-2 setninger)
    - Inkluder familieinteraksjoner og spesielle hendelser
    - Inkluder nostalgiske minner om hobbyer og samlinger
+   - **VIKTIG: Inkluder også brukerens interaksjoner med Anda:**
+     * Videoer eller innlegg brukeren lager om Anda
+     * Sosial respons (visninger, kommentarer, likes)
+     * Media-oppmerksomhet eller artikler om Anda
+     * Reaksjoner fra andre folk på Anda
+     * Milepæler og prestasjoner relatert til Anda-prosjektet
+   - Eksempel: "Brukeren lastet opp video av Anda på Reddit som fikk 15 000 visninger"
+   - Eksempel: "En journalist i England kontaktet brukeren om Anda"
+   - **VIKTIG: Fang også opp daglige samtaler og personlige emner:**
+     * Jobbrelaterte hendelser (prosjekter, møter, kollegaer, utfordringer, suksesser)
+     * Steder brukeren nevner (hjemby, reisemål, favorittplasser)
+     * Følelser og mental tilstand (stress, glede, bekymringer, humør)
+     * Helse og velvære (sykdom, trening, søvn, mat, energinivå)
+     * Planer for fremtiden (reiser, prosjekter, mål)
+     * Daglige rutiner og aktiviteter
+   - Eksempel: "Brukeren hadde en stressende dag på jobb"
+   - Eksempel: "Brukeren planlegger å dra til Sokndal i helgen"
+   - Eksempel: "Brukeren føler seg sliten og trenger mer søvn"
 
 3. **Topics**: Emne-kategorier
-   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection
+   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection, social_media, achievements, location, emotions, daily_life, documentation
 
 4. **Importance**: Hvor viktig er denne samtalen? (1-5)
    - 1: Triviell (vær, tid, small talk)
    - 3: Moderat (informasjon, spørsmål)
    - 5: Viktig (personlig info, planer, preferanser)
 
-**Samtale:**
+**VIKTIG om kontekst:**
+- Hvis du får tidligere meldinger som kontekst, bruk dem til å forstå sammenhengen
+- Kombiner informasjon fra flere meldinger til ett minneverdig utsagn hvis det gir mening
+- Eksempel: "Mange lurte på hvordan jeg laget deg" + "Jeg har dokumentert prosessen på GitHub" 
+  → Memory: "Brukeren har dokumentert Anda-prosjektet på GitHub fordi mange lurte på hvordan den ble laget"
+
+{context_section}
+
+**Nåværende melding å analysere:**
 Bruker: "{user_text}"
 AI: "{ai_response}"
+
+**Returner JSON:**
+{{
+    "profile_facts": [
+        {{
+            "key": "hobby_name",
+            "value": "fotografi",
+            "topic": "hobby",
+            "confidence": 0.9,
+            "source": "user"
+        }}
+    ],
+    "memories": [
+        {{
+            "text": "Brukeren planlegger tur til fjellet",
+            "topic": "hobby",
+            "importance": 3,
+            "confidence": 0.9", "oldString": "3. **Topics**: Emne-kategorier\n   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection, social_media, achievements, location, emotions, daily_life\n\n4. **Importance**: Hvor viktig er denne samtalen? (1-5)\n   - 1: Triviell (vær, tid, small talk)\n   - 3: Moderat (informasjon, spørsmål)\n   - 5: Viktig (personlig info, planer, preferanser)\n\n**Samtale:**\nBruker: \"{user_text}\"\nAI: \"{ai_response}\"", "newString": "3. **Topics**: Emne-kategorier\n   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection, social_media, achievements, location, emotions, daily_life, documentation\n\n4. **Importance**: Hvor viktig er denne samtalen? (1-5)\n   - 1: Triviell (vær, tid, small talk)\n   - 3: Moderat (informasjon, spørsmål)\n   - 5: Viktig (personlig info, planer, preferanser)\n\n**VIKTIG om kontekst:**\n- Hvis du får tidligere meldinger som kontekst, bruk dem til å forstå sammenhengen\n- Kombiner informasjon fra flere meldinger til ett minneverdig utsagn hvis det gir mening\n- Eksempel: \"Mange lurte på hvordan jeg laget deg\" + \"Jeg har dokumentert prosessen på GitHub\" \n  → Memory: \"Brukeren har dokumentert Anda-prosjektet på GitHub fordi mange lurte på hvordan den ble laget\"\n- Ekstraher kun fra den nåværende meldingen, men bruk kontekst til å forstå sammenhengen\n{context_section}\n\n**Nåværende melding å analysere:**\nBruker: \"{user_text}\"\nAI: \"{ai_response}\"", "oldString": "3. **Topics**: Emne-kategorier\n   - Velg fra: family, hobby, work, projects, technical, health, pets, preferences, weather, time, general, collection, social_media, achievements, location, emotions, daily_life\n\n4. **Importance**: Hvor viktig er denne samtalen? (1-5)\n   - 1: Triviell (vær, tid, small talk)\n   - 3: Moderat (informasjon, spørsmål)\n   - 5: Viktig (personlig info, planer, preferanser)\n\n**Samtale:**\nBruker: \"{user_text}\"\nAI: \"{ai_response}\""
 
 **Returner JSON:**
 {{
@@ -228,25 +288,60 @@ class MemoryWorker:
         
         return len(messages)
     
+    def _get_conversation_context(self, current_msg_id: int, context_size: int = 2) -> List[tuple]:
+        """
+        Hent tidligere meldinger som kontekst
+        Returnerer liste av (user_text, ai_response) tupler
+        """
+        conn = self.memory_manager._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT user_text, ai_response
+            FROM messages
+            WHERE id < ?
+            ORDER BY id DESC
+            LIMIT ?
+        """, (current_msg_id, context_size))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Returner i kronologisk rekkefølge (eldste først)
+        return list(reversed(rows))
+    
     def _process_message(self, msg):
         """
         Prosesser én melding: ekstraher og lagre minner
         """
-        # Ekstraher minner via LLM
+        # Hent kontekst (2 tidligere meldinger)
+        context = self._get_conversation_context(msg.id, context_size=2)
+        
+        # Ekstraher minner via LLM med kontekst
         extracted = self.extractor.extract_from_conversation(
             msg.user_text,
-            msg.ai_response
+            msg.ai_response,
+            context=context
         )
         
         # Lagre profile facts
         for fact_data in extracted.get('profile_facts', []):
             try:
+                # Automatisk metadata med kontekst
+                auto_metadata = {
+                    'learned_at': datetime.now().isoformat(),
+                    'source_message_id': msg.id,
+                    'extraction_confidence': fact_data.get('confidence', 0.8),
+                    'learned_from': 'conversation'
+                }
+                
                 fact = ProfileFact(
                     key=fact_data['key'],
                     value=fact_data['value'],
                     topic=fact_data.get('topic', 'general'),
                     confidence=fact_data.get('confidence', 0.8),
-                    source=fact_data.get('source', 'extracted')
+                    source=fact_data.get('source', 'extracted'),
+                    metadata=auto_metadata
                 )
                 self.memory_manager.save_profile_fact(fact)
                 
@@ -257,16 +352,26 @@ class MemoryWorker:
             except Exception as e:
                 print(f"  ⚠️ Kunne ikke lagre fact: {e}", flush=True)
         
-        # Lagre memories
+        # Lagre memories (med duplikat-sjekk)
         for mem_data in extracted.get('memories', []):
             try:
+                # Automatisk metadata for memories
+                auto_metadata = {
+                    'learned_at': datetime.now().isoformat(),
+                    'source_message_id': msg.id,
+                    'importance': mem_data.get('importance', 3),
+                    'learned_from': 'conversation'
+                }
+                
                 memory = Memory(
                     text=mem_data['text'],
                     topic=mem_data.get('topic', 'general'),
                     confidence=mem_data.get('confidence', 0.8),
-                    source='extracted'
+                    source='extracted',
+                    metadata=auto_metadata
                 )
-                self.memory_manager.save_memory(memory)
+                # save_memory vil nå sjekke for duplikater og merge hvis nødvendig
+                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True)
                 print(f"  ✅ Memory: {memory.text[:50]}...", flush=True)
             except Exception as e:
                 print(f"  ⚠️ Kunne ikke lagre memory: {e}", flush=True)

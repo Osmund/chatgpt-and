@@ -410,10 +410,17 @@ class MemoryManager:
         c = conn.cursor()
         
         # Sjekk om key allerede eksisterer
-        c.execute("SELECT frequency FROM profile_facts WHERE key = ?", (fact.key,))
+        c.execute("SELECT frequency, confidence, value FROM profile_facts WHERE key = ?", (fact.key,))
         existing = c.fetchone()
         
         if existing:
+            # VIKTIG: Ikke overskriv fakta med høy confidence (1.0)
+            # Dette beskytter mot at memory workeren ødelegger verifiserte fakta
+            if existing['confidence'] >= 1.0 and fact.value != existing['value']:
+                print(f"⚠️ Blokkerer overskriving av verifisert fact: {fact.key} = '{existing['value']}' (forsøkte: '{fact.value}')", flush=True)
+                conn.close()
+                return False
+            
             # Oppdater: øk frekvens, oppdater verdi hvis ny
             new_freq = existing['frequency'] + 1
             c.execute("""
@@ -422,10 +429,13 @@ class MemoryManager:
                     confidence = ?, 
                     frequency = ?,
                     last_updated = ?,
-                    source = ?
+                    source = ?,
+                    metadata = ?
                 WHERE key = ?
             """, (fact.value, fact.confidence, new_freq, 
-                  datetime.now().isoformat(), fact.source, fact.key))
+                  datetime.now().isoformat(), fact.source, 
+                  json.dumps(fact.metadata) if hasattr(fact, 'metadata') and fact.metadata else '{}',
+                  fact.key))
         else:
             # Ny fact
             c.execute("""
@@ -743,8 +753,88 @@ class MemoryManager:
     
     # ==================== MEMORIES ====================
     
-    def save_memory(self, memory: Memory) -> int:
-        """Lagre nytt minne"""
+    def find_similar_memory(self, text: str, topic: str, similarity_threshold: float = 0.80) -> Optional[int]:
+        """
+        Finn eksisterende minne som er veldig likt det nye
+        Returnerer memory_id hvis funnet, ellers None
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Hent alle minner i samme topic (reduserer søkeområde)
+        c.execute("""
+            SELECT id, text 
+            FROM memories 
+            WHERE topic = ?
+        """, (topic,))
+        
+        existing = c.fetchall()
+        conn.close()
+        
+        if not existing:
+            return None
+        
+        # Enkel similarity basert på overlappende ord
+        new_words = set(text.lower().split())
+        
+        for row in existing:
+            existing_id = row['id']
+            existing_text = row['text']
+            existing_words = set(existing_text.lower().split())
+            
+            # Jaccard similarity
+            intersection = len(new_words & existing_words)
+            union = len(new_words | existing_words)
+            
+            if union > 0:
+                similarity = intersection / union
+                if similarity >= similarity_threshold:
+                    return existing_id
+        
+        return None
+    
+    def update_memory(self, memory_id: int, new_text: str, metadata: dict = None):
+        """
+        Oppdater eksisterende minne med rikere informasjon
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Oppdater text og metadata
+        if metadata:
+            c.execute("""
+                UPDATE memories 
+                SET text = ?, 
+                    metadata = ?,
+                    last_accessed = ?
+                WHERE id = ?
+            """, (new_text, json.dumps(metadata), datetime.now().isoformat(), memory_id))
+        else:
+            c.execute("""
+                UPDATE memories 
+                SET text = ?,
+                    last_accessed = ?
+                WHERE id = ?
+            """, (new_text, datetime.now().isoformat(), memory_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def save_memory(self, memory: Memory, check_duplicates: bool = True) -> int:
+        """
+        Lagre nytt minne (med optional duplikat-sjekk)
+        Returnerer memory_id (enten ny eller oppdatert)
+        """
+        # Sjekk for lignende minner hvis ønsket
+        if check_duplicates:
+            existing_id = self.find_similar_memory(memory.text, memory.topic)
+            if existing_id:
+                # Oppdater eksisterende minne med rikere info
+                self.update_memory(existing_id, memory.text, memory.metadata)
+                print(f"  ♻️  Oppdaterte eksisterende minne {existing_id}", flush=True)
+                return existing_id
+        
+        # Lagre som nytt minne
         conn = self._get_connection()
         c = conn.cursor()
         
@@ -781,7 +871,20 @@ class MemoryManager:
             conn.close()
             return []
         
-        # FTS5 MATCH query - bruk enkle søkeord uten special chars
+        # Preprosesser query for FTS5:
+        # - Fjern spesielle tegn som kan forårsake FTS feil
+        # - Split til individuelle ord
+        # - Bruk OR mellom ord for bedre matching
+        import re
+        words = re.findall(r'\w+', query.lower())  # Ekstraher bare ord (fjerner -, ?, ! etc)
+        if not words:
+            conn.close()
+            return []
+        
+        # Lag FTS5-vennlig query: "word1 OR word2 OR word3"
+        fts_query = ' OR '.join(words)
+        
+        # FTS5 MATCH query
         search_limit = limit * 3
         try:
             c.execute(f"""
@@ -791,9 +894,10 @@ class MemoryManager:
                 WHERE memories_fts MATCH ?
                 ORDER BY rank
                 LIMIT {search_limit}
-            """, (query,))
-        except sqlite3.OperationalError:
-            # Fallback til LIKE hvis FTS feiler
+            """, (fts_query,))
+        except sqlite3.OperationalError as e:
+            # Fallback til LIKE hvis FTS fortsatt feiler
+            print(f"⚠️ FTS søk feilet ({e}), bruker LIKE fallback", flush=True)
             c.execute(f"""
                 SELECT *, 0 as rank FROM memories 
                 WHERE text LIKE ?
@@ -893,77 +997,105 @@ class MemoryManager:
     
     # ==================== SESSION STATE ====================
     
+    def _expand_related_facts(self, facts: List[ProfileFact]) -> List[ProfileFact]:
+        """
+        Ekspander facts med relaterte facts basert på key-prefixes.
+        
+        Hvis vi f.eks. har 'sister_2_child_1_name', hent også:
+        - sister_2_name
+        - sister_2_location
+        - sister_2_child_1_age_relation
+        - osv.
+        
+        Dette gjør context-building mer intelligent og generell.
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        expanded = list(facts)  # Start med original facts
+        seen_keys = {f.key for f in facts}
+        
+        # Identifiser alle prefixes vi skal ekspandere
+        prefixes_to_expand = set()
+        
+        for fact in facts:
+            key = fact.key
+            # Finn prefix patterns (f.eks. 'sister_2', 'sister_2_child_1')
+            parts = key.split('_')
+            
+            # For 'sister_X_*' patterns
+            if key.startswith('sister_') and len(parts) >= 2:
+                # 'sister_2_child_1_name' -> ekspander 'sister_2' og 'sister_2_child_1'
+                sister_num = parts[1] if parts[1].isdigit() else None
+                if sister_num:
+                    prefixes_to_expand.add(f'sister_{sister_num}')
+                    
+                    # Hvis det er child-relatert, ekspander også child-prefixet
+                    if 'child' in key and len(parts) >= 4:
+                        child_num = parts[3] if parts[3].isdigit() else None
+                        if child_num:
+                            prefixes_to_expand.add(f'sister_{sister_num}_child_{child_num}')
+        
+        # Hent alle facts som matcher prefixene
+        for prefix in prefixes_to_expand:
+            c.execute("""
+                SELECT * FROM profile_facts 
+                WHERE key LIKE ? || '%'
+                LIMIT 20
+            """, (prefix,))
+            
+            for row in c.fetchall():
+                if row['key'] not in seen_keys:
+                    fact = ProfileFact(
+                        key=row['key'],
+                        value=row['value'],
+                        topic=row['topic'],
+                        confidence=row['confidence'],
+                        frequency=row['frequency'],
+                        source=row['source'],
+                        last_updated=row['last_updated']
+                    )
+                    expanded.append(fact)
+                    seen_keys.add(row['key'])
+        
+        conn.close()
+        return expanded
+
     def build_context_for_ai(self, query: str, recent_messages: int = 5) -> Dict:
         """
-        Bygg komplett context for AI-prompt
+        Bygg komplett context for AI-prompt med smart expansion.
+        
+        Strategi:
+        1. Embedding search (topp 20 facts)
+        2. Expand relaterte facts (hvis vi finner sister_2_child_1, hent alle sister_2_*)
+        3. Legg til frekvente facts hvis nødvendig
+        4. Begrens til totalt 40 facts for AI
         
         Returnerer dict med:
-        - profile_facts: Top fakta om bruker (kombinasjon av søkte + frekvente)
+        - profile_facts: Top fakta om bruker
         - relevant_memories: Søkte minner
         - recent_topics: Hva snakker vi om?
         - conversation_summary: Hvis tilgjengelig
         """
         # 1. Søk etter relevante facts basert på query (EMBEDDING SEARCH)
-        searched_facts = self.search_by_embedding(query, limit=10)
+        # Økt fra 10 til 20 for bedre dekning
+        searched_facts = self.search_by_embedding(query, limit=20)
         
-        # 2. Hvis embedding søk gir få resultater, hent også de mest frekvente facts
-        if len(searched_facts) < 5:
-            frequent_facts = self.get_top_facts_cached(limit=10)
+        # 2. Ekspander med relaterte facts
+        expanded_facts = self._expand_related_facts(searched_facts)
+        
+        # 3. Hvis vi fremdeles har få facts, legg til frekvente
+        if len(expanded_facts) < 15:
+            frequent_facts = self.get_top_facts_cached(limit=15)
         else:
             frequent_facts = []
         
-        # 3. Spesialbehandling: Hvis query handler om søstre, sørg for at alle søsternavn er inkludert
-        query_lower = query.lower()
-        if any(word in query_lower for word in ['søster', 'sister', 'søstre', 'sisters']):
-            conn = self._get_connection()
-            c = conn.cursor()
-            c.execute("""
-                SELECT * FROM profile_facts 
-                WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name')
-            """)
-            for row in c.fetchall():
-                fact = ProfileFact(
-                    key=row['key'],
-                    value=row['value'],
-                    topic=row['topic'],
-                    confidence=row['confidence'],
-                    frequency=row['frequency'],
-                    source=row['source'],
-                    last_updated=row['last_updated']
-                )
-                # Legg til først i listen hvis ikke allerede der
-                if fact not in searched_facts:
-                    searched_facts.insert(0, fact)
-            conn.close()
-        
-        # 3b. Spesialbehandling: Hvis query handler om barn/nieser/nevøer, inkluder alle barnenavn
-        if any(word in query_lower for word in ['barn', 'child', 'children', 'niese', 'niece', 'nevø', 'nephew']):
-            conn = self._get_connection()
-            c = conn.cursor()
-            c.execute("""
-                SELECT * FROM profile_facts 
-                WHERE key LIKE '%child%name' OR key LIKE '%child%_name'
-            """)
-            for row in c.fetchall():
-                fact = ProfileFact(
-                    key=row['key'],
-                    value=row['value'],
-                    topic=row['topic'],
-                    confidence=row['confidence'],
-                    frequency=row['frequency'],
-                    source=row['source'],
-                    last_updated=row['last_updated']
-                )
-                if fact not in searched_facts:
-                    searched_facts.insert(0, fact)
-            conn.close()
-        
-        # 4. Kombiner og dedupliser (prioriter søkte facts)
+        # 4. Kombiner og dedupliser
         seen_keys = set()
         combined_facts = []
         
-        # Legg til søkte facts først
-        for fact in searched_facts:
+        # Prioriter søkte + expanded facts først
+        for fact in expanded_facts:
             if fact.key not in seen_keys:
                 combined_facts.append(fact)
                 seen_keys.add(fact.key)        # Legg til frekvente facts
@@ -972,16 +1104,22 @@ class MemoryManager:
                 combined_facts.append(fact)
                 seen_keys.add(fact.key)
         
-        # Begrens til max 15 facts totalt
-        profile_facts = combined_facts[:15]
+        # Legg til frekvente facts
+        for fact in frequent_facts:
+            if fact.key not in seen_keys:
+                combined_facts.append(fact)
+                seen_keys.add(fact.key)
         
-        # 4. Relevant memories (FTS søk)
+        # Begrens til max 40 facts totalt (økt fra 15 for bedre context)
+        profile_facts = combined_facts[:40]
+        
+        # 5. Relevant memories (FTS søk)
         relevant_memories = self.search_memories(query, limit=8)
         
-        # 5. Recent topics
+        # 6. Recent topics
         topic_stats = self.get_topic_stats(limit=5)
         
-        # 6. Recent conversation (siste N meldinger)
+        # 7. Recent conversation (siste N meldinger)
         conn = self._get_connection()
         c = conn.cursor()
         c.execute("""

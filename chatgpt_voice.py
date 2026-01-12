@@ -241,11 +241,46 @@ def wait_for_wake_word():
             audio_stream.close()
         if porcupine is not None:
             porcupine.delete()
+
+def clean_markdown_for_tts(text):
+    """
+    Fjerner Markdown-formatering fra tekst før TTS.
+    Dette forhindrer at TTS sier 'asterisk asterisk' osv.
+    """
+    import re
+    
+    # Fjern bold/italic: **tekst** eller *tekst*
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+    text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italic*
+    
+    # Fjern underline: __tekst__ eller _tekst_
+    text = re.sub(r'__(.+?)__', r'\1', text)      # __underline__
+    text = re.sub(r'_(.+?)_', r'\1', text)        # _underline_
+    
+    # Fjern kodeblokker: ```kode``` eller `kode`
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)  # ```code block```
+    text = re.sub(r'`(.+?)`', r'\1', text)                   # `inline code`
+    
+    # Fjern lenker: [tekst](url) → tekst
+    text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', text)
+    
+    # Fjern overskrifter: ### Overskrift → Overskrift
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    
+    # Fjern liste-markører: - item eller * item eller 1. item
+    text = re.sub(r'^\s*[-*]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    
+    return text
+
 def speak(text, speech_config, beak):
     stop_blink()  # Stopp eventuell blinking
     set_red()  # LED rød FØR anda begynner å snakke
     import tempfile
     import wave
+    
+    # Fjern Markdown-formatering før TTS
+    text = clean_markdown_for_tts(text)
     
     # Les valgt stemme fra konfigurasjonsfil
     voice_name = DEFAULT_VOICE
@@ -1011,12 +1046,17 @@ def get_weather(location_name, timeframe="now"):
             # Samle data for morgendagen
             tomorrow_temps = []
             tomorrow_symbols = []
+            tomorrow_winds = []
             
             for ts in timeseries:
                 ts_time = datetime.fromisoformat(ts['time'].replace('Z', '+00:00'))
                 if ts_time.date() == tomorrow_date:
                     temp = ts['data']['instant']['details']['air_temperature']
                     tomorrow_temps.append(temp)
+                    
+                    # Hent vindstyrke
+                    wind = ts['data']['instant']['details'].get('wind_speed', 0)
+                    tomorrow_winds.append(wind)
                     
                     # Hent værsymbol hvis tilgjengelig
                     if 'next_1_hours' in ts['data']:
@@ -1027,9 +1067,38 @@ def get_weather(location_name, timeframe="now"):
             if not tomorrow_temps:
                 return f"Beklager, jeg har ikke værdata for i morgen for {display_name}."
             
-            # Beregn min/max temp
+            # Beregn min/max temp og gjennomsnittsvind
             min_temp = min(tomorrow_temps)
             max_temp = max(tomorrow_temps)
+            avg_wind = sum(tomorrow_winds) / len(tomorrow_winds) if tomorrow_winds else 0
+            max_wind = max(tomorrow_winds) if tomorrow_winds else 0
+            
+            # Beskriv vindstyrke på norsk
+            def get_wind_description(speed_ms):
+                if speed_ms < 1.6:
+                    return "vindstille"
+                elif speed_ms < 3.4:
+                    return "svak vind"
+                elif speed_ms < 5.5:
+                    return "lett bris"
+                elif speed_ms < 8.0:
+                    return "laber bris"
+                elif speed_ms < 10.8:
+                    return "frisk bris"
+                elif speed_ms < 13.9:
+                    return "liten kuling"
+                elif speed_ms < 17.2:
+                    return "stiv kuling"
+                elif speed_ms < 20.8:
+                    return "sterk kuling"
+                elif speed_ms < 24.5:
+                    return "liten storm"
+                elif speed_ms < 28.5:
+                    return "full storm"
+                else:
+                    return "sterk storm"
+            
+            wind_desc = get_wind_description(avg_wind)
             
             # Finn mest vanlige værsymbol
             most_common_symbol = "ukjent"
@@ -1039,14 +1108,74 @@ def get_weather(location_name, timeframe="now"):
             
             weather_desc = get_weather_desc(most_common_symbol)
             
+            # Hent total nedbør for morgendagen
+            total_precipitation = 0
+            for ts in timeseries:
+                ts_time = datetime.fromisoformat(ts['time'].replace('Z', '+00:00'))
+                if ts_time.date() == tomorrow_date:
+                    if 'next_1_hours' in ts['data'] and 'details' in ts['data']['next_1_hours']:
+                        precip = ts['data']['next_1_hours']['details'].get('precipitation_amount', 0)
+                        total_precipitation += precip
+            
             result = f"Værmelding for {display_name} i morgen:\n"
             result += f"Temperatur: {min_temp:.1f}°C til {max_temp:.1f}°C\n"
-            result += f"Vær: {weather_desc}"
+            result += f"Vær: {weather_desc}\n"
+            result += f"Vind: {wind_desc} (gjennomsnitt {avg_wind:.1f} m/s, maks {max_wind:.1f} m/s)\n"
+            
+            # Legg til nedbør hvis relevant
+            if total_precipitation > 0.1:
+                result += f"Nedbør: {total_precipitation:.1f} mm"
+            else:
+                result += "Ingen nedbør ventet"
             
         else:  # "now" eller "today"
             # Nåværende vær (første tidspunkt)
             current = timeseries[0]['data']['instant']['details']
             current_temp = current['air_temperature']
+            
+            # Hent vinddata
+            wind_speed = current.get('wind_speed', 0)  # m/s
+            wind_from_direction = current.get('wind_from_direction', None)  # grader
+            
+            # Konverter vindretning fra grader til kompassretning
+            def get_wind_direction(degrees):
+                if degrees is None:
+                    return ""
+                directions = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"]
+                index = round(degrees / 45) % 8
+                return directions[index]
+            
+            # Beskriv vindstyrke på norsk (basert på Beaufort-skala)
+            def get_wind_description(speed_ms):
+                if speed_ms < 1.6:
+                    return "vindstille"
+                elif speed_ms < 3.4:
+                    return "svak vind"
+                elif speed_ms < 5.5:
+                    return "lett bris"
+                elif speed_ms < 8.0:
+                    return "laber bris"
+                elif speed_ms < 10.8:
+                    return "frisk bris"
+                elif speed_ms < 13.9:
+                    return "liten kuling"
+                elif speed_ms < 17.2:
+                    return "stiv kuling"
+                elif speed_ms < 20.8:
+                    return "sterk kuling"
+                elif speed_ms < 24.5:
+                    return "liten storm"
+                elif speed_ms < 28.5:
+                    return "full storm"
+                else:
+                    return "sterk storm"
+            
+            wind_desc = get_wind_description(wind_speed)
+            wind_dir = get_wind_direction(wind_from_direction)
+            wind_text = f"{wind_desc}"
+            if wind_dir and wind_speed >= 1.6:  # Kun vis retning hvis det er vind
+                wind_text += f" fra {wind_dir}"
+            wind_text += f" ({wind_speed:.1f} m/s)"
             
             # Finn symbolkode for nåværende vær
             current_symbol = "ukjent"
@@ -1056,6 +1185,14 @@ def get_weather(location_name, timeframe="now"):
                 current_symbol = timeseries[0]['data']['next_6_hours']['summary']['symbol_code']
             
             weather_desc = get_weather_desc(current_symbol)
+            
+            # Hent nedbør neste time og neste 6 timer
+            precip_1h = 0
+            precip_6h = 0
+            if 'next_1_hours' in timeseries[0]['data'] and 'details' in timeseries[0]['data']['next_1_hours']:
+                precip_1h = timeseries[0]['data']['next_1_hours']['details'].get('precipitation_amount', 0)
+            if 'next_6_hours' in timeseries[0]['data'] and 'details' in timeseries[0]['data']['next_6_hours']:
+                precip_6h = timeseries[0]['data']['next_6_hours']['details'].get('precipitation_amount', 0)
             
             # Hent prognose for resten av dagen (neste 6-12 timer)
             forecast_summary = []
@@ -1072,6 +1209,15 @@ def get_weather(location_name, timeframe="now"):
             # Bygg svar
             result = f"Værmelding for {display_name}:\n"
             result += f"Nå: {current_temp:.1f}°C, {weather_desc}\n"
+            result += f"Vind: {wind_text}\n"
+            
+            # Legg til nedbør-informasjon
+            if precip_1h > 0.1:
+                result += f"Nedbør neste time: {precip_1h:.1f} mm\n"
+            elif precip_6h > 0.1:
+                result += f"Nedbør neste 6 timer: {precip_6h:.1f} mm\n"
+            else:
+                result += "Ingen nedbør ventet\n"
             
             if forecast_summary:
                 result += f"Prognose i dag: {', '.join(forecast_summary[:4])}"  # Max 4 tidspunkt
@@ -1163,37 +1309,98 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None):
     final_messages = messages.copy()
     system_content = date_time_info
     
-    # Legg til memory context hvis tilgjengelig
+    # Samle memory context først (men legg til senere)
+    memory_section = ""
     if memory_manager:
         try:
             # Hent brukerens siste melding for relevant søk
             user_query = messages[-1]["content"] if messages else ""
             context = memory_manager.build_context_for_ai(user_query, recent_messages=3)
             
-            # Bygg memory section
+            # Bygg memory section (legges til senere)
             memory_section = "\n\n### Ditt Minne ###\n"
             
             # Profile facts
             if context['profile_facts']:
                 memory_section += "Fakta om brukeren:\n"
-                for fact in context['profile_facts'][:15]:  # Top 15 facts
-                    memory_section += f"- {fact['key']}: {fact['value']}\n"
+                for fact in context['profile_facts']:  # Vis alle facts (økt til 40)
+                    memory_section += f"- {fact['key']}: {fact['value']}"
+                    
+                    # Vis metadata hvis tilgjengelig og relevant
+                    if fact.get('metadata') and fact['metadata']:
+                        meta = fact['metadata']
+                        # Parse JSON hvis det er en string
+                        if isinstance(meta, str):
+                            try:
+                                meta = json.loads(meta)
+                            except:
+                                meta = {}
+                        
+                        # Vis kun relevante metadata-felt
+                        if 'learned_at' in meta:
+                            learned_date = meta['learned_at'].split('T')[0]
+                            memory_section += f" (lært {learned_date})"
+                        if 'verified' in meta and meta['verified']:
+                            memory_section += " [verifisert]"
+                    
+                    memory_section += "\n"
+                
+                memory_section += "\nViktig: Når du refererer til familiemedlemmer, ALLTID bruk deres navn i stedet for 'søster 1/2/3' eller 'din andre søster'. Dette gjør samtalen mer personlig og naturlig.\n"
+                memory_section += "\nOBS: Datoer i formatet 'DD-MM' er dag-måned (f.eks. '21-11' = 21. november). Når du svarer om fødselsdager, inkluder både dag og måned.\n"
+                
+                # Bygg eksplisitt oversikt over søstrene direkte fra databasen (ikke kontekst) 
+                # for å sikre at ALLE søstre inkluderes
+                sisters = {}
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                c.execute("SELECT key, value FROM profile_facts WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name', 'sister_1_age_relation', 'sister_2_age_relation', 'sister_3_age_relation')")
+                for row in c.fetchall():
+                    key = row[0]
+                    value = row[1]
+                    sister_num = key.split('_')[1]
+                    if sister_num not in sisters:
+                        sisters[sister_num] = {}
+                    if key.endswith('_name'):
+                        sisters[sister_num]['name'] = value
+                    elif key.endswith('_age_relation'):
+                        sisters[sister_num]['age_relation'] = value
+                conn.close()
+                
+                if sisters:
+                    memory_section += "\nKRITISK - Søstrene (bruk ALLTID denne informasjonen):\n"
+                    for num, info in sorted(sisters.items()):
+                        if 'name' in info and 'age_relation' in info:
+                            memory_section += f"- {info['name']} er den {info['age_relation']} søsteren\n"
+
             
             # Relevant memories
             if context['relevant_memories']:
-                memory_section += "\nRelevante minner:\n"
+                memory_section += "\n### Relevante minner ###\n"
+                memory_section += "Dette husker du fra tidligere samtaler:\n\n"
                 for mem_text, score in context['relevant_memories'][:5]:  # Top 5 memories
-                    memory_section += f"- {mem_text}\n"
+                    # Konverter tredjeperson til førsteperson for bedre forståelse
+                    converted = mem_text
+                    converted = converted.replace("Brukeren", "Du")
+                    converted = converted.replace("brukeren", "du")
+                    converted = converted.replace("Anda", "meg")
+                    # Juster verbformer hvis nødvendig
+                    if converted.startswith("Du "):
+                        # "Du planlegger" -> OK
+                        # "Du skal" -> OK
+                        # "Du lastet" -> "Du lastet" (OK)
+                        pass
+                    memory_section += f"- {converted}\n"
+                memory_section += "\nBruk denne informasjonen når du svarer!\n"
             
             # Recent topics
             if context['recent_topics']:
                 topics = [t['topic'] for t in context['recent_topics'][:3]]
                 memory_section += f"\nSiste emner vi har snakket om: {', '.join(topics)}\n"
             
-            system_content += memory_section
-            print(f"✅ Memory context lagt til ({len(context['profile_facts'])} facts, {len(context['relevant_memories'])} minner)", flush=True)
+            # IKKE legg til memory_section her ennå
+            print(f"✅ Memory context bygget ({len(context['profile_facts'])} facts, {len(context['relevant_memories'])} minner)", flush=True)
         except Exception as e:
-            print(f"⚠️ Kunne ikke legge til memory context: {e}", flush=True)
+            print(f"⚠️ Kunne ikke bygge memory context: {e}", flush=True)
     
     # Legg til Samanthas identitet fra konfigurasjonsfil
     try:
@@ -1236,7 +1443,24 @@ Dine fysiske egenskaper:
         system_content += "\n\n" + personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
     
+    # Legg til memory section HER - rett før TTS-instruksjon
+    # Dette sikrer at minnene er det siste AI-en leser før den svarer
+    if memory_section:
+        system_content += memory_section
+    
+    # Viktig instruksjon for TTS-kompatibilitet
+    system_content += "\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'"
+    
     final_messages.insert(0, {"role": "system", "content": system_content})
+    
+    # DEBUG: Logg om minner er inkludert
+    if memory_section and "### Relevante minner ###" in memory_section:
+        print(f"📝 DEBUG: Memory section er inkludert i prompt", flush=True)
+        # Logg de første 200 tegnene av memory section
+        mem_preview = memory_section[:200].replace('\n', ' ')
+        print(f"📝 Preview: {mem_preview}...", flush=True)
+    else:
+        print(f"⚠️ DEBUG: Memory section mangler eller er tom!", flush=True)
     
     # Definer function tools
     tools = [

@@ -151,3 +151,4 @@ temp/
 # If services create log files locally
 chatgpt-duck.log
 duck-control.log
+*-embedding.bin
