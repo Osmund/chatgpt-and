@@ -20,6 +20,7 @@ import struct
 import traceback
 from datetime import datetime, timedelta
 from duck_memory import MemoryManager
+from duck_user_manager import UserManager
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -1230,7 +1231,7 @@ def get_weather(location_name, timeframe="now"):
         traceback.print_exc()
         return f"Beklager, jeg kunne ikke hente værdata akkurat nå. Feil: {str(e)}"
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None):
     if model is None:
         # Prøv å lese modell fra konfigurasjonsfil
         try:
@@ -1246,6 +1247,15 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None):
             model = DEFAULT_MODEL
     
     print(f"Bruker AI-modell: {model}", flush=True)
+    
+    # Hent nåværende bruker
+    current_user = None
+    if user_manager:
+        try:
+            current_user = user_manager.get_current_user()
+            print(f"👤 Nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
+        except Exception as e:
+            print(f"⚠️ Kunne ikke hente current_user: {e}", flush=True)
     
     # Les personlighet fra konfigurasjonsfil
     personality_prompt = None
@@ -1305,9 +1315,22 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None):
     month_name = norwegian_months[now.strftime('%B')]
     date_time_info = f"Nåværende dato og tid: {day_name} {now.day}. {month_name} {now.year}, klokken {now.strftime('%H:%M')}. "
     
+    # Legg til brukerinfo hvis tilgjengelig
+    user_info = ""
+    if current_user:
+        user_info = f"\n\n### Nåværende bruker ###\n"
+        user_info += f"Du snakker nå med: {current_user['display_name']}\n"
+        user_info += f"Relasjon til Osmund (primary user): {current_user['relation']}\n"
+        
+        if current_user['username'] != 'Osmund':
+            timeout_sec = user_manager.get_time_until_timeout()
+            if timeout_sec:
+                timeout_min = timeout_sec // 60
+                user_info += f"Viktig: Hvis brukeren ikke svarer på 30 minutter, vil systemet automatisk bytte tilbake til Osmund.\n"
+    
     # Legg til dato/tid + personlighet i system-prompt
     final_messages = messages.copy()
-    system_content = date_time_info
+    system_content = date_time_info + user_info
     
     # Samle memory context først (men legg til senere)
     memory_section = ""
@@ -1603,7 +1626,7 @@ Dine fysiske egenskaper:
     
     return (message["content"], is_thank_you)
 
-def check_ai_queries(api_key, speech_config, beak, memory_manager=None):
+def check_ai_queries(api_key, speech_config, beak, memory_manager=None, user_manager=None):
     """Bakgrunnstråd som sjekker for AI-queries fra kontrollpanelet"""
     import threading
     while True:
@@ -1620,7 +1643,7 @@ def check_ai_queries(api_key, speech_config, beak, memory_manager=None):
                     
                     # Spør ChatGPT
                     messages = [{"role": "user", "content": query}]
-                    response = chatgpt_query(messages, api_key, memory_manager=memory_manager)
+                    response = chatgpt_query(messages, api_key, memory_manager=memory_manager, user_manager=user_manager)
                     
                     # Håndter tuple response
                     if isinstance(response, tuple):
@@ -1641,6 +1664,103 @@ def check_ai_queries(api_key, speech_config, beak, memory_manager=None):
         
         time.sleep(0.5)  # Sjekk hver halve sekund
 
+def ask_for_user_switch(speech_config, beak, user_manager):
+    """
+    Håndter brukerbytte-dialog
+    
+    Returns:
+        True hvis brukeren ble byttet vellykket
+    """
+    try:
+        # Spør hvem som snakker
+        speak("Hvem er du?", speech_config, beak)
+        
+        name_response = recognize_speech_from_mic()
+        if not name_response:
+            speak("Jeg hørte ikke navnet ditt. Prøv igjen ved å si mitt navn først.", speech_config, beak)
+            return False
+        
+        # Ekstraher navnet (fjern "jeg er", "dette er", etc.)
+        name_clean = name_response.strip().lower()
+        name_clean = name_clean.replace("jeg er ", "").replace("dette er ", "").replace("jeg heter ", "")
+        name_clean = name_clean.strip().title()  # Kapitalisér første bokstav
+        
+        print(f"👤 Bruker sa navnet: {name_clean}", flush=True)
+        
+        # Søk etter bruker i database
+        found_user = user_manager.find_user_by_name(name_clean)
+        
+        if found_user:
+            # Bruker funnet - bekreft
+            relation_text = found_user['relation']
+            if found_user['matched_key']:
+                speak(f"Er du {found_user['display_name']}, Osmunds {relation_text}?", speech_config, beak)
+            else:
+                speak(f"Er du {found_user['display_name']}?", speech_config, beak)
+            
+            confirmation = recognize_speech_from_mic()
+            if confirmation and ('ja' in confirmation.lower() or 'stemmer' in confirmation.lower() or 'riktig' in confirmation.lower()):
+                # Bytt bruker
+                user_manager.switch_user(
+                    username=found_user['username'],
+                    display_name=found_user['display_name'],
+                    relation=found_user['relation']
+                )
+                
+                speak(f"Velkommen {found_user['display_name']}! Hva kan jeg hjelpe deg med?", speech_config, beak)
+                print(f"✅ Byttet til bruker: {found_user['display_name']}", flush=True)
+                return True
+            else:
+                speak("Beklager, da misforsto jeg. Prøv igjen.", speech_config, beak)
+                return False
+        else:
+            # Ny bruker - spør om relasjon
+            speak(f"Hei {name_clean}! Jeg kjenner deg ikke fra før. Hva er din relasjon til Osmund?", speech_config, beak)
+            
+            relation_response = recognize_speech_from_mic()
+            if not relation_response:
+                speak("Jeg hørte ikke hva du sa. Prøv igjen senere.", speech_config, beak)
+                return False
+            
+            relation_clean = relation_response.strip().lower()
+            
+            # Enkel mapping av vanlige svar
+            relation_map = {
+                'venn': 'venn',
+                'venninne': 'venn',
+                'kollega': 'kollega',
+                'gjest': 'gjest',
+                'besøkende': 'gjest',
+                'familie': 'familie',
+                'søster': 'søster',
+                'bror': 'bror',
+                'mor': 'mor',
+                'far': 'far'
+            }
+            
+            relation = 'gjest'  # Default
+            for key, value in relation_map.items():
+                if key in relation_clean:
+                    relation = value
+                    break
+            
+            # Opprett ny bruker
+            username = name_clean.lower().replace(' ', '_')
+            user_manager.switch_user(
+                username=username,
+                display_name=name_clean,
+                relation=relation
+            )
+            
+            speak(f"Velkommen {name_clean}! Hyggelig å møte deg. Hva kan jeg hjelpe deg med?", speech_config, beak)
+            print(f"✅ Opprettet og byttet til ny bruker: {name_clean} ({relation})", flush=True)
+            return True
+            
+    except Exception as e:
+        print(f"⚠️ Feil under brukerbytte: {e}", flush=True)
+        speak("Beklager, det oppstod en feil. Jeg fortsetter som Osmund.", speech_config, beak)
+        return False
+
 def main():
     # Prøv å initialisere servo, men fortsett uten hvis den ikke finnes
     beak = None
@@ -1658,6 +1778,15 @@ def main():
     except Exception as e:
         print(f"⚠️ Memory system feilet (fortsetter uten): {e}", flush=True)
         memory_manager = None
+    
+    # Initialiser user manager
+    try:
+        user_manager = UserManager()
+        current_user = user_manager.get_current_user()
+        print(f"✅ User system initialisert - nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
+    except Exception as e:
+        print(f"⚠️ User system feilet (fortsetter uten): {e}", flush=True)
+        user_manager = None
     
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -1696,7 +1825,7 @@ def main():
 
     # Start bakgrunnstråd for AI-queries fra kontrollpanelet
     import threading
-    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager), daemon=True)
+    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager, user_manager), daemon=True)
     ai_thread.start()
     print("AI-query tråd startet", flush=True)
 
@@ -1745,6 +1874,33 @@ def main():
     print("Anda venter på wake word... (si 'quack quack')", flush=True)
     while True:
         external_message = wait_for_wake_word()
+        
+        # Sjekk timeout før ny samtale
+        if user_manager:
+            try:
+                # Hent siste melding tidspunkt fra database
+                last_message_time = None
+                if memory_manager:
+                    conn = memory_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("SELECT timestamp FROM messages ORDER BY timestamp DESC LIMIT 1")
+                    row = c.fetchone()
+                    if row:
+                        last_message_time = datetime.fromisoformat(row['timestamp'])
+                    conn.close()
+                
+                # Sjekk om timeout skal trigges
+                if user_manager.check_timeout(last_message_time):
+                    current_user = user_manager.get_current_user()
+                    print(f"⏰ Timeout for {current_user['display_name']} - bytter til Osmund", flush=True)
+                    
+                    # Bytt til Osmund
+                    user_manager.switch_user('Osmund', 'Osmund', 'owner')
+                    
+                    # Si beskjed til Osmund
+                    speak("Hei Osmund, jeg har byttet tilbake til deg etter timeout.", speech_config, beak)
+            except Exception as e:
+                print(f"⚠️ Feil ved timeout-sjekk: {e}", flush=True)
         
         # Hvis det er en ekstern melding, sjekk type
         if external_message:
@@ -1829,10 +1985,20 @@ def main():
             if "stopp" in prompt_clean:
                 speak(messages_config['conversation']['goodbye'], speech_config, beak)
                 break
+            
+            # Sjekk for brukerbytte-kommando
+            if user_manager and ("bytt bruker" in prompt_clean or "skifte bruker" in prompt_clean or "bytte bruker" in prompt_clean):
+                if ask_for_user_switch(speech_config, beak, user_manager):
+                    # Vellykket brukerbytte - start ny samtale
+                    break
+                else:
+                    # Mislykket - fortsett samtale
+                    continue
+            
             messages.append({"role": "user", "content": prompt})
             try:
                 blink_yellow_purple()  # Start blinkende gul LED under tenkepause
-                result = chatgpt_query(messages, api_key, memory_manager=memory_manager)
+                result = chatgpt_query(messages, api_key, memory_manager=memory_manager, user_manager=user_manager)
                 off()           # Slå av blinking når svaret er klart
                 
                 # Håndter tuple-retur (svar, is_thank_you)
@@ -1848,9 +2014,14 @@ def main():
                 messages.append({"role": "assistant", "content": reply})
                 
                 # Lagre melding til memory database (asynkront prosessert av worker)
-                if memory_manager:
+                if memory_manager and user_manager:
                     try:
-                        memory_manager.save_message(prompt, reply)
+                        current_user = user_manager.get_current_user()
+                        memory_manager.save_message(prompt, reply, user_name=current_user['username'])
+                        
+                        # Oppdater aktivitet og message count
+                        user_manager.update_activity()
+                        user_manager.increment_message_count(current_user['username'])
                     except Exception as e:
                         print(f"⚠️ Kunne ikke lagre melding: {e}", flush=True)
                 
