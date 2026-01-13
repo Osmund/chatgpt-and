@@ -350,7 +350,7 @@ async function fetchLogs() {
         
         if (data.logs) {
             // Split logs into lines and add colors
-            const lines = data.logs.split('\\\\n');
+            const lines = data.logs.split('\\n');
             const coloredLines = lines.map(function(line) {
                 const escapedLine = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 if (line.includes('ERROR') || line.includes('error') || line.includes('failed')) {
@@ -786,7 +786,7 @@ function displayFacts(facts) {
                 html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
                 html += '<span>|</span>';
                 html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
-                html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
+                html += '<button onclick="deleteFact(\'' + fact.key + '\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\'#c62828\'" onmouseout="this.style.color=\'#f44336\'" title="Slett">🗑️</button>';
                 html += '</div></div>';
             });
             
@@ -808,7 +808,7 @@ function displayFacts(facts) {
             html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
             html += '<span>|</span>';
             html += '<span style="white-space: nowrap;">🏷️ ' + fact.topic + '</span>';
-            html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
+            html += '<button onclick="deleteFact(\'' + fact.key + '\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\'#c62828\'" onmouseout="this.style.color=\'#f44336\'" title="Slett">🗑️</button>';
             html += '</div></div>';
         });
         list.innerHTML = html;
@@ -1161,4 +1161,3 @@ window.onload = function() {
     setInterval(loadFanStatus, 5000);
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
 };
-</script>

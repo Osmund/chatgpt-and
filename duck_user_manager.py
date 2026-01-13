@@ -231,16 +231,97 @@ class UserManager:
             eller None hvis ikke funnet
         """
         name_lower = name.lower().strip()
+        # Fjern punktum og ekstra mellomrom for bedre matching
+        name_clean = name_lower.replace('.', '').replace('  ', ' ')
+        # Normaliser norske tegn for speech recognition (ø/o, å/a, æ/e)
+        name_normalized = name_clean.replace('ø', 'o').replace('å', 'a').replace('æ', 'e')
         
-        # 1. Søk i users tabell først
         conn = self._get_connection()
         c = conn.cursor()
         
+        # 0. FØRST: Sjekk user_name_pronunciation i profile_facts (kritisk for eieren!)
+        # Hvis noen sier "Åsmund", skal det matche Osmund (owner)
+        # SQLite LOWER() håndterer ikke alltid unicode riktig, så vi må gjøre matching i Python
+        c.execute("SELECT value FROM profile_facts WHERE key = 'user_name_pronunciation'")
+        pronunciation_row = c.fetchone()
+        
+        if pronunciation_row:
+            pronunciation = pronunciation_row['value']
+            pronunciation_clean = pronunciation.lower().replace('.', '').replace('  ', ' ')
+            pronunciation_normalized = pronunciation_clean.replace('ø', 'o').replace('å', 'a').replace('æ', 'e')
+            
+            # Sjekk om input matcher pronunciation (med ulike varianter)
+            if (name_lower == pronunciation.lower() or 
+                name_clean.replace(' ', '') == pronunciation_clean.replace(' ', '') or
+                name_normalized.replace(' ', '') == pronunciation_normalized.replace(' ', '')):
+                
+                # Match! Hent actual user_name og finn eieren
+                c.execute("SELECT value FROM profile_facts WHERE key = 'user_name'")
+                user_name_row = c.fetchone()
+                if user_name_row:
+                    actual_name = user_name_row['value']
+                    # Finn eieren i users tabellen
+                    c.execute("""
+                        SELECT username, display_name, relation_to_primary
+                        FROM users
+                        WHERE LOWER(username) = ? OR LOWER(display_name) = ? OR relation_to_primary = 'owner'
+                        LIMIT 1
+                    """, (actual_name.lower(), actual_name.lower()))
+                    owner = c.fetchone()
+                    if owner:
+                        conn.close()
+                        return {
+                            'username': owner['username'],
+                            'display_name': owner['display_name'],
+                            'relation': owner['relation_to_primary'],
+                            'matched_key': 'user_name_pronunciation'
+                        }
+        
+        # 1. Søk i users tabell
+        c = conn.cursor()
+        
+        # Prøv eksakt match først
         c.execute("""
             SELECT username, display_name, relation_to_primary
             FROM users
             WHERE LOWER(display_name) = ? OR LOWER(username) = ?
         """, (name_lower, name_lower))
+        
+        row = c.fetchone()
+        if row:
+            conn.close()
+            return {
+                'username': row['username'],
+                'display_name': row['display_name'],
+                'relation': row['relation_to_primary'],
+                'matched_key': None
+            }
+        
+        # Prøv fuzzy match (uten punktum/mellomrom)
+        c.execute("""
+            SELECT username, display_name, relation_to_primary
+            FROM users
+            WHERE REPLACE(REPLACE(LOWER(display_name), '.', ''), ' ', '') = ?
+               OR REPLACE(REPLACE(LOWER(username), '.', ''), ' ', '') = ?
+        """, (name_clean.replace(' ', ''), name_clean.replace(' ', '')))
+        
+        row = c.fetchone()
+        if row:
+            conn.close()
+            return {
+                'username': row['username'],
+                'display_name': row['display_name'],
+                'relation': row['relation_to_primary'],
+                'matched_key': None
+            }
+        
+        # Prøv normalisert match (ø->o, å->a, æ->e for speech recognition)
+        c.execute("""
+            SELECT username, display_name, relation_to_primary
+            FROM users
+            WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(display_name), '.', ''), ' ', ''), 'ø', 'o'), 'å', 'a'), 'æ', 'e') = ?
+               OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(username), '.', ''), ' ', ''), 'ø', 'o'), 'å', 'a'), 'æ', 'e') = ?
+        """, (name_normalized.replace(' ', ''), name_normalized.replace(' ', '')))
         
         row = c.fetchone()
         if row:

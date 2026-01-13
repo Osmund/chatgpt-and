@@ -882,17 +882,25 @@ class MemoryManager:
                 print(f"  ♻️  Oppdaterte eksisterende minne {existing_id}", flush=True)
                 return existing_id
         
+        # Generer embedding for memory
+        embedding = None
+        try:
+            embedding_array = self.generate_embedding(memory.text)
+            embedding = pickle.dumps(embedding_array)
+        except Exception as e:
+            print(f"  ⚠️  Kunne ikke generere embedding: {e}", flush=True)
+        
         # Lagre som nytt minne
         conn = self._get_connection()
         c = conn.cursor()
         
         c.execute("""
             INSERT INTO memories 
-            (text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name, embedding)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (memory.text, memory.topic, memory.frequency, memory.confidence,
               memory.source, memory.first_seen, memory.last_accessed,
-              json.dumps(memory.metadata), user_name))
+              json.dumps(memory.metadata), user_name, embedding))
         
         memory_id = c.lastrowid
         conn.commit()
@@ -988,6 +996,72 @@ class MemoryManager:
         self.metrics.total_searches += 1
         
         return scored_memories[:limit]
+    
+    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None) -> List[Memory]:
+        """
+        Søk i memories med embedding similarity (semantisk søk)
+        
+        Args:
+            query: Søkestreng
+            limit: Max antall resultater
+            threshold: Minimum similarity score (0-1)
+            user_name: Filter på bruker (optional)
+        
+        Returns:
+            List of Memory objects, sortert etter relevans
+        """
+        # Generer embedding for query
+        query_embedding = self.generate_embedding(query)
+        if query_embedding is None:
+            # Fallback til FTS search hvis embedding feiler
+            return [m for m, _ in self.search_memories(query, limit)]
+        
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Hent alle memories med embeddings
+        if user_name:
+            c.execute("""
+                SELECT id, text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name, embedding
+                FROM memories
+                WHERE embedding IS NOT NULL AND user_name = ?
+            """, (user_name,))
+        else:
+            c.execute("""
+                SELECT id, text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name, embedding
+                FROM memories
+                WHERE embedding IS NOT NULL
+            """)
+        
+        results = []
+        for row in c.fetchall():
+            memory_embedding = pickle.loads(row[10])  # embedding is last column
+            similarity = self.cosine_similarity(query_embedding, memory_embedding)
+            
+            if similarity >= threshold:
+                memory = Memory(
+                    text=row[1],
+                    topic=row[2],
+                    frequency=row[3],
+                    confidence=row[4],
+                    source=row[5],
+                    first_seen=row[6],
+                    last_accessed=row[7],
+                    metadata=json.loads(row[8]) if row[8] else {}
+                )
+                results.append((similarity, memory, row[0]))  # (similarity, memory, id)
+        
+        conn.close()
+        
+        # Sorter etter similarity (høyest først)
+        results.sort(key=lambda x: x[0], reverse=True)
+        
+        # Touch the top memories (update last_accessed)
+        for similarity, memory, memory_id in results[:limit]:
+            self._touch_memory(memory_id)
+        
+        # Returner top N memories
+        return [memory for _, memory, _ in results[:limit]]
     
     def _touch_memory(self, memory_id: int):
         """Oppdater last_accessed og øk frequency"""
@@ -1161,8 +1235,12 @@ class MemoryManager:
         # Begrens til max 40 facts totalt (økt fra 15 for bedre context)
         profile_facts = combined_facts[:40]
         
-        # 5. Relevant memories (FTS søk)
-        relevant_memories = self.search_memories(query, limit=8)
+        # 5. Relevant memories (EMBEDDING SEARCH - semantisk søk)
+        # Senket threshold til 0.35 for bedre recall
+        relevant_memories_list = self.search_memories_by_embedding(query, limit=8, threshold=0.35)
+        # Convert to same format as old search_memories (List[Tuple[Memory, float]])
+        # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
+        relevant_memories = [(m, 1.0) for m in relevant_memories_list]
         
         # 6. Recent topics
         topic_stats = self.get_topic_stats(limit=5)
