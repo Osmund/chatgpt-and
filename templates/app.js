@@ -1,0 +1,1164 @@
+async function changeBeak() {
+    const select = document.getElementById('beak-select');
+    const statusElement = document.getElementById('beak-status');
+    
+    try {
+        const response = await fetch('/change-beak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beak: select.value })
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => statusElement.textContent = '', 2000);
+        } else {
+            statusElement.textContent = ' ✗ Feil';
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ Feil: ' + error.message;
+    }
+}
+
+async function loadCurrentBeak() {
+    try {
+        const response = await fetch('/current-beak');
+        const data = await response.json();
+        const select = document.getElementById('beak-select');
+        select.value = data.beak;
+    } catch (error) {
+        console.error('Kunne ikke laste nebbet-status:', error);
+    }
+}
+
+async function changePersonality() {
+    const select = document.getElementById('personality-select');
+    const statusElement = document.getElementById('personality-status');
+    
+    try {
+        const response = await fetch('/change-personality', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personality: select.value })
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => statusElement.textContent = '', 2000);
+        } else {
+            statusElement.textContent = ' ✗ Feil';
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ Feil: ' + error.message;
+    }
+}
+
+async function loadCurrentPersonality() {
+    try {
+        const response = await fetch('/current-personality');
+        const data = await response.json();
+        const select = document.getElementById('personality-select');
+        select.value = data.personality;
+    } catch (error) {
+        console.error('Kunne ikke laste personlighet:', error);
+    }
+}
+
+async function changeVoice() {
+    const select = document.getElementById('voice-select');
+    const statusElement = document.getElementById('voice-status');
+    
+    try {
+        const response = await fetch('/change-voice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice: select.value })
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => statusElement.textContent = '', 2000);
+        } else {
+            statusElement.textContent = ' ✗ Feil';
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ Feil: ' + error.message;
+    }
+}
+
+async function loadCurrentVoice() {
+    try {
+        const response = await fetch('/current-voice');
+        const data = await response.json();
+        const select = document.getElementById('voice-select');
+        select.value = data.voice;
+    } catch (error) {
+        console.error('Kunne ikke laste stemme:', error);
+    }
+}
+
+async function sendMessage() {
+    const textarea = document.getElementById('speak-text');
+    const mode = document.getElementById('message-mode').value;
+    const text = textarea.value.trim();
+    const responseDiv = document.getElementById('ai-response');
+    const responseTextDiv = document.getElementById('response-text');
+    
+    if (!text) {
+        alert('Skriv en melding først!');
+        return;
+    }
+    
+    if (mode === 'ai') {
+        // Show loading state
+        responseDiv.style.display = 'block';
+        responseTextDiv.innerHTML = '<em>Venter på svar fra AI...</em>';
+        
+        try {
+            const response = await fetch('/ask-ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            const data = await response.json();
+            
+            if (data.success === true) {
+                const aiResponseText = data.response || 'Ingen svar mottatt';
+                const formattedResponse = `<strong>Spørsmål:</strong> ${text}<br><br><strong>Svar:</strong> ${aiResponseText}`;
+                responseTextDiv.innerHTML = formattedResponse;
+                
+                // Legg til knapp for å få anda til å si svaret
+                const speakButton = document.createElement('button');
+                speakButton.textContent = '🔊 La anda si svaret';
+                speakButton.style.marginTop = '10px';
+                speakButton.style.width = '100%';
+                speakButton.onclick = async () => {
+                    speakButton.disabled = true;
+                    speakButton.textContent = '⏳ Sender til anda...';
+                    try {
+                        const fullText = `Du spurte om: ${text}. Her er svaret: ${aiResponseText}`;
+                        const speakResponse = await fetch('/speak', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: fullText })
+                        });
+                        const speakData = await speakResponse.json();
+                        if (speakData.success === true) {
+                            speakButton.textContent = '✓ Anda sier det nå!';
+                            setTimeout(() => {
+                                speakButton.disabled = false;
+                                speakButton.textContent = '🔊 La anda si svaret';
+                            }, 3000);
+                        } else {
+                            speakButton.textContent = '❌ Feil ved sending';
+                            speakButton.disabled = false;
+                        }
+                    } catch (error) {
+                        speakButton.textContent = '❌ Feil: ' + error.message;
+                        speakButton.disabled = false;
+                    }
+                };
+                responseTextDiv.appendChild(speakButton);
+            } else {
+                responseTextDiv.innerHTML = '<em style="color: red;">Feil: ' + (data.error || 'Ukjent feil') + '</em>';
+            }
+        } catch (error) {
+            responseTextDiv.innerHTML = '<em style="color: red;">Feil: ' + error.message + '</em>';
+        }
+    } else {
+        // Original speak functionality
+        responseDiv.style.display = 'none';
+        try {
+            const response = await fetch('/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            const data = await response.json();
+            
+            if (data.success === true) {
+                textarea.value = '';
+                alert('Melding sendt! ✓');
+            } else {
+                alert('Feil ved sending: ' + data.error);
+            }
+        } catch (error) {
+            alert('Feil: ' + error.message);
+        }
+    }
+}
+
+async function startConversation() {
+    try {
+        const response = await fetch('/start-conversation', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        alert(data.message || 'Samtale startet!');
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+async function loadWakeWords() {
+    try {
+        const response = await fetch('/wake-words');
+        const data = await response.json();
+        if (data.wake_words) {
+            const wakeWordsList = document.getElementById('wake-words-list');
+            const wordsHtml = data.wake_words.map((word, i) => 
+                `<span style="display: inline-block; margin: 5px 8px; padding: 8px 16px; background: #4caf50; color: white; border-radius: 20px; font-weight: bold; font-size: 0.95em;">${word.charAt(0).toUpperCase() + word.slice(1)}</span>`
+            ).join('');
+            wakeWordsList.innerHTML = `<p style="margin: 0 0 10px 0; color: #2e7d32; font-weight: bold;">Aktive wake words:</p><div>${wordsHtml}</div>`;
+        }
+    } catch (error) {
+        console.error('Feil ved lasting av wake words:', error);
+    }
+}
+
+async function getStatus() {
+    const resultDiv = document.getElementById('test-result');
+    resultDiv.textContent = 'Henter status...';
+    
+    try {
+        const response = await fetch('/status');
+        const data = await response.json();
+        resultDiv.innerHTML = `
+            <strong>Status:</strong><br>
+            Personlighet: ${data.personality}<br>
+            Stemme: ${data.voice}<br>
+            Volum: ${data.volume}%<br>
+            Nebbet: ${data.beak === 'on' ? 'På ✓' : 'Av ✗'}<br>
+            Talehastighet: ${data.speed}%
+        `;
+    } catch (error) {
+        resultDiv.textContent = 'Feil: ' + error.message;
+    }
+}
+
+async function testBeak() {
+    const resultDiv = document.getElementById('test-result');
+    resultDiv.textContent = 'Tester nebbet...';
+    
+    try {
+        const response = await fetch('/test-beak', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        resultDiv.textContent = data.message || 'Test fullført!';
+    } catch (error) {
+        resultDiv.textContent = 'Feil: ' + error.message;
+    }
+}
+
+async function getWiFiNetworks() {
+    const listDiv = document.getElementById('wifi-list');
+    listDiv.textContent = 'Skanner etter nettverk...';
+    
+    try {
+        const response = await fetch('/wifi-networks');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.networks) {
+            if (data.networks.length === 0) {
+                listDiv.textContent = 'Ingen nettverk funnet';
+            } else {
+                listDiv.innerHTML = '<ul>' + 
+                    data.networks.map(net => `<li>${net.ssid} (${net.signal})</li>`).join('') + 
+                    '</ul>';
+            }
+        } else {
+            listDiv.textContent = 'Kunne ikke hente nettverk';
+        }
+    } catch (error) {
+        listDiv.textContent = 'Feil: ' + error.message;
+    }
+}
+
+async function updateStatus() {
+    try {
+        const response = await fetch('/duck-status');
+        const data = await response.json();
+        const statusEl = document.getElementById('status');
+        
+        if (data.running) {
+            statusEl.className = 'status-box status-running';
+            statusEl.innerHTML = '✅ Duck kjører';
+        } else {
+            statusEl.className = 'status-box status-stopped';
+            statusEl.innerHTML = '⏸️ Duck er stoppet';
+        }
+    } catch (error) {
+        const statusEl = document.getElementById('status');
+        statusEl.className = 'status-box status-unknown';
+        statusEl.innerHTML = '❓ Kunne ikke hente status';
+    }
+}
+
+async function controlDuck(action) {
+    try {
+        const response = await fetch('/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            alert(data.message || 'Kommando utført!');
+            // Update status after action
+            setTimeout(() => updateStatus(), 1000);
+        } else {
+            alert('Feil: ' + (data.error || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+function toggleLogs() {
+    const logDiv = document.getElementById('log-output');
+    const logButton = document.querySelector('.btn-logs');
+    
+    if (logDiv.style.display === 'none' || !logDiv.style.display) {
+        logDiv.style.display = 'block';
+        logButton.textContent = '📋 Skjul Logger';
+        // Start polling for logs
+        if (!window.logInterval) {
+            fetchLogs();
+            window.logInterval = setInterval(fetchLogs, 2000);
+        }
+    } else {
+        logDiv.style.display = 'none';
+        logButton.textContent = '📋 Vis Logger';
+        // Stop polling
+        if (window.logInterval) {
+            clearInterval(window.logInterval);
+            window.logInterval = null;
+        }
+    }
+}
+
+async function fetchLogs() {
+    try {
+        const response = await fetch('/logs');
+        const data = await response.json();
+        const logContent = document.getElementById('log-content');
+        
+        if (data.logs) {
+            // Split logs into lines and add colors
+            const lines = data.logs.split('\\\\n');
+            const coloredLines = lines.map(function(line) {
+                const escapedLine = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                if (line.includes('ERROR') || line.includes('error') || line.includes('failed')) {
+                    return '<span style="color: #ff4444;">' + escapedLine + '</span>';
+                } else if (line.includes('WARNING') || line.includes('warning')) {
+                    return '<span style="color: #ffaa00;">' + escapedLine + '</span>';
+                } else if (line.includes('INFO') || line.includes('Started') || line.includes('Active:')) {
+                    return '<span style="color: #44ff44;">' + escapedLine + '</span>';
+                } else {
+                    return '<span style="color: #88ff88;">' + escapedLine + '</span>';
+                }
+            }).join('<br>');
+            
+            // Check if user was at bottom before updating
+            const logOutput = document.getElementById('log-output');
+            const wasAtBottom = logOutput.scrollHeight - logOutput.scrollTop - logOutput.clientHeight < 50;
+            
+            logContent.innerHTML = coloredLines;
+            
+            // Only auto-scroll if user was already at bottom
+            if (wasAtBottom) {
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        } else {
+            logContent.textContent = 'Ingen logger tilgjengelig';
+        }
+    } catch (error) {
+        console.error('Kunne ikke hente logger:', error);
+        const logContent = document.getElementById('log-content');
+        logContent.innerHTML = '<span style="color: #ff4444;">Feil ved lasting av logger: ' + error.message + '</span>';
+    }
+}
+
+async function switchToHotspot() {
+    if (!confirm('Dette vil starte WiFi-portalen. Vil du fortsette?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/start-portal', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            alert('WiFi-portal startet! Koble til "Hotspot" nettverk og gå til http://192.168.4.1');
+        } else {
+            alert('Feil: ' + (data.error || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+async function rebootPi() {
+    if (!confirm('Er du sikker på at du vil restarte Raspberry Pi?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/reboot', {
+            method: 'POST'
+        });
+        alert('Raspberry Pi restarter...');
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+async function shutdownPi() {
+    if (!confirm('Er du sikker på at du vil skru av Raspberry Pi?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/shutdown', {
+            method: 'POST'
+        });
+        alert('Raspberry Pi skrur av...');
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+async function changeModel() {
+    const select = document.getElementById('model-select');
+    const statusElement = document.getElementById('model-status');
+    
+    try {
+        const response = await fetch('/change-model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: select.value })
+        });
+        const data = await response.json();
+        
+        if (data.success === true) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => statusElement.textContent = '', 2000);
+        } else {
+            statusElement.textContent = ' ✗ Feil';
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ Feil: ' + error.message;
+    }
+}
+
+async function loadCurrentModel() {
+    try {
+        const response = await fetch('/current-model');
+        const data = await response.json();
+        const select = document.getElementById('model-select');
+        select.value = data.model;
+    } catch (error) {
+        console.error('Kunne ikke laste modell:', error);
+    }
+}
+
+async function loadWakeWords() {
+    try {
+        const response = await fetch('/wake-words');
+        const data = await response.json();
+        if (data.wake_words) {
+            const wakeWordsList = document.getElementById('wake-words-list');
+            const wordsHtml = data.wake_words.map((word, i) => 
+                `<span style="display: inline-block; margin: 5px 8px; padding: 8px 16px; background: #4caf50; color: white; border-radius: 20px; font-weight: bold; font-size: 0.95em;">${word.charAt(0).toUpperCase() + word.slice(1)}</span>`
+            ).join('');
+            wakeWordsList.innerHTML = `<p style="margin: 0 0 10px 0; color: #2e7d32; font-weight: bold;">Aktive wake words:</p><div>${wordsHtml}</div>`;
+        }
+    } catch (error) {
+        console.error('Feil ved lasting av wake words:', error);
+    }
+}
+
+// Sang-funksjoner
+async function loadSongs() {
+    try {
+        const response = await fetch('/songs');
+        const data = await response.json();
+        const select = document.getElementById('song-select');
+        
+        // Tøm eksisterende alternativer (behold første "Velg en sang...")
+        select.innerHTML = '<option value="">Velg en sang...</option>';
+        
+        if (data.songs && data.songs.length > 0) {
+            data.songs.forEach(song => {
+                const option = document.createElement('option');
+                option.value = song.path;
+                option.textContent = song.name;
+                select.appendChild(option);
+            });
+        } else {
+            select.innerHTML += '<option value="" disabled>Ingen sanger funnet</option>';
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste sanger:', error);
+    }
+}
+
+async function playSong() {
+    const select = document.getElementById('song-select');
+    const statusDiv = document.getElementById('song-status');
+    const songPath = select.value;
+    
+    if (!songPath) {
+        alert('Velg en sang først!');
+        return;
+    }
+    
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = '<strong>🎤 Anda synger nå...</strong>';
+    
+    try {
+        const response = await fetch('/play-song', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ song_path: songPath })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            statusDiv.innerHTML = '<strong style="color: #4caf50;">✓ Sang startet!</strong>';
+            setTimeout(() => statusDiv.style.display = 'none', 5000);
+        } else {
+            statusDiv.innerHTML = '<strong style="color: #f44336;">✗ Feil: ' + (data.error || 'Ukjent feil') + '</strong>';
+        }
+    } catch (error) {
+        statusDiv.innerHTML = '<strong style="color: #f44336;">✗ Feil: ' + error.message + '</strong>';
+    }
+}
+
+async function stopSong() {
+    const statusDiv = document.getElementById('song-status');
+    
+    try {
+        const response = await fetch('/stop-song', {method: 'POST'});
+        const data = await response.json();
+        
+        if (data.success) {
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<strong style="color: #ff9800;">⏹ Sang stoppet</strong>';
+            setTimeout(() => statusDiv.style.display = 'none', 3000);
+        } else {
+            alert('Feil ved stopp av sang');
+        }
+    } catch (error) {
+        alert('Feil: ' + error.message);
+    }
+}
+
+// ==================== MEMORY FUNCTIONS ====================
+
+let memoryViewVisible = false;
+let factsViewMode = 'list'; // 'list' or 'category'
+
+async function loadMemoryStats() {
+    try {
+        const response = await fetch('/api/memory/stats');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('memory-stats-facts').textContent = data.stats.total_facts;
+            document.getElementById('memory-stats-memories').textContent = data.stats.total_memories;
+            document.getElementById('memory-stats-messages').textContent = data.stats.total_messages;
+        }
+    } catch (error) {
+        console.error('Memory stats error:', error);
+    }
+    
+    // Load quick facts
+    loadQuickFacts();
+    
+    // Load embedding status
+    loadEmbeddingStatus();
+    
+    // Load worker status
+    loadWorkerStatus();
+}
+
+async function loadQuickFacts() {
+    try {
+        const response = await fetch('/api/memory/quick-facts');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const content = document.getElementById('quick-facts-content');
+            let html = '<p style="margin: 5px 0;"><strong>Navn:</strong> ' + data.name + '</p>';
+            
+            if (data.sisters && data.sisters.length > 0) {
+                html += '<p style="margin: 5px 0;"><strong>Søstre:</strong> ' + data.sisters.join(', ') + ' (' + data.sisters_count + ')</p>';
+            }
+            
+            html += '<p style="margin: 5px 0;"><strong>Nieser:</strong> ' + data.nieces_count + ' | <strong>Nevøer:</strong> ' + data.nephews_count + '</p>';
+            
+            content.innerHTML = html;
+        }
+    } catch (error) {
+        console.error('Quick facts error:', error);
+        document.getElementById('quick-facts-content').innerHTML = '<p style="color: #999;">Kunne ikke laste nøkkelfakta</p>';
+    }
+}
+
+async function loadEmbeddingStatus() {
+    try {
+        const response = await fetch('/api/memory/embedding-status');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const statusText = document.getElementById('embedding-status-text');
+            const percentage = Math.round(data.percentage);
+            const emoji = percentage === 100 ? '✅' : percentage >= 80 ? '⚠️' : '❌';
+            statusText.textContent = emoji + ' Embeddings: ' + data.with_embedding + '/' + data.total_facts + ' (' + percentage + '%)';
+        }
+    } catch (error) {
+        console.error('Embedding status error:', error);
+    }
+}
+
+async function loadWorkerStatus() {
+    try {
+        const response = await fetch('/api/memory/worker-status');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const content = document.getElementById('worker-status-content');
+            const statusEmoji = data.is_active ? '🟢' : '🔴';
+            const statusText = data.is_active ? 'Aktiv' : 'Inaktiv';
+            
+            let html = '<p style="margin: 5px 0;">' + statusEmoji + ' <strong>Status:</strong> ' + statusText + '</p>';
+            html += '<p style="margin: 5px 0;"><strong>Uprosesserte:</strong> ' + data.unprocessed_messages + ' meldinger</p>';
+            
+            if (data.last_processed) {
+                const date = new Date(data.last_processed);
+                const timeStr = date.toLocaleString('no-NO');
+                html += '<p style="margin: 5px 0; font-size: 12px; color: #666;"><strong>Sist:</strong> ' + timeStr + '</p>';
+            }
+            
+            content.innerHTML = html;
+        }
+    } catch (error) {
+        console.error('Worker status error:', error);
+        document.getElementById('worker-status-content').innerHTML = '<p style="color: #999;">Kunne ikke hente status</p>';
+    }
+}
+
+async function toggleMemoryView() {
+    const view = document.getElementById('memory-view');
+    const toggleText = document.getElementById('memory-toggle-text');
+    
+    memoryViewVisible = !memoryViewVisible;
+    
+    if (memoryViewVisible) {
+        view.style.display = 'block';
+        toggleText.textContent = '🙈 Skjul detaljert minne';
+        await loadRecentUpdates();
+        await loadMemoryFacts();
+        await loadMemoryMemories();
+        await loadMemoryTopics();
+    } else {
+        view.style.display = 'none';
+        toggleText.textContent = '👁️ Vis detaljert minne';
+    }
+}
+
+async function loadRecentUpdates() {
+    const list = document.getElementById('recent-updates-list');
+    list.innerHTML = '<p style="color: #999; text-align: center;">Laster...</p>';
+    
+    try {
+        const response = await fetch('/api/memory/recent-updates');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.updates.length > 0) {
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+            
+            data.updates.forEach(update => {
+                const date = new Date(update.last_updated);
+                const timeStr = date.toLocaleTimeString('no-NO', {hour: '2-digit', minute: '2-digit'});
+                const dateStr = date.toLocaleDateString('no-NO', {day: '2-digit', month: '2-digit'});
+                
+                html += '<div style="padding: 8px; background: #f5f5f5; border-radius: 6px; border-left: 3px solid #ff9800;">';
+                html += '<div style="font-weight: bold; color: #333;">' + update.key + '</div>';
+                html += '<div style="font-size: 12px; color: #666; margin-top: 2px;">' + update.value + '</div>';
+                html += '<div style="font-size: 11px; color: #999; margin-top: 4px;">📅 ' + dateStr + ' ' + timeStr;
+                if (update.topic) html += ' • ' + update.topic;
+                html += '</div></div>';
+            });
+            
+            html += '</div>';
+            list.innerHTML = html;
+        } else {
+            list.innerHTML = '<p style="color: #999; text-align: center;">Ingen oppdateringer</p>';
+        }
+    } catch (error) {
+        list.innerHTML = '<p style="color: #f44336;">Feil ved lasting</p>';
+        console.error('Recent updates error:', error);
+    }
+}
+
+function toggleFactsView() {
+    factsViewMode = factsViewMode === 'list' ? 'category' : 'list';
+    const button = document.getElementById('facts-view-toggle');
+    button.textContent = factsViewMode === 'list' ? '📁 Vis etter kategori' : '📄 Vis som liste';
+    
+    if (window.memoryFacts) {
+        displayFacts(window.memoryFacts);
+    }
+}
+
+async function loadMemoryFacts() {
+    const list = document.getElementById('memory-facts-list');
+    list.innerHTML = '<p style="color: #999; text-align: center;">Laster fakta...</p>';
+    
+    try {
+        const response = await fetch('/api/memory/profile');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.facts.length > 0) {
+            // Lagre facts globalt for filtrering
+            window.memoryFacts = data.facts;
+            displayFacts(data.facts);
+        } else {
+            list.innerHTML = '<p style="color: #999; text-align: center;">Ingen fakta lagret ennå</p>';
+        }
+    } catch (error) {
+        list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av fakta</p>';
+        console.error('Memory facts error:', error);
+    }
+}
+
+function displayFacts(facts) {
+    const list = document.getElementById('memory-facts-list');
+    if (facts.length === 0) {
+        list.innerHTML = '<p style="color: #999; text-align: center;">Ingen treff</p>';
+        return;
+    }
+    
+    if (factsViewMode === 'category') {
+        // Group by topic
+        const grouped = {};
+        facts.forEach(fact => {
+            if (!grouped[fact.topic]) {
+                grouped[fact.topic] = [];
+            }
+            grouped[fact.topic].push(fact);
+        });
+        
+        let html = '';
+        Object.keys(grouped).sort().forEach(topic => {
+            const topicFacts = grouped[topic];
+            const topicColors = {
+                'family': '#e91e63',
+                'identity': '#9c27b0',
+                'preferences': '#ff5722',
+                'work': '#3f51b5',
+                'projects': '#00bcd4',
+                'technical': '#009688',
+                'health': '#4caf50',
+                'pets': '#ff9800',
+                'hobby': '#795548'
+            };
+            const color = topicColors[topic] || '#757575';
+            
+            html += '<div style="margin-bottom: 15px;">';
+            html += '<div style="font-weight: bold; color: ' + color + '; margin-bottom: 8px; padding: 6px 10px; background: rgba(0,0,0,0.05); border-radius: 6px;">📁 ' + topic + ' (' + topicFacts.length + ')</div>';
+            
+            topicFacts.forEach(fact => {
+                const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+                html += '<div style="padding: 10px; margin-bottom: 8px; margin-left: 15px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ' + confidenceColor + ';">';
+                html += '<div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">' + fact.key + '</div>';
+                html += '<div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">' + fact.value + '</div>';
+                html += '<div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">';
+                html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
+                html += '<span>|</span>';
+                html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
+                html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
+                html += '</div></div>';
+            });
+            
+            html += '</div>';
+        });
+        
+        list.innerHTML = html;
+    } else {
+        // List view
+        let html = '';
+        facts.forEach(fact => {
+            const confidenceColor = fact.confidence >= 0.8 ? '#4caf50' : fact.confidence >= 0.5 ? '#ff9800' : '#f44336';
+            html += '<div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ' + confidenceColor + ';">';
+            html += '<div style="font-weight: bold; color: #333; margin-bottom: 5px; word-wrap: break-word;">' + fact.key + '</div>';
+            html += '<div style="color: #666; word-wrap: break-word; margin-bottom: 8px;">' + fact.value + '</div>';
+            html += '<div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">';
+            html += '<span style="white-space: nowrap;">📊 ' + (fact.confidence * 100).toFixed(0) + '%</span>';
+            html += '<span>|</span>';
+            html += '<span style="white-space: nowrap;">🔢 ' + fact.frequency + 'x</span>';
+            html += '<span>|</span>';
+            html += '<span style="white-space: nowrap;">🏷️ ' + fact.topic + '</span>';
+            html += '<button onclick="deleteFact(\\'' + fact.key + '\\')" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color=\\\'#c62828\\\'" onmouseout="this.style.color=\\\'#f44336\\\'" title="Slett">🗑️</button>';
+            html += '</div></div>';
+        });
+        list.innerHTML = html;
+    }
+}
+
+function filterFacts() {
+    const searchInput = document.getElementById('facts-search');
+    const searchTerm = searchInput.value.toLowerCase();
+    
+    if (!window.memoryFacts) {
+        return;
+    }
+    
+    if (searchTerm === '') {
+        displayFacts(window.memoryFacts);
+        return;
+    }
+    
+    const filtered = window.memoryFacts.filter(fact => 
+        fact.key.toLowerCase().includes(searchTerm) ||
+        fact.value.toLowerCase().includes(searchTerm) ||
+        fact.topic.toLowerCase().includes(searchTerm)
+    );
+    
+    displayFacts(filtered);
+}
+
+async function loadMemoryMemories(query = '') {
+    const list = document.getElementById('memory-memories-list');
+    list.innerHTML = '<p style="color: #999; text-align: center;">Laster minner...</p>';
+    
+    try {
+        const url = '/api/memory/memories';
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.memories.length > 0) {
+            // Lagre i global variabel for filtrering
+            window.memoryMemories = data.memories;
+            displayMemories(data.memories);
+        } else {
+            window.memoryMemories = [];
+            list.innerHTML = '<p style="color: #999; text-align: center;">Ingen minner funnet</p>';
+        }
+    } catch (error) {
+        window.memoryMemories = [];
+        list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av minner</p>';
+        console.error('Memory memories error:', error);
+    }
+}
+
+function displayMemories(memories) {
+    const list = document.getElementById('memory-memories-list');
+    
+    if (!memories || memories.length === 0) {
+        list.innerHTML = '<p style="color: #999; text-align: center;">Ingen minner funnet</p>';
+        return;
+    }
+    
+    let html = '';
+    memories.forEach(mem => {
+        const topicColors = {
+            'family': '#e91e63',
+            'hobby': '#9c27b0',
+            'work': '#3f51b5',
+            'projects': '#00bcd4',
+            'technical': '#009688',
+            'health': '#4caf50',
+            'pets': '#ff9800',
+            'preferences': '#ff5722'
+        };
+        const topicColor = topicColors[mem.topic] || '#757575';
+        
+        const scoreHtml = mem.score ? `<span>|</span><span style="white-space: nowrap;">⭐ ${mem.score.toFixed(2)}</span>` : '';
+        html += `
+            <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor};">
+                <div style="color: #333; margin-bottom: 8px; word-wrap: break-word;">${mem.text}</div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                    <span style="white-space: nowrap;">🏷️ ${mem.topic}</span>
+                    <span>|</span>
+                    <span style="white-space: nowrap;">🔢 ${mem.frequency}x</span>
+                    <span>|</span>
+                    <span style="white-space: nowrap;">📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}</span>
+                    ${scoreHtml}
+                    <button onclick="deleteMemory(${mem.id})" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
+                </div>
+            </div>
+        `;
+    });
+    list.innerHTML = html;
+}
+
+function filterMemories() {
+    const searchInput = document.getElementById('memory-search');
+    const searchTerm = searchInput.value.toLowerCase();
+    
+    if (!window.memoryMemories) {
+        return;
+    }
+    
+    if (searchTerm === '') {
+        displayMemories(window.memoryMemories);
+        return;
+    }
+    
+    const filtered = window.memoryMemories.filter(memory => 
+        memory.text.toLowerCase().includes(searchTerm) ||
+        memory.topic.toLowerCase().includes(searchTerm)
+    );
+    
+    displayMemories(filtered);
+}
+
+async function loadMemoryTopics() {
+    const list = document.getElementById('memory-topics-list');
+    list.innerHTML = '<p style="color: #999; text-align: center;">Laster emner...</p>';
+    
+    try {
+        const response = await fetch('/api/memory/topics');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.topics.length > 0) {
+            const total = data.topics.reduce((sum, t) => sum + t.mention_count, 0);
+            
+            let html = '';
+            data.topics.forEach(topic => {
+                const percentage = (topic.mention_count / total * 100).toFixed(1);
+                const barWidth = Math.min(percentage, 100);
+                
+                const topicEmojis = {
+                    'family': '👨‍👩‍👧‍👦',
+                    'hobby': '🎨',
+                    'work': '💼',
+                    'projects': '🚀',
+                    'technical': '💻',
+                    'health': '❤️',
+                    'pets': '🐾',
+                    'preferences': '⭐',
+                    'weather': '🌤️',
+                    'general': '💬'
+                };
+                const emoji = topicEmojis[topic.topic] || '📌';
+                
+                html += `
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+                            <span>${emoji} ${topic.topic}</span>
+                            <span style="color: #666;">${topic.mention_count} (${percentage}%)</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, #00bcd4, #009688); transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        } else {
+            list.innerHTML = '<p style="color: #999; text-align: center;">Ingen emner ennå</p>';
+        }
+    } catch (error) {
+        list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av emner</p>';
+        console.error('Memory topics error:', error);
+    }
+}
+
+async function deleteFact(key) {
+    if (!confirm(`Er du sikker på at du vil slette "${key}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/memory/profile/${encodeURIComponent(key)}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ ' + data.message);
+            await loadMemoryFacts();
+            await loadMemoryStats();
+        } else {
+            alert('❌ Feil: ' + data.message);
+        }
+    } catch (error) {
+        alert('❌ Feil ved sletting: ' + error.message);
+        console.error('Delete fact error:', error);
+    }
+}
+
+async function deleteMemory(id) {
+    if (!confirm(`Er du sikker på at du vil slette dette minnet?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/memory/memories/${id}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ ' + data.message);
+            await loadMemoryMemories();
+            await loadMemoryStats();
+        } else {
+            alert('❌ Feil: ' + data.message);
+        }
+    } catch (error) {
+        alert('❌ Feil ved sletting: ' + error.message);
+        console.error('Delete memory error:', error);
+    }
+}
+
+// User Management Functions
+function toggleUserPanel() {
+    const panel = document.getElementById('user-panel');
+    const button = document.querySelector('.btn-user');
+    
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'block';
+        button.textContent = '👥 Skjul Brukerpanel';
+        loadUsers();  // Last brukere når panelet åpnes
+    } else {
+        panel.style.display = 'none';
+        button.textContent = '👥 Bytt Bruker';
+    }
+}
+
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/api/users/current');
+        const data = await response.json();
+        
+        document.getElementById('user-name').textContent = data.display_name;
+        document.getElementById('user-relation').textContent = 
+            data.username !== 'Osmund' ? `(${data.relation})` : '';
+    } catch (error) {
+        console.error('Kunne ikke laste current user:', error);
+        document.getElementById('user-name').textContent = 'Ukjent';
+    }
+}
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/users/list');
+        const data = await response.json();
+        
+        // Oppdater dropdown
+        const select = document.getElementById('user-select');
+        select.innerHTML = '<option value="">-- Velg bruker --</option>';
+        data.users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.username;
+            option.textContent = `${user.display_name} (${user.relation})`;
+            select.appendChild(option);
+        });
+        
+        // Oppdater liste
+        const listDiv = document.getElementById('users-list');
+        listDiv.innerHTML = '';
+        
+        data.users.forEach(user => {
+            const userDiv = document.createElement('div');
+            userDiv.style.cssText = 'padding: 10px; margin: 5px 0; background: white; border-radius: 5px; border-left: 4px solid #667eea;';
+            
+            const isCurrent = user.username === data.current_user;
+            const badge = isCurrent ? '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 5px;">Aktiv</span>' : '';
+            
+            userDiv.innerHTML = `
+                <div style="font-weight: bold; color: #333;">
+                    👤 ${user.display_name} ${badge}
+                </div>
+                <div style="font-size: 0.9em; color: #666; margin-top: 3px;">
+                    ${user.relation} • ${user.total_messages} meldinger
+                </div>
+                <div style="font-size: 0.8em; color: #999; margin-top: 3px;">
+                    Sist aktiv: ${formatTimestamp(user.last_active)}
+                </div>
+            `;
+            
+            listDiv.appendChild(userDiv);
+        });
+    } catch (error) {
+        console.error('Kunne ikke laste brukere:', error);
+        document.getElementById('users-list').innerHTML = '<div style="color: red;">Feil ved lasting av brukere</div>';
+    }
+}
+
+async function switchToUser() {
+    const select = document.getElementById('user-select');
+    const username = select.value;
+    
+    if (!username) {
+        alert('Velg en bruker først');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Byttet til ${data.display_name}`);
+            loadCurrentUser();
+            loadUsers();
+        } else {
+            alert('❌ Feil: ' + (data.error || 'Kunne ikke bytte bruker'));
+        }
+    } catch (error) {
+        alert('❌ Feil: ' + error.message);
+    }
+}
+
+function formatTimestamp(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Nå';
+    if (diffMins < 60) return `${diffMins} min siden`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)} timer siden`;
+    return `${Math.floor(diffMins / 1440)} dager siden`;
+}
+
+// Load current settings on page load
+window.onload = function() {
+    updateStatus();
+    loadCurrentUser();  // Last current user
+    loadWakeWords();
+    loadCurrentModel();
+    loadCurrentPersonality();
+    loadCurrentVoice();
+    loadCurrentVolume();
+    loadCurrentBeak();
+    loadCurrentSpeed();
+    loadFanStatus();
+    getWiFiNetworks();
+    loadSongs();  // Last sanger
+    loadMemoryStats();  // Last memory stats
+    
+    // Oppdater status automatisk hvert 5. sekund
+    setInterval(updateStatus, 5000);
+    setInterval(loadCurrentUser, 10000);  // Oppdater current user hvert 10. sekund
+    setInterval(loadFanStatus, 5000);
+    setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
+};
+</script>
