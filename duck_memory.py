@@ -36,10 +36,13 @@ class ProfileFact:
     frequency: int = 1
     source: str = 'user'  # 'user', 'assistant', 'inferred'
     last_updated: Optional[str] = None
+    metadata: Optional[dict] = None
     
     def __post_init__(self):
         if self.last_updated is None:
             self.last_updated = datetime.now().isoformat()
+        if self.metadata is None:
+            self.metadata = {}
 
 
 @dataclass
