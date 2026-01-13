@@ -10,6 +10,7 @@ import json
 import os
 from datetime import datetime
 from duck_memory import MemoryManager
+from duck_user_manager import UserManager
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -129,6 +130,15 @@ HTML_TEMPLATE = """
             background: #0b7dda;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(33,150,243,0.3);
+        }
+        .btn-user {
+            background: #667eea;
+            color: white;
+        }
+        .btn-user:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.3);
         }
         .btn-shutdown {
             background: #d32f2f;
@@ -265,6 +275,13 @@ HTML_TEMPLATE = """
         <div class="duck-emoji">🦆</div>
         <h1>ChatGPT Duck</h1>
         
+        <!-- Current User Display -->
+        <div id="current-user" style="text-align: center; margin: 15px 0; padding: 10px; background: #f0f0f0; border-radius: 8px; font-size: 1.1em;">
+            <span style="color: #666;">👤 Nåværende bruker:</span> 
+            <span id="user-name" style="font-weight: bold; color: #667eea;">...</span>
+            <span id="user-relation" style="color: #888; font-size: 0.9em;"></span>
+        </div>
+        
         <div id="status" class="status-box status-unknown">
             Henter status...
         </div>
@@ -272,6 +289,7 @@ HTML_TEMPLATE = """
         <button class="btn-start" onclick="controlDuck('start')">▶️ Start Duck</button>
         <button class="btn-stop" onclick="controlDuck('stop')">⏹️ Stopp Duck</button>
         <button class="btn-restart" onclick="controlDuck('restart')">🔄 Restart Duck</button>
+        <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
         <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
         <button class="btn-wifi" onclick="switchToHotspot()">📡 Bytt WiFi-nettverk</button>
         <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
@@ -280,6 +298,28 @@ HTML_TEMPLATE = """
         <div id="log-output" style="display: none; margin: 20px 0; padding: 20px; background: #1e1e1e; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333; max-height: 400px; overflow-y: auto;">
             <div id="log-content" style="font-family: 'Courier New', monospace; font-size: 12px; color: #00ff00; line-height: 1.4; white-space: pre-wrap; word-break: break-all;">
                 Laster logger...
+            </div>
+        </div>
+        
+        <!-- User Management Panel -->
+        <div id="user-panel" style="display: none; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid #667eea;">
+            <h3 style="margin-top: 0; color: #667eea;">👥 Brukeradministrasjon</h3>
+            
+            <div style="margin: 15px 0;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bytt til eksisterende bruker:</label>
+                <select id="user-select" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; font-size: 1em;">
+                    <option value="">Laster brukere...</option>
+                </select>
+                <button onclick="switchToUser()" style="width: 100%; margin-top: 10px; padding: 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: bold;">
+                    🔄 Bytt bruker
+                </button>
+            </div>
+            
+            <div style="margin: 20px 0; padding-top: 20px; border-top: 2px solid #ddd;">
+                <h4 style="margin-top: 0;">📋 Registrerte brukere:</h4>
+                <div id="users-list" style="max-height: 200px; overflow-y: auto;">
+                    Laster brukere...
+                </div>
             </div>
         </div>
         
@@ -1743,10 +1783,127 @@ HTML_TEMPLATE = """
                 console.error('Delete memory error:', error);
             }
         }
+        
+        // User Management Functions
+        function toggleUserPanel() {
+            const panel = document.getElementById('user-panel');
+            const button = document.querySelector('.btn-user');
+            
+            if (panel.style.display === 'none' || !panel.style.display) {
+                panel.style.display = 'block';
+                button.textContent = '👥 Skjul Brukerpanel';
+                loadUsers();  // Last brukere når panelet åpnes
+            } else {
+                panel.style.display = 'none';
+                button.textContent = '👥 Bytt Bruker';
+            }
+        }
+        
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/api/users/current');
+                const data = await response.json();
+                
+                document.getElementById('user-name').textContent = data.display_name;
+                document.getElementById('user-relation').textContent = 
+                    data.username !== 'Osmund' ? `(${data.relation})` : '';
+            } catch (error) {
+                console.error('Kunne ikke laste current user:', error);
+                document.getElementById('user-name').textContent = 'Ukjent';
+            }
+        }
+        
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users/list');
+                const data = await response.json();
+                
+                // Oppdater dropdown
+                const select = document.getElementById('user-select');
+                select.innerHTML = '<option value="">-- Velg bruker --</option>';
+                data.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.username;
+                    option.textContent = `${user.display_name} (${user.relation})`;
+                    select.appendChild(option);
+                });
+                
+                // Oppdater liste
+                const listDiv = document.getElementById('users-list');
+                listDiv.innerHTML = '';
+                
+                data.users.forEach(user => {
+                    const userDiv = document.createElement('div');
+                    userDiv.style.cssText = 'padding: 10px; margin: 5px 0; background: white; border-radius: 5px; border-left: 4px solid #667eea;';
+                    
+                    const isCurrent = user.username === data.current_user;
+                    const badge = isCurrent ? '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 5px;">Aktiv</span>' : '';
+                    
+                    userDiv.innerHTML = `
+                        <div style="font-weight: bold; color: #333;">
+                            👤 ${user.display_name} ${badge}
+                        </div>
+                        <div style="font-size: 0.9em; color: #666; margin-top: 3px;">
+                            ${user.relation} • ${user.total_messages} meldinger
+                        </div>
+                        <div style="font-size: 0.8em; color: #999; margin-top: 3px;">
+                            Sist aktiv: ${formatTimestamp(user.last_active)}
+                        </div>
+                    `;
+                    
+                    listDiv.appendChild(userDiv);
+                });
+            } catch (error) {
+                console.error('Kunne ikke laste brukere:', error);
+                document.getElementById('users-list').innerHTML = '<div style="color: red;">Feil ved lasting av brukere</div>';
+            }
+        }
+        
+        async function switchToUser() {
+            const select = document.getElementById('user-select');
+            const username = select.value;
+            
+            if (!username) {
+                alert('Velg en bruker først');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/users/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Byttet til ${data.display_name}`);
+                    loadCurrentUser();
+                    loadUsers();
+                } else {
+                    alert('❌ Feil: ' + (data.error || 'Kunne ikke bytte bruker'));
+                }
+            } catch (error) {
+                alert('❌ Feil: ' + error.message);
+            }
+        }
+        
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Nå';
+            if (diffMins < 60) return `${diffMins} min siden`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)} timer siden`;
+            return `${Math.floor(diffMins / 1440)} dager siden`;
+        }
 
         // Load current settings on page load
         window.onload = function() {
             updateStatus();
+            loadCurrentUser();  // Last current user
             loadWakeWords();
             loadCurrentModel();
             loadCurrentPersonality();
@@ -1761,6 +1918,7 @@ HTML_TEMPLATE = """
             
             // Oppdater status automatisk hvert 5. sekund
             setInterval(updateStatus, 5000);
+            setInterval(loadCurrentUser, 10000);  // Oppdater current user hvert 10. sekund
             setInterval(loadFanStatus, 5000);
             setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
         };
@@ -2410,6 +2568,50 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/users/current':
+            # Hent nåværende bruker
+            try:
+                user_manager = UserManager()
+                current_user = user_manager.get_current_user()
+                
+                response = {
+                    'username': current_user['username'],
+                    'display_name': current_user['display_name'],
+                    'relation': current_user['relation']
+                }
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+        
+        elif self.path == '/api/users/list':
+            # Hent alle brukere
+            try:
+                user_manager = UserManager()
+                users = user_manager.get_all_users()
+                current_user = user_manager.get_current_user()
+                
+                response = {
+                    'users': users,
+                    'current_user': current_user['username']
+                }
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
         
         else:
             self.send_response(404)
@@ -3091,6 +3293,67 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write('stop')
                 
                 response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/api/users/switch':
+            # Bytt bruker
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode())
+            
+            username = data.get('username', '').strip()
+            
+            if not username:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Ingen bruker valgt'}).encode())
+                return
+            
+            try:
+                user_manager = UserManager()
+                
+                # Hent bruker fra database
+                found_user = user_manager.find_user_by_name(username)
+                
+                if not found_user:
+                    # Ikke funnet i profile_facts - sjekk i users tabell direkte
+                    conn = user_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("SELECT display_name, relation_to_primary FROM users WHERE username = ?", (username,))
+                    row = c.fetchone()
+                    conn.close()
+                    
+                    if row:
+                        found_user = {
+                            'username': username,
+                            'display_name': row['display_name'],
+                            'relation': row['relation_to_primary']
+                        }
+                    else:
+                        raise Exception(f"Bruker '{username}' ikke funnet")
+                
+                # Bytt bruker
+                user_manager.switch_user(
+                    username=found_user['username'],
+                    display_name=found_user['display_name'],
+                    relation=found_user['relation']
+                )
+                
+                response = {
+                    'success': True,
+                    'username': found_user['username'],
+                    'display_name': found_user['display_name']
+                }
+                
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
