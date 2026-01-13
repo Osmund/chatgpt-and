@@ -393,7 +393,7 @@ class MemoryManager:
                 timestamp=row['timestamp'],
                 processed=row['processed'],
                 session_id=row['session_id'],
-                user_name=row.get('user_name', 'Osmund')
+                user_name=row['user_name'] if 'user_name' in row.keys() else 'Osmund'
             ))
         
         conn.close()
