@@ -371,8 +371,8 @@ class MemoryWorker:
                     metadata=auto_metadata
                 )
                 # save_memory vil nå sjekke for duplikater og merge hvis nødvendig
-                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True)
-                print(f"  ✅ Memory: {memory.text[:50]}...", flush=True)
+                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True, user_name=msg.user_name)
+                print(f"  ✅ Memory [{msg.user_name}]: {memory.text[:50]}...", flush=True)
             except Exception as e:
                 print(f"  ⚠️ Kunne ikke lagre memory: {e}", flush=True)
         

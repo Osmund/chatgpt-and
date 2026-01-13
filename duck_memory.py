@@ -109,6 +109,7 @@ class Message:
     timestamp: Optional[str] = None
     processed: int = 0  # 0 = ikke prosessert av worker
     session_id: Optional[str] = None
+    user_name: str = 'Osmund'  # Hvilken bruker sendte meldingen
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -388,7 +389,8 @@ class MemoryManager:
                 ai_response=row['ai_response'],
                 timestamp=row['timestamp'],
                 processed=row['processed'],
-                session_id=row['session_id']
+                session_id=row['session_id'],
+                user_name=row.get('user_name', 'Osmund')
             ))
         
         conn.close()
@@ -863,7 +865,7 @@ class MemoryManager:
         conn.commit()
         conn.close()
     
-    def save_memory(self, memory: Memory, check_duplicates: bool = True) -> int:
+    def save_memory(self, memory: Memory, check_duplicates: bool = True, user_name: str = 'Osmund') -> int:
         """
         Lagre nytt minne (med optional duplikat-sjekk)
         Returnerer memory_id (enten ny eller oppdatert)
@@ -883,11 +885,11 @@ class MemoryManager:
         
         c.execute("""
             INSERT INTO memories 
-            (text, topic, frequency, confidence, source, first_seen, last_accessed, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (memory.text, memory.topic, memory.frequency, memory.confidence,
               memory.source, memory.first_seen, memory.last_accessed,
-              json.dumps(memory.metadata)))
+              json.dumps(memory.metadata), user_name))
         
         memory_id = c.lastrowid
         conn.commit()
