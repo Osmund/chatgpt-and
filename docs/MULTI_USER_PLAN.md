@@ -1,7 +1,40 @@
 # Multi-User Support - Implementeringsplan
 
 **Dato:** 13. januar 2026  
-**Feature:** Multi-bruker support for Anda - La flere personer bruke anda med separate minner
+**Feature:** Multi-bruker support for Anda - La flere personer bruke anda med separate minner  
+**Status:** ✅ **IMPLEMENTERT** (branch: oDuckberry7)
+
+---
+
+## ✅ Implementasjonsstatus
+
+**Implementert:** 13. januar 2026  
+**Branch:** `oDuckberry7`  
+**Commits:**
+- `463db20` - Multi-user system: database migration, UserManager, og chat integration
+- `3866838` - Kontrollpanel: multi-user UI med brukerbytte
+- `ec41c21` - Memory worker: track user_name for minner
+- `238615a` - Fix ProfileFact: legg til metadata felt og @dataclass
+- `de56d5a` - Fix sqlite3.Row compatibility i get_unprocessed_messages
+
+**Testet:**
+- ✅ Brukerbytte via voice ("bytt bruker" → "Miriam")
+- ✅ Meldinger lagres med riktig user_name
+- ✅ Memory worker ekstraherer minner med bruker-attributering
+- ✅ Facts forblir globale (delt på tvers av brukere)
+- ✅ 30 minutters timeout til Osmund
+- ✅ Kontrollpanel viser current user og bruker-liste
+- ✅ API endpoints for brukerbytte
+
+**Filer modifisert:**
+- `duck_user_manager.py` - Ny fil, user session management
+- `chatgpt_voice.py` - User context i prompts, brukerbytte-dialog
+- `duck_memory.py` - user_name i Message, save_memory parameter
+- `duck_memory_worker.py` - Logger og lagrer minner med user_name
+- `duck-control.py` - Multi-user UI, API endpoints
+- `scripts/migrate_multi_user.py` - Database migration script
+
+---
 
 ## 🎯 Mål
 Tillate at flere personer kan snakke med Anda, hvor hver person får sine egne samtaler, minner og facts lagret separat, men alle data er tilgjengelig for primærbruker (Osmund) i kontrollpanel.
@@ -401,15 +434,142 @@ def switch_user():
 ## 📝 Dokumentasjon
 
 ### For brukere
-- Hvordan bytte bruker
-- Timeout-regler
-- Hvem kan se hva
+
+**Hvordan bytte bruker:**
+
+**Via voice:**
+1. Si wake word ("Samantha" eller "Quack quack")
+2. Si "bytt bruker"
+3. Anda spør: "Hvem snakker jeg med?"
+4. Si ditt navn (f.eks. "Miriam")
+5. Hvis navnet er kjent fra profile_facts, får du bekreftelse
+6. Hvis ukjent, spør Anda om relasjon til Osmund
+
+**Via kontrollpanel:**
+1. Gå til http://192.168.10.138:3000 (eller din Anda IP)
+2. Klikk på "👥 Bytt Bruker" knappen
+3. Velg bruker fra dropdown eller skriv nytt navn
+4. Klikk på bruker i listen
+
+**Timeout-regler:**
+- 30 minutters inaktivitet → automatisk tilbake til Osmund
+- Timer pauses hvis aktiv samtale (siste melding < 5 min)
+- Si "bytt tilbake" for å gå tilbake til Osmund manuelt
+
+**Hvem kan se hva:**
+- Alle minner (`memories`) er knyttet til brukeren som sa dem
+- Alle facts (`profile_facts`) er globale - alle brukere ser samme facts
+- Osmund (owner) kan se alle meldinger, minner og facts i kontrollpanelet
+- Cross-user queries fungerer: Miriam kan spørre "Når har Osmund bursdag?"
 
 ### For utviklere
-- UserManager API
-- Database schema
-- Timeout logic
-- Testing procedures
+
+**UserManager API:**
+```python
+from duck_user_manager import UserManager
+
+um = UserManager()
+
+# Hent current user
+user = um.get_current_user()
+# Returns: {'username': 'Osmund', 'display_name': 'Osmund', 'relation': 'owner', ...}
+
+# Bytt bruker
+um.switch_user('Miriam')
+
+# Sjekk timeout
+if um.check_timeout():
+    um.switch_user('Osmund')
+
+# Finn bruker basert på navn
+user = um.find_user_by_name('Miriam')
+
+# Få alle brukere
+users = um.get_all_users()
+```
+
+**Database schema:**
+```sql
+-- users tabell
+CREATE TABLE users (
+    username TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_active TEXT,
+    message_count INTEGER DEFAULT 0
+);
+
+-- messages med user_name
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY,
+    user_text TEXT,
+    ai_response TEXT,
+    timestamp TEXT,
+    user_name TEXT DEFAULT 'Osmund',  -- NY
+    ...
+);
+
+-- memories med user_name
+CREATE TABLE memories (
+    id INTEGER PRIMARY KEY,
+    text TEXT,
+    topic TEXT,
+    user_name TEXT DEFAULT 'Osmund',  -- NY
+    ...
+);
+
+-- profile_facts (globale, ingen user_name)
+CREATE TABLE profile_facts (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    -- Ingen user_name - facts er delt
+    ...
+);
+```
+
+**Session management:**
+- Session lagres i `/tmp/duck_current_user.json`
+- Inneholder: username, display_name, relation, timeout_at, last_activity
+- Leses ved hver wake word for timeout-sjekk
+- Oppdateres ved brukerbytte og meldinger
+
+**Testing procedures:**
+```bash
+# Test brukerbytte
+python3 -c "
+from duck_user_manager import UserManager
+um = UserManager()
+um.switch_user('TestUser')
+print(um.get_current_user())
+"
+
+# Test melding med user_name
+python3 -c "
+from duck_memory import MemoryManager
+mm = MemoryManager()
+msg_id = mm.save_message('Test message', 'Test response', user_name='TestUser')
+print(f'Message {msg_id} saved')
+"
+
+# Sjekk at worker lagrer med user_name
+sudo journalctl -u duck-memory-worker -n 20 | grep "Memory"
+# Forvent: "✅ Memory [TestUser]: ..."
+```
+
+**Migrering til multi-user:**
+```bash
+# Kjør migrasjonsskriptet
+cd /home/admog/Code/chatgpt-and
+python3 scripts/migrate_multi_user.py
+
+# Restart tjenester
+sudo systemctl restart chatgpt-duck
+sudo systemctl restart duck-memory-worker
+
+# Verifiser
+python3 -c "from duck_user_manager import UserManager; print(UserManager().get_current_user())"
+```
 
 ## ⚠️ Edge Cases
 

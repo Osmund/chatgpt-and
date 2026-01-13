@@ -76,6 +76,10 @@ Desktop.ini
 *.swo
 *~
 
+# Database backups (inneholder personlig data)
+backups/
+*.tar.gz
+
 # ============ Vosk Models ============
 # Models are large - download separately
 vosk-model*/
