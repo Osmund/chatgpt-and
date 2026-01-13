@@ -140,7 +140,7 @@ secrets/
 messages.json
 
 # Documentation with personal data
-DATABASE_CLEANUP_*.md
+docs/DATABASE_CLEANUP_*.md
 
 # ============ Cache ============
 .cache/
