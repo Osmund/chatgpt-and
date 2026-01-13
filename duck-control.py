@@ -510,7 +510,7 @@ HTML_TEMPLATE = """
                             
                             <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
                                 <h4 style="margin: 0 0 15px 0; color: #009688;">💭 Episodiske Minner</h4>
-                                <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" onkeypress="if(event.key==='Enter') searchMemories()">
+                                <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" oninput="filterMemories()">
                                 <div id="memory-memories-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
                                     Laster...
                                 </div>
@@ -1563,54 +1563,85 @@ HTML_TEMPLATE = """
             list.innerHTML = '<p style="color: #999; text-align: center;">Laster minner...</p>';
             
             try {
-                const url = query ? `/api/memory/memories?q=${encodeURIComponent(query)}` : '/api/memory/memories';
+                const url = '/api/memory/memories';
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.status === 'success' && data.memories.length > 0) {
-                    let html = '';
-                    data.memories.forEach(mem => {
-                        const topicColors = {
-                            'family': '#e91e63',
-                            'hobby': '#9c27b0',
-                            'work': '#3f51b5',
-                            'projects': '#00bcd4',
-                            'technical': '#009688',
-                            'health': '#4caf50',
-                            'pets': '#ff9800',
-                            'preferences': '#ff5722'
-                        };
-                        const topicColor = topicColors[mem.topic] || '#757575';
-                        
-                        const scoreHtml = mem.score ? `<span>|</span><span style="white-space: nowrap;">⭐ ${mem.score.toFixed(2)}</span>` : '';
-                        html += `
-                            <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor};">
-                                <div style="color: #333; margin-bottom: 8px; word-wrap: break-word;">${mem.text}</div>
-                                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
-                                    <span style="white-space: nowrap;">🏷️ ${mem.topic}</span>
-                                    <span>|</span>
-                                    <span style="white-space: nowrap;">🔢 ${mem.frequency}x</span>
-                                    <span>|</span>
-                                    <span style="white-space: nowrap;">📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}</span>
-                                    ${scoreHtml}
-                                    <button onclick="deleteMemory(${mem.id})" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    list.innerHTML = html;
+                    // Lagre i global variabel for filtrering
+                    window.memoryMemories = data.memories;
+                    displayMemories(data.memories);
                 } else {
+                    window.memoryMemories = [];
                     list.innerHTML = '<p style="color: #999; text-align: center;">Ingen minner funnet</p>';
                 }
             } catch (error) {
+                window.memoryMemories = [];
                 list.innerHTML = '<p style="color: #f44336;">Feil ved lasting av minner</p>';
                 console.error('Memory memories error:', error);
             }
         }
         
-        async function searchMemories() {
-            const query = document.getElementById('memory-search').value;
-            await loadMemoryMemories(query);
+        function displayMemories(memories) {
+            const list = document.getElementById('memory-memories-list');
+            
+            if (!memories || memories.length === 0) {
+                list.innerHTML = '<p style="color: #999; text-align: center;">Ingen minner funnet</p>';
+                return;
+            }
+            
+            let html = '';
+            memories.forEach(mem => {
+                const topicColors = {
+                    'family': '#e91e63',
+                    'hobby': '#9c27b0',
+                    'work': '#3f51b5',
+                    'projects': '#00bcd4',
+                    'technical': '#009688',
+                    'health': '#4caf50',
+                    'pets': '#ff9800',
+                    'preferences': '#ff5722'
+                };
+                const topicColor = topicColors[mem.topic] || '#757575';
+                
+                const scoreHtml = mem.score ? `<span>|</span><span style="white-space: nowrap;">⭐ ${mem.score.toFixed(2)}</span>` : '';
+                html += `
+                    <div style="padding: 10px; margin-bottom: 8px; background: #f5f5f5; border-radius: 8px; border-left: 4px solid ${topicColor};">
+                        <div style="color: #333; margin-bottom: 8px; word-wrap: break-word;">${mem.text}</div>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999;">
+                            <span style="white-space: nowrap;">🏷️ ${mem.topic}</span>
+                            <span>|</span>
+                            <span style="white-space: nowrap;">🔢 ${mem.frequency}x</span>
+                            <span>|</span>
+                            <span style="white-space: nowrap;">📅 ${new Date(mem.last_accessed).toLocaleDateString('nb-NO')}</span>
+                            ${scoreHtml}
+                            <button onclick="deleteMemory(${mem.id})" style="margin-left: auto !important; flex-shrink: 0 !important; background: transparent !important; color: #f44336 !important; border: none !important; padding: 0 !important; cursor: pointer; font-size: 16px !important; line-height: 1 !important; width: auto !important; min-width: 0 !important; transition: all 0.2s;" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='#f44336'" title="Slett">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        }
+        
+        function filterMemories() {
+            const searchInput = document.getElementById('memory-search');
+            const searchTerm = searchInput.value.toLowerCase();
+            
+            if (!window.memoryMemories) {
+                return;
+            }
+            
+            if (searchTerm === '') {
+                displayMemories(window.memoryMemories);
+                return;
+            }
+            
+            const filtered = window.memoryMemories.filter(memory => 
+                memory.text.toLowerCase().includes(searchTerm) ||
+                memory.topic.toLowerCase().includes(searchTerm)
+            );
+            
+            displayMemories(filtered);
         }
         
         async function loadMemoryTopics() {

@@ -753,9 +753,11 @@ class MemoryManager:
     
     # ==================== MEMORIES ====================
     
-    def find_similar_memory(self, text: str, topic: str, similarity_threshold: float = 0.80) -> Optional[int]:
+    def find_similar_memory(self, text: str, topic: str, similarity_threshold: float = 0.60) -> Optional[int]:
         """
         Finn eksisterende minne som er veldig likt det nye
+        Bruker hybrid-metode: Jaccard + embeddings for grensecaser
+        
         Returnerer memory_id hvis funnet, ellers None
         """
         conn = self._get_connection()
@@ -774,8 +776,9 @@ class MemoryManager:
         if not existing:
             return None
         
-        # Enkel similarity basert på overlappende ord
+        # Jaccard similarity screening (rask)
         new_words = set(text.lower().split())
+        candidates = []  # (id, text, jaccard_score)
         
         for row in existing:
             existing_id = row['id']
@@ -787,9 +790,49 @@ class MemoryManager:
             union = len(new_words | existing_words)
             
             if union > 0:
-                similarity = intersection / union
-                if similarity >= similarity_threshold:
+                jaccard = intersection / union
+                
+                # Høy Jaccard (>0.80): Automatisk match
+                if jaccard >= 0.80:
                     return existing_id
+                
+                # Medium Jaccard (0.50-0.80): Kandidat for embedding-sjekk
+                elif jaccard >= 0.50:
+                    candidates.append((existing_id, existing_text, jaccard))
+        
+        # Hvis ingen klare matches, sjekk candidates med embeddings
+        if candidates:
+            try:
+                # Generer embedding for nytt minne
+                new_embedding = self.generate_embedding(text)
+                
+                best_match_id = None
+                best_semantic_score = 0.0
+                
+                for cand_id, cand_text, jaccard_score in candidates:
+                    # Generer embedding for kandidat
+                    cand_embedding = self.generate_embedding(cand_text)
+                    
+                    # Cosine similarity
+                    semantic_similarity = self.cosine_similarity(new_embedding, cand_embedding)
+                    
+                    # Kombiner Jaccard og semantic similarity
+                    # Vekt: 30% Jaccard, 70% semantic
+                    combined_score = (0.3 * jaccard_score) + (0.7 * semantic_similarity)
+                    
+                    # Match hvis combined score over threshold
+                    if combined_score > best_semantic_score and combined_score >= similarity_threshold:
+                        best_semantic_score = combined_score
+                        best_match_id = cand_id
+                
+                if best_match_id:
+                    print(f"  🔍 Semantic match: Jaccard={jaccard_score:.2f}, Semantic={semantic_similarity:.2f}, Combined={best_semantic_score:.2f}", flush=True)
+                    return best_match_id
+                    
+            except Exception as e:
+                # Fallback til kun Jaccard hvis embedding feiler
+                print(f"  ⚠️ Embedding similarity feilet: {e}", flush=True)
+                pass
         
         return None
     
