@@ -6,9 +6,9 @@
   
   "conversation": {
     "greeting": "Hei, {name}. Hva kan jeg hjelpe deg med?",
-    "no_response_timeout": "Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.",
-    "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen.",
-    "goodbye": "Da venter jeg til du sier navnet mitt igjen."
+    "no_response_timeout": "Jeg tror jeg venter til du sier navnet mitt igjen.",
+    "no_response_retry": "Beklager, jeg forstod ikke helt hva du sa. Kan du prøve igjen?",
+    "goodbye": "Kvakk for nå.. vi snakkes senere!"
   },
   
   "web_interface": {

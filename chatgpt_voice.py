@@ -939,6 +939,26 @@ def control_beak(enabled):
         print(f"Feil ved nebb-kontroll: {e}", flush=True)
         return f"Beklager, jeg kunne ikke endre nebb-innstillingen. Feil: {str(e)}"
 
+def get_ip_address_tool():
+    """Hent nåværende IP-adresse for Pi'en"""
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(2)
+        s.connect(("8.8.8.8", 80))
+        ip_address = s.getsockname()[0]
+        s.close()
+        
+        if ip_address and ip_address != "127.0.0.1":
+            # Formater IP-adresse for tale
+            ip_spoken = ip_address.replace('.', ' punkt ')
+            return f"Min IP-adresse er {ip_spoken}. Du finner kontrollpanelet på port 3000, altså: http://{ip_address}:3000"
+        else:
+            return "Jeg kunne ikke finne en gyldig IP-adresse. Jeg er kanskje ikke koblet til et nettverk."
+    except Exception as e:
+        print(f"Feil ved henting av IP-adresse: {e}", flush=True)
+        return "Beklager, jeg kunne ikke hente IP-adressen min akkurat nå. Sjekk at jeg er koblet til nettverket."
+
 def get_coordinates(location_name):
     """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
     try:
@@ -1557,6 +1577,18 @@ Dine fysiske egenskaper:
                     "required": ["enabled"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_ip_address",
+                "description": "Hent Pi'ens nåværende IP-adresse på det lokale nettverket. Brukes når brukeren spør om IP-adressen, nettverksadressen, eller hvor de kan koble til kontrollpanelet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
         }
     ]
     
@@ -1596,6 +1628,8 @@ Dine fysiske egenskaper:
         elif function_name == "control_beak":
             enabled = function_args.get("enabled")
             result = control_beak(enabled)
+        elif function_name == "get_ip_address":
+            result = get_ip_address_tool()
         else:
             result = "Ukjent funksjon"
         
