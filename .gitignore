@@ -156,3 +156,6 @@ temp/
 chatgpt-duck.log
 duck-control.log
 *-embedding.bin
+
+# Migration scripts
+migrations/
