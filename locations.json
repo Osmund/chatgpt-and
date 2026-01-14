@@ -1,0 +1,65 @@
+{
+  "_comment": "Presise koordinater for norske steder. Brukes før Nominatim-søk for bedre nøyaktighet.",
+  "locations": {
+    "sokndal": {
+      "name": "Sokndal",
+      "lat": 58.34,
+      "lon": 6.27,
+      "description": "Sokndal kommune, Rogaland"
+    },
+    "stavanger": {
+      "name": "Stavanger",
+      "lat": 58.97,
+      "lon": 5.73,
+      "description": "Stavanger sentrum"
+    },
+    "oslo": {
+      "name": "Oslo",
+      "lat": 59.91,
+      "lon": 10.75,
+      "description": "Oslo sentrum"
+    },
+    "bergen": {
+      "name": "Bergen",
+      "lat": 60.39,
+      "lon": 5.32,
+      "description": "Bergen sentrum"
+    },
+    "trondheim": {
+      "name": "Trondheim",
+      "lat": 63.43,
+      "lon": 10.39,
+      "description": "Trondheim sentrum"
+    },
+    "kristiansand": {
+      "name": "Kristiansand",
+      "lat": 58.15,
+      "lon": 8.00,
+      "description": "Kristiansand sentrum"
+    },
+    "tromsø": {
+      "name": "Tromsø",
+      "lat": 69.65,
+      "lon": 18.96,
+      "description": "Tromsø sentrum"
+    },
+    "drammen": {
+      "name": "Drammen",
+      "lat": 59.74,
+      "lon": 10.20,
+      "description": "Drammen sentrum"
+    },
+    "hauge i dalane": {
+      "name": "Hauge i Dalane",
+      "lat": 58.35,
+      "lon": 6.26,
+      "description": "Sokndal tettsted"
+    },
+    "egersund": {
+      "name": "Egersund",
+      "lat": 58.45,
+      "lon": 6.00,
+      "description": "Egersund, Eigersund kommune"
+    }
+  }
+}

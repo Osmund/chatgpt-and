@@ -1052,9 +1052,26 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     return metadata
 
 def get_coordinates(location_name):
-    """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
+    """Hent koordinater for et stedsnavn - sjekker først lokal database, deretter Nominatim"""
     try:
-        # Legg til Norge i søket for bedre nøyaktighet
+        # Først: Sjekk om stedet finnes i vår lokale database
+        locations_file = "/home/admog/Code/chatgpt-and/locations.json"
+        if os.path.exists(locations_file):
+            try:
+                with open(locations_file, 'r', encoding='utf-8') as f:
+                    locations_data = json.load(f)
+                    locations = locations_data.get('locations', {})
+                    
+                    # Søk case-insensitive
+                    location_key = location_name.lower().strip()
+                    if location_key in locations:
+                        loc = locations[location_key]
+                        print(f"📍 Bruker lokal koordinat for {loc['name']}", flush=True)
+                        return loc['lat'], loc['lon'], loc['description']
+            except Exception as e:
+                print(f"Kunne ikke lese locations.json: {e}", flush=True)
+        
+        # Fallback: Søk via Nominatim (OpenStreetMap)
         search_query = f"{location_name}, Norge"
         url = "https://nominatim.openstreetmap.org/search"
         params = {
@@ -1074,6 +1091,7 @@ def get_coordinates(location_name):
             lat = float(data[0]['lat'])
             lon = float(data[0]['lon'])
             display_name = data[0].get('display_name', location_name)
+            print(f"📍 Bruker Nominatim for {location_name}", flush=True)
             return lat, lon, display_name
         return None
     except Exception as e:
@@ -2145,11 +2163,13 @@ def main():
                     reply = result
                     is_thank_you = False
                 
-                # Sjekk om AI har markert samtalen som ferdig
-                ai_wants_to_end = "[AVSLUTT]" in reply
+                # Sjekk om AI har markert samtalen som ferdig (med eller uten brackets)
+                ai_wants_to_end = "[AVSLUTT]" in reply or " AVSLUTT" in reply or reply.endswith("AVSLUTT")
                 
-                # Fjern [AVSLUTT] markør før TTS
-                reply_for_speech = reply.replace("[AVSLUTT]", "").strip()
+                # Fjern AVSLUTT markør før TTS (både med og uten brackets)
+                reply_for_speech = reply.replace("[AVSLUTT]", "").replace(" AVSLUTT", "").strip()
+                if reply_for_speech.endswith("AVSLUTT"):
+                    reply_for_speech = reply_for_speech[:-8].strip()
                 
                 print("ChatGPT svar:", reply_for_speech, flush=True)
                 if ai_wants_to_end:
