@@ -768,6 +768,7 @@ def recognize_speech_from_mic(device_name=None):
     set_green()  # LED grønn mens bruker snakker
     stt_key = os.getenv("AZURE_STT_KEY")
     stt_region = os.getenv("AZURE_STT_REGION")
+    silence_timeout = os.getenv("AZURE_STT_SILENCE_TIMEOUT_MS", "1200")  # Default 1200ms hvis ikke satt
     speech_config = speechsdk.SpeechConfig(subscription=stt_key, region=stt_region)
     
     # Finn USB mikrofon dynamisk (ALSA card kan endre seg ved reboot)
@@ -780,8 +781,8 @@ def recognize_speech_from_mic(device_name=None):
             audio_config = speechsdk.audio.AudioConfig(device_name=dev)
             speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config, language="nb-NO")
             prop = speechsdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs
-            speech_recognizer.properties.set_property(prop, "800")
-            print(f"Snakk nå (device {dev})...", flush=True)
+            speech_recognizer.properties.set_property(prop, silence_timeout)
+            print(f"Snakk nå (device {dev}, timeout {silence_timeout}ms)...", flush=True)
             t0 = time.time()
             result = speech_recognizer.recognize_once()
             t1 = time.time()
@@ -959,6 +960,42 @@ def get_ip_address_tool():
     except Exception as e:
         print(f"Feil ved henting av IP-adresse: {e}", flush=True)
         return "Beklager, jeg kunne ikke hente IP-adressen min akkurat nå. Sjekk at jeg er koblet til nettverket."
+
+def is_conversation_ending(user_text: str) -> bool:
+    """
+    Sjekker om brukerens input indikerer at de vil avslutte samtalen.
+    Returnerer True hvis input er en avslutningsfrase.
+    """
+    text_lower = user_text.strip().lower()
+    
+    # Fjern vanlig tegnsetting
+    text_clean = text_lower.replace(".", "").replace(",", "").replace("!", "").replace("?", "")
+    
+    # Liste over avslutningsfraser
+    ending_phrases = [
+        "nei takk",
+        "nei det er greit",
+        "nei det er bra",
+        "nei det er fint",
+        "nei det holder",
+        "det er alt",
+        "det er greit",
+        "det er bra",
+        "det er fint",
+        "det holder",
+        "stopp"  # Eksplisitt stopp-kommando
+    ]
+    
+    # Sjekk også for enkelt "takk" eller "nei" hvis det er hele meldingen
+    if text_clean in ["takk", "tusen takk", "mange takk", "nei", "stopp"]:
+        return True
+    
+    # Sjekk om noen av frasene matcher
+    for phrase in ending_phrases:
+        if phrase in text_clean:
+            return True
+    
+    return False
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     """
@@ -1350,6 +1387,16 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     except Exception as e:
         print(f"Feil ved lesing av personlighet: {e}", flush=True)
     
+    # Last messages.json for ending_phrases
+    messages_config_local = None
+    try:
+        messages_file = "/home/admog/Code/chatgpt-and/messages.json"
+        if os.path.exists(messages_file):
+            with open(messages_file, 'r', encoding='utf-8') as f:
+                messages_config_local = json.load(f)
+    except Exception as e:
+        print(f"Feil ved lesing av messages.json: {e}", flush=True)
+    
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -1546,8 +1593,13 @@ Dine fysiske egenskaper:
     if memory_section:
         system_content += memory_section
     
-    # Viktig instruksjon for TTS-kompatibilitet
-    system_content += "\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'"
+    # Viktig instruksjon for TTS-kompatibilitet og samtalestil
+    # Hent ending phrases fra messages_config
+    ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"  # Default
+    if messages_config_local and 'conversation' in messages_config_local and 'ending_phrases' in messages_config_local['conversation']:
+        ending_examples = "', '".join(messages_config_local['conversation']['ending_phrases'][:5])  # Bruk første 5 som eksempler
+    
+    system_content += f"\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- VISER avslutningshilsenen for naturlig variasjon. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     
@@ -1904,8 +1956,7 @@ def main():
             "conversation": {
                 "greeting": "Hei på du, hva kan jeg hjelpe deg med?",
                 "no_response_timeout": "Jeg hører deg ikke. Da venter jeg til du sier navnet mitt igjen.",
-                "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen.",
-                "goodbye": "Da venter jeg til du sier navnet mitt igjen."
+                "no_response_retry": "Beklager, jeg hørte ikke hva du sa. Prøv igjen."
             },
             "web_interface": {
                 "start_conversation": "Hei på du, hva kan jeg hjelpe deg med?"
@@ -2068,14 +2119,11 @@ def main():
             # Reset teller når vi får svar
             no_response_count = 0
             
-            # Sjekk for stopp-kommando (fjern tegnsetting først)
-            prompt_clean = prompt.strip().lower().replace(".", "").replace(",", "").replace("!", "")
-            if "stopp" in prompt_clean:
-                speak(messages_config['conversation']['goodbye'], speech_config, beak)
-                break
+            # Sjekk om bruker vil avslutte samtalen (inkluderer "stopp")
+            should_end_conversation = is_conversation_ending(prompt)
             
             # Sjekk for brukerbytte-kommando
-            if user_manager and ("bytt bruker" in prompt_clean or "skifte bruker" in prompt_clean or "bytte bruker" in prompt_clean):
+            if user_manager and ("bytt bruker" in prompt.strip().lower() or "skifte bruker" in prompt.strip().lower() or "bytte bruker" in prompt.strip().lower()):
                 if ask_for_user_switch(speech_config, beak, user_manager):
                     # Vellykket brukerbytte - start ny samtale
                     break
@@ -2097,22 +2145,31 @@ def main():
                     reply = result
                     is_thank_you = False
                 
-                print("ChatGPT svar:", reply, flush=True)
-                speak(reply, speech_config, beak)
-                messages.append({"role": "assistant", "content": reply})
+                # Sjekk om AI har markert samtalen som ferdig
+                ai_wants_to_end = "[AVSLUTT]" in reply
+                
+                # Fjern [AVSLUTT] markør før TTS
+                reply_for_speech = reply.replace("[AVSLUTT]", "").strip()
+                
+                print("ChatGPT svar:", reply_for_speech, flush=True)
+                if ai_wants_to_end:
+                    print("🔚 AI detekterte samtale-avslutning", flush=True)
+                
+                speak(reply_for_speech, speech_config, beak)
+                messages.append({"role": "assistant", "content": reply_for_speech})
                 
                 # Lagre melding til memory database (asynkront prosessert av worker)
                 if memory_manager and user_manager:
                     try:
                         current_user = user_manager.get_current_user()
                         
-                        # Generer metadata for meldingen
-                        msg_metadata = generate_message_metadata(prompt, reply)
+                        # Generer metadata for meldingen (uten [AVSLUTT] markør)
+                        msg_metadata = generate_message_metadata(prompt, reply_for_speech)
                         metadata_json = json.dumps(msg_metadata, ensure_ascii=False)
                         
                         memory_manager.save_message(
                             prompt, 
-                            reply, 
+                            reply_for_speech, 
                             session_id=current_session_id, 
                             user_name=current_user['username'],
                             metadata=metadata_json
@@ -2124,9 +2181,16 @@ def main():
                     except Exception as e:
                         print(f"⚠️ Kunne ikke lagre melding: {e}", flush=True)
                 
-                # Hvis brukeren takket, gå tilbake til wake word
-                if is_thank_you:
-                    print("Bruker takket - går tilbake til wake word", flush=True)
+                # Sjekk om samtalen skal avsluttes
+                # Tre måter: 1) AI markerte [AVSLUTT], 2) Bruker brukte avslutningsfrase, 3) Bruker takket (legacy)
+                if ai_wants_to_end:
+                    print("🔚 Samtale avsluttet av AI (detekterte at bruker var ferdig)", flush=True)
+                    break
+                elif should_end_conversation:
+                    print("🔚 Samtale avsluttet (bruker sa avslutningsfrase)", flush=True)
+                    break
+                elif is_thank_you:
+                    print("🔚 Samtale avsluttet (bruker takket - legacy)", flush=True)
                     break
             except Exception as e:
                 off()

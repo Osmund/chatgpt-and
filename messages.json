@@ -5,10 +5,22 @@
   },
   
   "conversation": {
-    "greeting": "Hei, {name}. Hva kan jeg hjelpe deg med?",
+    "greeting": "Hei, {name}. Hvordan går det?",
     "no_response_timeout": "Jeg tror jeg venter til du sier navnet mitt igjen.",
     "no_response_retry": "Beklager, jeg forstod ikke helt hva du sa. Kan du prøve igjen?",
-    "goodbye": "Kvakk for nå.. vi snakkes senere!"
+    "ending_phrases": [
+      "Kvakk for nå.. vi snakkes senere!",
+      "Greit! Ha det bra!",
+      "Topp! Vi snakkes!",
+      "I orden! Ha en fin dag videre!",
+      "Helt klart! Jeg er her hvis du trenger meg!",
+      "Fint! Ha det!",
+      "Perfekt! Ha en fin dag!",
+      "Greit! Vi høres!",
+      "Flott! Ha det fint!",
+      "Supert! Ha en god dag!",
+      "Alright! Ta det fint!"
+    ]
   },
   
   "web_interface": {
