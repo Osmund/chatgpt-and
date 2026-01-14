@@ -310,12 +310,43 @@ class MemoryWorker:
         # Returner i kronologisk rekkefølge (eldste først)
         return list(reversed(rows))
     
+    def _get_session_context(self, session_id: str) -> List[dict]:
+        """
+        Hent alle meldinger i samme session for full kontekst
+        Returnerer liste av dict med id, user_text, ai_response, metadata
+        """
+        conn = self.memory_manager._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, user_text, ai_response, metadata
+            FROM messages
+            WHERE session_id = ?
+            ORDER BY id ASC
+        """, (session_id,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [dict(row) for row in rows]
+    
     def _process_message(self, msg):
         """
         Prosesser én melding: ekstraher og lagre minner
         """
-        # Hent kontekst (2 tidligere meldinger)
-        context = self._get_conversation_context(msg.id, context_size=2)
+        # Hent session context hvis tilgjengelig
+        session_context = []
+        if msg.session_id:
+            session_context = self._get_session_context(msg.session_id)
+            print(f"  📋 Session context: {len(session_context)} meldinger i session {msg.session_id[:8]}...", flush=True)
+        
+        # Bruk session context hvis tilgjengelig, ellers fallback til vanlig context
+        if session_context:
+            # Bruk alle meldinger i session som context (ekskluder nåværende)
+            context = [(row['user_text'], row['ai_response']) for row in session_context if row['id'] < msg.id]
+        else:
+            # Fallback til vanlig context (2 siste meldinger)
+            context = self._get_conversation_context(msg.id, context_size=2)
         
         # Ekstraher minner via LLM med kontekst
         extracted = self.extractor.extract_from_conversation(
@@ -399,6 +430,62 @@ class MemoryWorker:
         print(f"  Total facts: {stats['total_facts']}", flush=True)
         print(f"  Database størrelse: {stats['db_size_mb']} MB\n", flush=True)
     
+    def _generate_session_summary(self, session_id: str):
+        """
+        Generer automatisk oppsummering av en session
+        """
+        try:
+            # Hent alle meldinger i session
+            conn = self.memory_manager._get_connection()
+            c = conn.cursor()
+            
+            c.execute("""
+                SELECT id, user_text, ai_response, timestamp, metadata
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY id ASC
+            """, (session_id,))
+            
+            session_messages = [dict(row) for row in c.fetchall()]
+            
+            if len(session_messages) < 2:
+                print(f"  ⏭️  Session for kort for oppsummering ({len(session_messages)} meldinger)", flush=True)
+                conn.close()
+                return
+            
+            # Finn start og slutt tid
+            start_time = session_messages[0]['timestamp']
+            end_time = session_messages[-1]['timestamp']
+            
+            # Ekstraher topics fra metadata
+            import json
+            all_topics = set()
+            for msg in session_messages:
+                if msg.get('metadata'):
+                    try:
+                        meta = json.loads(msg['metadata'])
+                        all_topics.update(meta.get('topics', []))
+                    except:
+                        pass
+            
+            topics_str = ', '.join(sorted(all_topics)) if all_topics else 'general'
+            
+            # Lag en kort oppsummering ved å samle første og siste melding
+            summary = f"Samtale med {len(session_messages)} meldinger. Topics: {topics_str}"
+            
+            # Lagre summary
+            c.execute("""
+                INSERT INTO session_summaries 
+                (session_id, summary, message_count, topics, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (session_id, summary, len(session_messages), topics_str, start_time, end_time))
+            conn.commit()
+            conn.close()
+            
+            print(f"  ✅ Session summary lagret: {summary}", flush=True)
+        except Exception as e:
+            print(f"  ⚠️ Kunne ikke generere session summary: {e}", flush=True)
+    
     def run(self):
         """
         Hovedløkke: kjør kontinuerlig
@@ -414,6 +501,7 @@ class MemoryWorker:
             return
         
         stats_counter = 0
+        summary_counter = 0
         
         while True:
             try:
@@ -426,6 +514,12 @@ class MemoryWorker:
                     self.print_stats()
                     stats_counter = 0
                 
+                # Generer session summaries hver 120. iterasjon (10 min ved 5s interval)
+                summary_counter += 1
+                if summary_counter >= 120:
+                    self._check_and_summarize_old_sessions()
+                    summary_counter = 0
+                
                 # Vent før neste sjekk
                 time.sleep(CHECK_INTERVAL)
                 
@@ -436,6 +530,38 @@ class MemoryWorker:
             except Exception as e:
                 print(f"❌ Worker error: {e}", flush=True)
                 time.sleep(CHECK_INTERVAL * 2)  # Lengre pause ved feil
+    
+    def _check_and_summarize_old_sessions(self):
+        """
+        Finn sessions som er eldre enn 30 min og generer summaries
+        """
+        try:
+            from datetime import datetime, timedelta
+            cutoff_time = (datetime.now() - timedelta(minutes=30)).isoformat()
+            
+            conn = self.memory_manager._get_connection()
+            c = conn.cursor()
+            
+            # Finn sessions uten summary som er gamle nok
+            c.execute("""
+                SELECT DISTINCT m.session_id, MAX(m.timestamp) as last_msg_time
+                FROM messages m
+                LEFT JOIN session_summaries s ON m.session_id = s.session_id
+                WHERE m.session_id IS NOT NULL 
+                  AND s.session_id IS NULL
+                  AND m.timestamp < ?
+                GROUP BY m.session_id
+            """, (cutoff_time,))
+            
+            old_sessions = c.fetchall()
+            conn.close()
+            
+            if old_sessions:
+                print(f"📝 Fant {len(old_sessions)} session(s) å oppsummere", flush=True)
+                for row in old_sessions:
+                    self._generate_session_summary(row['session_id'])
+        except Exception as e:
+            print(f"⚠️ Feil ved session summary check: {e}", flush=True)
 
 
 def main():

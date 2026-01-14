@@ -21,6 +21,7 @@ import traceback
 from datetime import datetime, timedelta
 from duck_memory import MemoryManager
 from duck_user_manager import UserManager
+import uuid
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -958,6 +959,60 @@ def get_ip_address_tool():
     except Exception as e:
         print(f"Feil ved henting av IP-adresse: {e}", flush=True)
         return "Beklager, jeg kunne ikke hente IP-adressen min akkurat nå. Sjekk at jeg er koblet til nettverket."
+
+def generate_message_metadata(user_text: str, ai_response: str) -> dict:
+    """
+    Generer metadata for en melding (enkelt, uten LLM for ytelse)
+    Returnerer: {
+        'user_length': int,
+        'ai_length': int,
+        'has_question': bool,
+        'topics_mentioned': list,
+        'timestamp': str
+    }
+    """
+    metadata = {
+        'user_length': len(user_text),
+        'ai_length': len(ai_response),
+        'has_question': '?' in user_text,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # Enkel topic detection basert på keywords
+    topics = []
+    user_lower = user_text.lower()
+    
+    # Kategori-mapping
+    topic_keywords = {
+        'weather': ['vær', 'temperatur', 'regn', 'sol', 'varmt', 'kaldt'],
+        'time': ['klokk', 'tid', 'dato', 'dag', 'måned', 'år'],
+        'family': ['mamma', 'pappa', 'søster', 'bror', 'familie', 'barn', 'datter', 'sønn'],
+        'work': ['jobb', 'arbeid', 'kontor', 'møte', 'kollega', 'sjef'],
+        'health': ['lege', 'syk', 'tannlege', 'time', 'smerter', 'vondt'],
+        'home': ['hus', 'leilighet', 'rom', 'kjøkken', 'bad', 'soverom'],
+        'food': ['mat', 'middag', 'lunsj', 'frokost', 'spise', 'sultne'],
+        'music': ['sang', 'musikk', 'spill', 'syng', 'låt'],
+        'lights': ['lys', 'lampe', 'skru på', 'skru av', 'dimme']
+    }
+    
+    for topic, keywords in topic_keywords.items():
+        if any(keyword in user_lower for keyword in keywords):
+            topics.append(topic)
+    
+    metadata['topics'] = topics if topics else ['general']
+    
+    # Enkelt importance score basert på lengde og spørsmål
+    importance = 5  # Base importance
+    if metadata['has_question']:
+        importance += 2
+    if metadata['user_length'] > 100:
+        importance += 1
+    if len(topics) > 0:
+        importance += 1
+    
+    metadata['importance'] = min(importance, 10)
+    
+    return metadata
 
 def get_coordinates(location_name):
     """Hent koordinater for et stedsnavn via Nominatim (OpenStreetMap)"""
@@ -1906,8 +1961,29 @@ def main():
         print("Oppstartshilsen kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
     print("Anda venter på wake word... (si 'quack quack')", flush=True)
+    
+    # Session tracking: Generer ny session_id ved hver samtale
+    current_session_id = None
+    session_start_time = None
+    SESSION_TIMEOUT_MINUTES = 30
+    
     while True:
         external_message = wait_for_wake_word()
+        
+        # Generer ny session_id for ny samtale
+        # Session fortsetter hvis mindre enn 30 min siden siste melding
+        if current_session_id and session_start_time:
+            time_since_start = datetime.now() - session_start_time
+            if time_since_start > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                print(f"📅 Session timeout ({SESSION_TIMEOUT_MINUTES} min) - starter ny session", flush=True)
+                current_session_id = None
+        
+        if current_session_id is None:
+            current_session_id = str(uuid.uuid4())
+            session_start_time = datetime.now()
+            print(f"🆕 Ny session: {current_session_id[:8]}...", flush=True)
+        else:
+            print(f"♻️  Fortsetter session: {current_session_id[:8]}...", flush=True)
         
         # Sjekk timeout før ny samtale
         if user_manager:
@@ -2029,7 +2105,18 @@ def main():
                 if memory_manager and user_manager:
                     try:
                         current_user = user_manager.get_current_user()
-                        memory_manager.save_message(prompt, reply, user_name=current_user['username'])
+                        
+                        # Generer metadata for meldingen
+                        msg_metadata = generate_message_metadata(prompt, reply)
+                        metadata_json = json.dumps(msg_metadata, ensure_ascii=False)
+                        
+                        memory_manager.save_message(
+                            prompt, 
+                            reply, 
+                            session_id=current_session_id, 
+                            user_name=current_user['username'],
+                            metadata=metadata_json
+                        )
                         
                         # Oppdater aktivitet og message count
                         user_manager.update_activity()

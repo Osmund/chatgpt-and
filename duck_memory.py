@@ -356,15 +356,15 @@ class MemoryManager:
     
     # ==================== MESSAGE STORAGE ====================
     
-    def save_message(self, user_text: str, ai_response: str, session_id: Optional[str] = None, user_name: str = 'Osmund') -> int:
+    def save_message(self, user_text: str, ai_response: str, session_id: Optional[str] = None, user_name: str = 'Osmund', metadata: Optional[str] = None) -> int:
         """Lagre melding til database (synkront, rask)"""
         conn = self._get_connection()
         c = conn.cursor()
         
         c.execute("""
-            INSERT INTO messages (user_text, ai_response, timestamp, session_id, user_name)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user_text, ai_response, datetime.now().isoformat(), session_id, user_name))
+            INSERT INTO messages (user_text, ai_response, timestamp, session_id, user_name, metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_text, ai_response, datetime.now().isoformat(), session_id, user_name, metadata))
         
         message_id = c.lastrowid
         conn.commit()
