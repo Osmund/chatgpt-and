@@ -1,6 +1,6 @@
 """
 Duck Tools Module
-AI function calling tools: weather, lights, IP address, and geocoding.
+AI function calling tools: weather, lights, IP address, geocoding, and Netatmo sensors.
 """
 
 import os
@@ -477,3 +477,130 @@ def get_ip_address_tool():
     except Exception as e:
         print(f"Feil ved henting av IP-adresse: {e}", flush=True)
         return "Beklager, jeg kunne ikke hente IP-adressen min akkurat nå. Sjekk at jeg er koblet til nettverket."
+
+
+def get_netatmo_temperature(room_name=None):
+    """
+    Hent temperatur og sensordata fra Netatmo værstasjoner.
+    
+    Args:
+        room_name: Navn på rom/modul (None = alle rom/moduler)
+    
+    Returns:
+        str: Temperatur-rapport med fuktighet og CO2 hvis tilgjengelig
+    """
+    try:
+        # Hent credentials fra environment
+        client_id = os.getenv("NETATMO_CLIENT_ID")
+        client_secret = os.getenv("NETATMO_CLIENT_SECRET")
+        refresh_token = os.getenv("NETATMO_REFRESH_TOKEN")
+        
+        if not all([client_id, client_secret, refresh_token]):
+            return "Netatmo er ikke konfigurert. Mangler API-nøkler i .env filen."
+        
+        # Få access token via refresh token
+        token_url = "https://api.netatmo.com/oauth2/token"
+        token_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+        
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()
+        access_token = token_response.json()["access_token"]
+        
+        # Hent homestatus data
+        api_url = "https://api.netatmo.com/api/homestatus"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        # Først hent homes for å få home_id
+        homes_url = "https://api.netatmo.com/api/homesdata"
+        homes_response = requests.post(homes_url, headers=headers)
+        homes_response.raise_for_status()
+        homes_data = homes_response.json()
+        
+        if "body" not in homes_data or "homes" not in homes_data["body"]:
+            return "Fant ingen Netatmo-hjem i kontoen din."
+        
+        all_data = []
+        
+        # Loop gjennom alle hjem
+        for home in homes_data["body"]["homes"]:
+            home_id = home["id"]
+            home_name = home.get("name", "Hjem")
+            
+            # Hent status for dette hjemmet
+            status_response = requests.post(
+                api_url,
+                headers=headers,
+                json={"home_id": home_id}
+            )
+            status_response.raise_for_status()
+            status_data = status_response.json()
+            
+            # Parse rooms og modules
+            if "body" not in status_data or "home" not in status_data["body"]:
+                continue
+                
+            home_status = status_data["body"]["home"]
+            rooms = {r["id"]: r for r in home_status.get("rooms", [])}
+            modules = {m["id"]: m for m in home_status.get("modules", [])}
+            
+            # Map modules to rooms from homesdata
+            for room_info in home.get("rooms", []):
+                room_id = room_info["id"]
+                room_name_str = room_info.get("name", "Ukjent rom")
+                
+                # Finn moduler i rommet
+                for module_id in room_info.get("module_ids", []):
+                    if module_id in modules:
+                        module = modules[module_id]
+                        
+                        # Sjekk om modulen har målinger
+                        if "temperature" in module or "humidity" in module or "co2" in module:
+                            temp = module.get("temperature")
+                            humidity = module.get("humidity")
+                            co2 = module.get("co2")
+                            
+                            parts = []
+                            if temp is not None:
+                                parts.append(f"{temp:.1f}°C")
+                            if humidity is not None:
+                                parts.append(f"{humidity}% fuktighet")
+                            if co2 is not None:
+                                parts.append(f"{co2}ppm CO2")
+                            
+                            if parts:
+                                data_str = f"{room_name_str}: " + ", ".join(parts)
+                                all_data.append({
+                                    "name": room_name_str.lower(),
+                                    "display_name": room_name_str,
+                                    "data": data_str
+                                })
+        
+        # Hvis spesifikt rom ble forespurt
+        if room_name:
+            room_lower = room_name.lower().strip()
+            for room in all_data:
+                if room_lower in room["name"]:
+                    return room["data"]
+            available = ', '.join([r['display_name'] for r in all_data])
+            return f"Fant ikke Netatmo-sensor for '{room_name}'. Tilgjengelige: {available}"
+        
+        # Returner alle rom
+        if not all_data:
+            return "Fant ingen Netatmo-sensordata. Sjekk at værstasjonene er tilkoblet."
+        
+        result = "Netatmo sensordata:\n" + "\n".join([r["data"] for r in all_data])
+        return result
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Netatmo API request-feil: {e}", flush=True)
+        return f"Kunne ikke koble til Netatmo API: {str(e)}"
+    except Exception as e:
+        print(f"Netatmo API-feil: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return f"Kunne ikke hente data fra Netatmo: {str(e)}"

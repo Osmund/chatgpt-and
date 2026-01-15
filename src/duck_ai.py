@@ -14,7 +14,7 @@ from src.duck_config import (
     LOCATIONS_FILE, PERSONALITIES_FILE, SAMANTHA_IDENTITY_FILE,
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
-from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool
+from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
 
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
@@ -37,7 +37,7 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     
     # Kategori-mapping
     topic_keywords = {
-        'weather': ['vær', 'temperatur', 'regn', 'sol', 'varmt', 'kaldt'],
+        'weather': ['vær', 'temperatur', 'regn', 'sol', 'varmt', 'kaldt', 'netatmo', 'sensor'],
         'time': ['klokk', 'tid', 'dato', 'dag', 'måned', 'år'],
         'family': ['mamma', 'pappa', 'søster', 'bror', 'familie', 'barn', 'datter', 'sønn'],
         'work': ['jobb', 'arbeid', 'kontor', 'møte', 'kollega', 'sjef'],
@@ -469,6 +469,23 @@ Dine fysiske egenskaper:
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_netatmo_temperature",
+                "description": "Hent temperatur, fuktighet og CO2-nivå fra Netatmo værstasjon(er) i hjemmet. Bruk denne for innendørs temperatur eller når brukeren spør om sensorer i spesifikke rom.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "room_name": {
+                            "type": "string",
+                            "description": "Navn på rom/modul (f.eks. 'stue', 'soverom'). Hvis None returneres alle rom."
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
     ]
     
@@ -511,6 +528,9 @@ Dine fysiske egenskaper:
             result = beak_result.get("status", "error") if isinstance(beak_result, dict) else str(beak_result)
         elif function_name == "get_ip_address":
             result = get_ip_address_tool()
+        elif function_name == "get_netatmo_temperature":
+            room_name = function_args.get("room_name")
+            result = get_netatmo_temperature(room_name)
         else:
             result = "Ukjent funksjon"
         
