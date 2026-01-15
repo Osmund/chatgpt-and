@@ -546,6 +546,13 @@ Dine fysiske egenskaper:
         # Kall API igjen med værdata
         data["messages"] = final_messages
         response2 = requests.post(url, headers=headers, json=data)
+        
+        # Bedre error-håndtering for debugging
+        if not response2.ok:
+            print(f"❌ OpenAI API error {response2.status_code}: {response2.text[:500]}", flush=True)
+            print(f"📤 Tool result length: {len(result)} chars", flush=True)
+            print(f"📤 Tool result preview: {result[:200]}", flush=True)
+        
         response2.raise_for_status()
         reply_content = response2.json()["choices"][0]["message"]["content"]
         

@@ -584,7 +584,8 @@ def get_netatmo_temperature(room_name=None):
         if room_name:
             room_lower = room_name.lower().strip()
             for room in all_data:
-                if room_lower in room["name"]:
+                # Sjekk om søket matcher noen del av romnavnet (case-insensitive)
+                if room_lower in room["name"].lower() or room["name"].lower().startswith(room_lower):
                     return room["data"]
             available = ', '.join([r['display_name'] for r in all_data])
             return f"Fant ikke Netatmo-sensor for '{room_name}'. Tilgjengelige: {available}"
