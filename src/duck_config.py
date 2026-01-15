@@ -5,6 +5,11 @@ All configuration constants and file paths for the duck assistant.
 
 import os
 
+# ============ Base Path ============
+# Automatically detect the project root directory
+# src/duck_config.py -> go up one level to get project root
+BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # ============ File Paths ============
 MESSAGE_FILE = "/tmp/duck_message.txt"
 MODEL_CONFIG_FILE = "/tmp/duck_model.txt"
@@ -15,9 +20,21 @@ SPEED_FILE = "/tmp/duck_speed.txt"
 VOLUME_FILE = "/tmp/duck_volume.txt"
 AI_QUERY_FILE = "/tmp/duck_ai_query.txt"
 AI_RESPONSE_FILE = "/tmp/duck_ai_response.txt"
-MESSAGES_FILE = "/home/admog/Code/chatgpt-and/config/messages.json"
+MESSAGES_FILE = os.path.join(BASE_PATH, "config", "messages.json")
 SONG_REQUEST_FILE = "/tmp/duck_song_request.txt"
 SONG_STOP_FILE = "/tmp/duck_song_stop.txt"
+
+# Config directory paths
+CONFIG_DIR = os.path.join(BASE_PATH, "config")
+LOCATIONS_FILE = os.path.join(CONFIG_DIR, "locations.json")
+PERSONALITIES_FILE = os.path.join(CONFIG_DIR, "personalities.json")
+SAMANTHA_IDENTITY_FILE = os.path.join(CONFIG_DIR, "samantha_identity.json")
+
+# Database path
+DB_PATH = os.path.join(BASE_PATH, "duck_memory.db")
+
+# Wake word path
+WAKE_WORD_PATH = os.path.join(BASE_PATH, "Quack-quack.ppn")
 
 # ============ AI Model Configuration ============
 DEFAULT_MODEL = "gpt-4-turbo-2024-04-09"  # GPT-4.1 Mini - beste balanse mellom kvalitet, hastighet og kostnad
@@ -52,7 +69,7 @@ FADE_MS = 150  # 150ms fade in/out
 BEAK_CHUNK_MS = 30  # Hvor ofte nebbet oppdateres (mindre = mer responsivt)
 BEAK_PRE_START_MS = 0  # Start nebb før aplay (negativ = etter aplay starter)
 
-# ============ Wake Word Configuration ============
+# ============ Porcupine Configuration ============
 PORCUPINE_ACCESS_KEY_ENV = "PORCUPINE_ACCESS_KEY"
 WAKE_WORD_PATH = "/home/admog/Code/chatgpt-and/Quack-quack.ppn"
 

@@ -162,8 +162,8 @@ class MemoryManager:
     - Caching
     """
     
-    def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or DEFAULT_DB_PATH
         self.metrics = MemoryMetrics()
         
         # OpenAI client for embeddings

@@ -23,10 +23,9 @@ def get_coordinates(location_name):
     """
     try:
         # Først: Sjekk om stedet finnes i vår lokale database
-        locations_file = "/home/admog/Code/chatgpt-and/config/locations.json"
-        if os.path.exists(locations_file):
+        if os.path.exists(LOCATIONS_FILE):
             try:
-                with open(locations_file, 'r', encoding='utf-8') as f:
+                with open(LOCATIONS_FILE, 'r', encoding='utf-8') as f:
                     locations_data = json.load(f)
                     locations = locations_data.get('locations', {})
                     
@@ -37,7 +36,7 @@ def get_coordinates(location_name):
                         print(f"📍 Bruker lokal koordinat for {loc['name']}", flush=True)
                         return loc['lat'], loc['lon'], loc['description']
             except Exception as e:
-                print(f"Kunne ikke lese locations.json: {e}", flush=True)
+                print(f"Kunne ikke lese locations-fil: {e}", flush=True)
         
         # Fallback: Søk via Nominatim (OpenStreetMap)
         search_query = f"{location_name}, Norge"
@@ -576,10 +575,9 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     personality_prompt = None
     try:
         # Last personligheter fra JSON-fil
-        personalities_file = "/home/admog/Code/chatgpt-and/config/personalities.json"
         personalities = {}
-        if os.path.exists(personalities_file):
-            with open(personalities_file, 'r', encoding='utf-8') as f:
+        if os.path.exists(PERSONALITIES_FILE):
+            with open(PERSONALITIES_FILE, 'r', encoding='utf-8') as f:
                 personalities = json.load(f)
         
         # Les hvilken personlighet som skal brukes
@@ -593,9 +591,8 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     # Last messages.json for ending_phrases
     messages_config_local = None
     try:
-        messages_file = "/home/admog/Code/chatgpt-and/config/messages.json"
-        if os.path.exists(messages_file):
-            with open(messages_file, 'r', encoding='utf-8') as f:
+        if os.path.exists(MESSAGES_FILE):
+            with open(MESSAGES_FILE, 'r', encoding='utf-8') as f:
                 messages_config_local = json.load(f)
     except Exception as e:
         print(f"Feil ved lesing av messages.json: {e}", flush=True)
@@ -791,9 +788,8 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     
     # Legg til Samanthas identitet fra konfigurasjonsfil
     try:
-        identity_file = "/home/admog/Code/chatgpt-and/config/samantha_identity.json"
-        if os.path.exists(identity_file):
-            with open(identity_file, 'r', encoding='utf-8') as f:
+        if os.path.exists(SAMANTHA_IDENTITY_FILE):
+            with open(SAMANTHA_IDENTITY_FILE, 'r', encoding='utf-8') as f:
                 identity = json.load(f)
             
             samantha_identity = f"""

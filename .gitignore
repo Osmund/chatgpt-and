@@ -124,6 +124,9 @@ site/
 config.local.json
 settings.local.json
 
+# Messages (inneholder samtalehistorikk - må være i gitignore)
+config/messages.json
+
 # ============ Secrets ============
 secrets/
 *.key
@@ -135,9 +138,6 @@ secrets/
 *.db
 *.sqlite
 *.sqlite3
-
-# Messages (inneholder samtalehistorikk)
-messages.json
 
 # Documentation with personal data
 docs/DATABASE_CLEANUP_*.md

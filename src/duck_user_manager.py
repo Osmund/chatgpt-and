@@ -9,9 +9,9 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from pathlib import Path
+from src.duck_config import DB_PATH
 
 SESSION_FILE = "/tmp/duck_current_user.json"
-DB_PATH = "/home/admog/Code/chatgpt-and/duck_memory.db"
 
 class UserManager:
     """
