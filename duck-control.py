@@ -12,8 +12,8 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-from duck_memory import MemoryManager
-from duck_user_manager import UserManager
+from src.duck_memory import MemoryManager
+from src.duck_user_manager import UserManager
 
 # Template directory
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
