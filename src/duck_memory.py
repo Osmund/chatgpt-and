@@ -21,6 +21,7 @@ import numpy as np
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+from src.duck_config import DB_PATH as DEFAULT_DB_PATH
 
 # Last environment variables
 load_dotenv()

@@ -8,6 +8,7 @@ Type=oneshot
 User=admog
 WorkingDirectory=/home/admog/Code/chatgpt-and
 Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/home/admog/Code/chatgpt-and"
 
 # Kjør maintenance
 ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/src/duck_memory_hygiene.py
