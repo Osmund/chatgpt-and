@@ -34,7 +34,27 @@ print("MAX98357A SD pin skal være koblet til 3.3V - forsterker alltid på", flu
 MESSAGE_FILE = "/tmp/duck_message.txt"
 # Fil for AI-modell konfigurering
 MODEL_CONFIG_FILE = "/tmp/duck_model.txt"
-DEFAULT_MODEL = "gpt-3.5-turbo"
+DEFAULT_MODEL = "gpt-4-turbo-2024-04-09"  # GPT-4.1 Mini - beste balanse mellom kvalitet, hastighet og kostnad
+
+# Tilgjengelige AI-modeller (basert på testing av perspektiv-håndtering)
+AVAILABLE_MODELS = {
+    # GPT-4 serien - Anbefalt for produksjon
+    "gpt-4-turbo-2024-04-09": {"name": "GPT-4.1 Mini", "accuracy": "50%", "latency": "0.87s", "cost": "lav"},
+    "gpt-4": {"name": "GPT-4", "accuracy": "75%", "latency": "1.38s", "cost": "høy"},
+    "gpt-4-turbo": {"name": "GPT-4.1", "accuracy": "50%", "latency": "1.40s", "cost": "middels"},
+    
+    # GPT-4o serien - Billig men dårlig for perspektiv
+    "gpt-4o-mini": {"name": "GPT-4o Mini", "accuracy": "25%", "latency": "1.12s", "cost": "svært lav"},
+    
+    # GPT-3.5 - Rask men dårlig kvalitet
+    "gpt-3.5-turbo": {"name": "GPT-3.5 Turbo", "accuracy": "25%", "latency": "0.81s", "cost": "svært lav"},
+    
+    # GPT-5 serien - Ikke anbefalt for perspektiv-oppgaver
+    "gpt-5-turbo": {"name": "GPT-5.2", "accuracy": "50%", "latency": "1.34s", "cost": "svært høy"},
+}
+
+# Kommentar: GPT-4.1 Mini er standard fordi den gir 50% korrekthet på perspektiv-spørsmål
+# (dobbelt så bra som GPT-3.5), med bare 60ms ekstra latency og rimelig pris.
 # Fil for personlighet
 PERSONALITY_FILE = "/tmp/duck_personality.txt"
 # Fil for TTS-stemme
@@ -1457,6 +1477,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     
     # Legg til brukerinfo hvis tilgjengelig
     user_info = ""
+    perspective_context = ""
     if current_user:
         user_info = f"\n\n### Nåværende bruker ###\n"
         user_info += f"Du snakker nå med: {current_user['display_name']}\n"
@@ -1467,10 +1488,54 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
             if timeout_sec:
                 timeout_min = timeout_sec // 60
                 user_info += f"Viktig: Hvis brukeren ikke svarer på 30 minutter, vil systemet automatisk bytte tilbake til Osmund.\n"
+            
+            # PERSPEKTIV-HÅNDTERING: Generer instruksjoner for ikke-Osmund brukere
+            perspective_context = f"\n\n### KRITISK: Perspektiv-håndtering ###\n"
+            perspective_context += f"Du snakker nå med {current_user['display_name']} ({current_user['relation']}).\n"
+            perspective_context += f"ALLE fakta i 'Ditt Minne' er lagret fra Osmunds perspektiv.\n\n"
+            
+            # Spesifikke instruksjoner basert på relasjon
+            relation = current_user['relation'].lower()
+            if 'far' in relation or 'father' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'pappa' eller 'far', spør han om SIN far (Osmunds bestefar).\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine' eller 'mine barn', mener han Osmund og Osmunds søstre.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barnebarna mine', mener han Osmunds nevøer/nieser (søstrenes barn).\n"
+                perspective_context += f"- {current_user['display_name']} ER Osmunds far, ikke omvendt.\n"
+            elif 'mor' in relation or 'mother' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'mamma' eller 'mor', spør hun om SIN mor (Osmunds bestemor).\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine', mener hun Osmund og Osmunds søstre.\n"
+                perspective_context += f"- {current_user['display_name']} ER Osmunds mor, ikke omvendt.\n"
+            elif 'søster' in relation or 'sister' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine', mener hun SINE egne barn (ikke sine søskens barn).\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'nevøer' eller 'nieser', mener hun sine SØSKENS barn (Osmunds og de andre søstrenes barn), IKKE sine egne.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'broren min' eller 'bror', mener hun Osmund.\n"
+                perspective_context += f"- {current_user['display_name']} ER Osmunds søster, ikke omvendt.\n"
+            elif 'kollega' in relation or 'colleague' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- {current_user['display_name']} er Osmunds kollega, ikke familiemedlem.\n"
+                perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
+                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
+                perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
+            elif 'venn' in relation or 'kamerat' in relation or 'friend' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- {current_user['display_name']} er Osmunds venn, ikke familiemedlem.\n"
+                perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
+                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
+                perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
+            elif 'gjest' in relation or 'guest' in relation:
+                perspective_context += f"VIKTIG PERSPEKTIV:\n"
+                perspective_context += f"- {current_user['display_name']} er gjest, ikke familiemedlem.\n"
+                perspective_context += f"- Alle fakta om familie er Osmunds familie.\n"
+                perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin bakgrunn med mindre det er eksplisitt lagret.\n"
+            
+            perspective_context += f"\nHvis du er usikker på perspektiv: Si 'Jeg har ikke nok informasjon om det' i stedet for å gjette.\n"
     
     # Legg til dato/tid + personlighet i system-prompt
     final_messages = messages.copy()
-    system_content = date_time_info + user_info
+    system_content = date_time_info + user_info + perspective_context
     
     # Samle memory context først (men legg til senere)
     memory_section = ""
@@ -1478,7 +1543,8 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         try:
             # Hent brukerens siste melding for relevant søk
             user_query = messages[-1]["content"] if messages else ""
-            context = memory_manager.build_context_for_ai(user_query, recent_messages=3)
+            # Send med current_user for å filtrere minner og meldinger
+            context = memory_manager.build_context_for_ai(user_query, recent_messages=3, user_name=current_user['username'])
             
             # Bygg memory section (legges til senere)
             memory_section = "\n\n### Ditt Minne ###\n"
@@ -1839,6 +1905,15 @@ def ask_for_user_switch(speech_config, beak, user_manager):
             speak("Jeg hørte ikke navnet ditt. Prøv igjen ved å si mitt navn først.", speech_config, beak)
             return False
         
+        # Sjekk om brukeren vil bytte til eier (Osmund)
+        name_lower = name_response.strip().lower()
+        if 'eier' in name_lower or 'owner' in name_lower:
+            # Bytt direkte til Osmund
+            user_manager.switch_user('Osmund', 'Osmund', 'owner')
+            speak("Velkommen tilbake Osmund!", speech_config, beak)
+            print(f"✅ Byttet tilbake til eier: Osmund", flush=True)
+            return True
+        
         # Ekstraher navnet (fjern "jeg er", "dette er", etc.)
         name_clean = name_response.strip().lower()
         name_clean = name_clean.replace("jeg er ", "").replace("dette er ", "").replace("jeg heter ", "")
@@ -2142,8 +2217,22 @@ def main():
             # Sjekk om bruker vil avslutte samtalen (inkluderer "stopp")
             should_end_conversation = is_conversation_ending(prompt)
             
+            # Sjekk for direkte bytte til eier/Osmund
+            prompt_lower = prompt.strip().lower()
+            if user_manager and ("bytt til eier" in prompt_lower or "bytte til eier" in prompt_lower or 
+                                  "bytt til osmund" in prompt_lower or "bytte til osmund" in prompt_lower):
+                current_user = user_manager.get_current_user()
+                if current_user['username'] != 'Osmund':
+                    user_manager.switch_user('Osmund', 'Osmund', 'owner')
+                    speak("Velkommen tilbake Osmund!", speech_config, beak)
+                    print(f"✅ Byttet tilbake til eier: Osmund", flush=True)
+                    break  # Start ny samtale
+                else:
+                    speak("Du er allerede Osmund, eieren!", speech_config, beak)
+                    continue
+            
             # Sjekk for brukerbytte-kommando
-            if user_manager and ("bytt bruker" in prompt.strip().lower() or "skifte bruker" in prompt.strip().lower() or "bytte bruker" in prompt.strip().lower()):
+            if user_manager and ("bytt bruker" in prompt_lower or "skifte bruker" in prompt_lower or "bytte bruker" in prompt_lower):
                 if ask_for_user_switch(speech_config, beak, user_manager):
                     # Vellykket brukerbytte - start ny samtale
                     break

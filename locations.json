@@ -60,6 +60,18 @@
       "lat": 58.45,
       "lon": 6.00,
       "description": "Egersund, Eigersund kommune"
+    },
+    "grimstad": {
+      "name": "Grimstad",
+      "lat": 58.34,
+      "lon": 8.59,
+      "description": "Grimstad sentrum, Agder"
+    },
+    "sirdal": {
+      "name": "Sirdal",
+      "lat": 58.85,
+      "lon": 6.75,
+      "description": "Sirdal kommune, Agder"
     }
   }
 }

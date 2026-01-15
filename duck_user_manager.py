@@ -99,15 +99,33 @@ class UserManager:
         Bytt til annen bruker
         
         Args:
-            username: Brukernavn (lowercase, uten mellomrom)
-            display_name: Visningsnavn (optional, default = username)
-            relation: Relasjon til Osmund (optional)
+            username: Brukernavn (vil bli normalisert til Title Case)
+            display_name: Visningsnavn (optional, default = username med Title Case)
+            relation: Relasjon til Osmund (optional, hentes fra database hvis ikke spesifisert)
         
         Returns:
             True hvis vellykket
         """
+        # Normaliser username til Title Case for konsistens
+        username = username.strip().title()
+        
         if display_name is None:
             display_name = username
+        else:
+            # Sørg for at display_name også er Title Case
+            display_name = display_name.strip().title()
+        
+        # Hvis relation ikke er spesifisert, hent fra database
+        if relation is None:
+            conn = self._get_connection()
+            c = conn.cursor()
+            c.execute("SELECT relation_to_primary FROM users WHERE username = ?", (username,))
+            row = c.fetchone()
+            conn.close()
+            if row and row[0]:
+                relation = row[0]
+            else:
+                relation = 'gjest'
         
         now = datetime.now()
         timeout_at = now + timedelta(minutes=self.timeout_minutes)
@@ -119,7 +137,7 @@ class UserManager:
         session = {
             'username': username,
             'display_name': display_name,
-            'relation': relation or 'gjest',
+            'relation': relation,
             'switched_at': now.isoformat(),
             'timeout_at': timeout_at.isoformat(),
             'last_activity': now.isoformat()
@@ -140,15 +158,21 @@ class UserManager:
         
         now = datetime.now().isoformat()
         
-        # Sjekk om bruker eksisterer
-        c.execute("SELECT username FROM users WHERE username = ?", (username,))
-        if c.fetchone():
-            # Oppdater last_active
+        # Normaliser username til Title Case
+        username = username.strip().title()
+        display_name = display_name.strip().title()
+        
+        # Sjekk om bruker eksisterer (case-insensitive)
+        c.execute("SELECT username FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+        existing = c.fetchone()
+        
+        if existing:
+            # Oppdater last_active og normaliser username/display_name hvis nødvendig
             c.execute("""
                 UPDATE users 
-                SET last_active = ?
-                WHERE username = ?
-            """, (now, username))
+                SET username = ?, display_name = ?, last_active = ?
+                WHERE LOWER(username) = LOWER(?)
+            """, (username, display_name, now, username))
         else:
             # Opprett ny bruker
             c.execute("""
@@ -428,11 +452,14 @@ class UserManager:
         conn = self._get_connection()
         c = conn.cursor()
         
+        # Normaliser username til Title Case
+        username = username.strip().title()
+        
         c.execute("""
             UPDATE users
             SET total_messages = total_messages + 1,
                 last_active = ?
-            WHERE username = ?
+            WHERE LOWER(username) = LOWER(?)
         """, (datetime.now().isoformat(), username))
         
         conn.commit()

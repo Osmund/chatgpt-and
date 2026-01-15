@@ -159,3 +159,9 @@ duck-control.log
 
 # Migration scripts
 migrations/
+tests/
+test_*.py
+
+# ============ Test Files ============
+tests/
+test_*.py

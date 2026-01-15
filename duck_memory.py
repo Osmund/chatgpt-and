@@ -1021,6 +1021,8 @@ class MemoryManager:
         
         # Hent alle memories med embeddings
         if user_name:
+            # Normaliser user_name til Title Case for konsistent matching
+            user_name = user_name.strip().title()
             c.execute("""
                 SELECT id, text, topic, frequency, confidence, source, first_seen, last_accessed, metadata, user_name, embedding
                 FROM memories
@@ -1183,7 +1185,7 @@ class MemoryManager:
         conn.close()
         return expanded
 
-    def build_context_for_ai(self, query: str, recent_messages: int = 5) -> Dict:
+    def build_context_for_ai(self, query: str, recent_messages: int = 5, user_name: str = None) -> Dict:
         """
         Bygg komplett context for AI-prompt med smart expansion.
         
@@ -1193,9 +1195,15 @@ class MemoryManager:
         3. Legg til frekvente facts hvis nødvendig
         4. Begrens til totalt 40 facts for AI
         
+        Args:
+            query: Søkestreng
+            recent_messages: Antall siste meldinger å inkludere
+            user_name: Filter KUN for recent conversation (meldingshistorikk)
+                      Minner og fakta er ALLTID tilgjengelig for alle brukere
+        
         Returnerer dict med:
-        - profile_facts: Top fakta om bruker
-        - relevant_memories: Søkte minner
+        - profile_facts: Top fakta om bruker (IKKE filtrert)
+        - relevant_memories: Søkte minner (IKKE filtrert)
         - recent_topics: Hva snakker vi om?
         - conversation_summary: Hvis tilgjengelig
         """
@@ -1237,7 +1245,8 @@ class MemoryManager:
         
         # 5. Relevant memories (EMBEDDING SEARCH - semantisk søk)
         # Senket threshold til 0.35 for bedre recall
-        relevant_memories_list = self.search_memories_by_embedding(query, limit=8, threshold=0.35)
+        # IKKE filtrer på user_name - alle brukere skal se alle minner
+        relevant_memories_list = self.search_memories_by_embedding(query, limit=8, threshold=0.35, user_name=None)
         # Convert to same format as old search_memories (List[Tuple[Memory, float]])
         # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
         relevant_memories = [(m, 1.0) for m in relevant_memories_list]
@@ -1248,11 +1257,22 @@ class MemoryManager:
         # 7. Recent conversation (siste N meldinger)
         conn = self._get_connection()
         c = conn.cursor()
-        c.execute("""
-            SELECT user_text, ai_response FROM messages 
-            ORDER BY timestamp DESC 
-            LIMIT ?
-        """, (recent_messages,))
+        
+        # Filter på user_name hvis oppgitt
+        if user_name:
+            c.execute("""
+                SELECT user_text, ai_response FROM messages 
+                WHERE user_name = ?
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            """, (user_name, recent_messages))
+        else:
+            c.execute("""
+                SELECT user_text, ai_response FROM messages 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            """, (recent_messages,))
+        
         recent_conv = [dict(row) for row in c.fetchall()]
         recent_conv.reverse()  # Eldst først
         conn.close()

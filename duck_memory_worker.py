@@ -31,7 +31,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Worker config
 CHECK_INTERVAL = 5  # Sjekk hver 5. sekund
 BATCH_SIZE = 5      # Prosesser opptil 5 meldinger per batch
-USE_CHEAP_MODEL = False  # Bruk gpt-4o-mini for bedre family extraction
+USE_CHEAP_MODEL = False  # Satt til False for å bruke GPT-4.1 Mini (beste balanse)
 
 
 class MemoryExtractor:
@@ -216,7 +216,7 @@ AI: "{ai_response}"
                 "Content-Type": "application/json"
             }
             
-            model = "gpt-3.5-turbo" if USE_CHEAP_MODEL else "gpt-4o-mini"
+            model = "gpt-3.5-turbo" if USE_CHEAP_MODEL else "gpt-4-turbo-2024-04-09"
             
             data = {
                 "model": model,
@@ -493,7 +493,7 @@ class MemoryWorker:
         print("🚀 Memory Worker startet", flush=True)
         print(f"  Check interval: {CHECK_INTERVAL}s", flush=True)
         print(f"  Batch size: {BATCH_SIZE}", flush=True)
-        print(f"  Model: {'gpt-3.5-turbo' if USE_CHEAP_MODEL else 'gpt-4o-mini'}", flush=True)
+        print(f"  Model: {'gpt-3.5-turbo' if USE_CHEAP_MODEL else 'gpt-4-turbo-2024-04-09 (GPT-4.1 Mini)'}", flush=True)
         print(f"  API key: {'✅' if OPENAI_API_KEY else '❌'}\n", flush=True)
         
         if not OPENAI_API_KEY:
