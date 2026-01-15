@@ -83,3 +83,19 @@ OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 # ============ Home Assistant Configuration ============
 HA_TOKEN_ENV = "HA_TOKEN"
 HA_URL_ENV = "HA_URL"
+
+# ============ Memory System Configuration ============
+# Hvor mange facts embedding-søk skal returnere
+MEMORY_EMBEDDING_SEARCH_LIMIT = 30
+
+# Hvor mange minner som skal inkluderes i kontekst
+MEMORY_LIMIT = 8
+
+# Similarity threshold for minner (0.0-1.0, lavere = mer inkluderende)
+MEMORY_THRESHOLD = 0.35
+
+# Hvor mange frekvente facts som legges til hvis embedding finner få
+MEMORY_FREQUENT_FACTS_LIMIT = 15
+
+# Minimum antall expanded facts før frequent facts legges til
+MEMORY_EXPAND_THRESHOLD = 15

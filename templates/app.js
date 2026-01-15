@@ -1154,6 +1154,8 @@ window.onload = function() {
     getWiFiNetworks();
     loadSongs();  // Last sanger
     loadMemoryStats();  // Last memory stats
+    loadMaxContextFacts();  // Last max context facts setting
+    loadMemorySettings();  // Last alle memory settings
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1161,3 +1163,177 @@ window.onload = function() {
     setInterval(loadFanStatus, 5000);
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
 };
+
+// Max Context Facts
+function updateMaxFactsLabel() {
+    const slider = document.getElementById('max-facts-slider');
+    const label = document.getElementById('max-facts-label');
+    label.textContent = slider.value + ' fakta';
+}
+
+async function changeMaxFacts() {
+    const slider = document.getElementById('max-facts-slider');
+    const statusElement = document.getElementById('max-facts-status');
+    const value = parseInt(slider.value);
+    
+    try {
+        const response = await fetch('/api/settings/max-context-facts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_context_facts: value })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => statusElement.textContent = '', 2000);
+        } else {
+            statusElement.textContent = ' ✗ Feil: ' + (data.error || 'Ukjent feil');
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ Feil: ' + error.message;
+    }
+}
+
+async function loadMaxContextFacts() {
+    try {
+        const response = await fetch('/api/settings/max-context-facts');
+        const data = await response.json();
+        if (data.status === 'success') {
+            const slider = document.getElementById('max-facts-slider');
+            slider.value = data.max_context_facts;
+            updateMaxFactsLabel();
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste max context facts:', error);
+    }
+}
+
+async function loadMemorySettings() {
+    try {
+        const response = await fetch('/api/settings/memory');
+        const data = await response.json();
+        if (data.status === 'success') {
+            // Embedding search limit
+            const embeddingSlider = document.getElementById('embedding-limit-slider');
+            if (embeddingSlider) {
+                embeddingSlider.value = data.embedding_search_limit || 30;
+                updateEmbeddingLimitLabel();
+            }
+            
+            // Memory limit
+            const memorySlider = document.getElementById('memory-limit-slider');
+            if (memorySlider) {
+                memorySlider.value = data.memory_limit || 8;
+                updateMemoryLimitLabel();
+            }
+            
+            // Memory threshold (konverter fra 0.35 til 35 for slider)
+            const thresholdSlider = document.getElementById('memory-threshold-slider');
+            if (thresholdSlider) {
+                thresholdSlider.value = Math.round((data.memory_threshold || 0.35) * 100);
+                updateMemoryThresholdLabel();
+            }
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste memory settings:', error);
+    }
+}
+
+function updateEmbeddingLimitLabel() {
+    const slider = document.getElementById('embedding-limit-slider');
+    const label = document.getElementById('embedding-limit-value');
+    if (slider && label) {
+        label.textContent = slider.value;
+    }
+}
+
+async function changeEmbeddingLimit() {
+    const slider = document.getElementById('embedding-limit-slider');
+    const statusElement = document.getElementById('embedding-limit-status');
+    
+    try {
+        const response = await fetch('/api/settings/memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ embedding_search_limit: parseInt(slider.value) })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => { statusElement.textContent = ''; }, 2000);
+        } else {
+            statusElement.textContent = ' ✗ ' + (data.error || 'Feil');
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ ' + error.message;
+    }
+}
+
+function updateMemoryLimitLabel() {
+    const slider = document.getElementById('memory-limit-slider');
+    const label = document.getElementById('memory-limit-value');
+    if (slider && label) {
+        label.textContent = slider.value;
+    }
+}
+
+async function changeMemoryLimit() {
+    const slider = document.getElementById('memory-limit-slider');
+    const statusElement = document.getElementById('memory-limit-status');
+    
+    try {
+        const response = await fetch('/api/settings/memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memory_limit: parseInt(slider.value) })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => { statusElement.textContent = ''; }, 2000);
+        } else {
+            statusElement.textContent = ' ✗ ' + (data.error || 'Feil');
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ ' + error.message;
+    }
+}
+
+function updateMemoryThresholdLabel() {
+    const slider = document.getElementById('memory-threshold-slider');
+    const label = document.getElementById('memory-threshold-value');
+    if (slider && label) {
+        // Konverter fra 20-80 (slider) til 0.20-0.80 (display)
+        const val = (parseInt(slider.value) / 100).toFixed(2);
+        label.textContent = val;
+    }
+}
+
+async function changeMemoryThreshold() {
+    const slider = document.getElementById('memory-threshold-slider');
+    const statusElement = document.getElementById('memory-threshold-status');
+    
+    try {
+        // Konverter fra 20-80 (slider) til 0.20-0.80 (backend)
+        const threshold = parseInt(slider.value) / 100;
+        
+        const response = await fetch('/api/settings/memory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memory_threshold: threshold })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            statusElement.textContent = ' ✓';
+            setTimeout(() => { statusElement.textContent = ''; }, 2000);
+        } else {
+            statusElement.textContent = ' ✗ ' + (data.error || 'Feil');
+        }
+    } catch (error) {
+        statusElement.textContent = ' ✗ ' + error.message;
+    }
+}

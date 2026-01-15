@@ -259,6 +259,83 @@
                             <span id="memory-toggle-text">👁️ Vis detaljert minne</span>
                         </button>
                         
+                        <!-- Memory Settings -->
+                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 15px 0; color: #00bcd4;">⚙️ Minneinnstillinger</h4>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <h5 style="margin: 5px 0; font-size: 14px;">🧠 Max Kontekst Fakta</h5>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px;">1</span>
+                                    <input type="range" id="max-facts-slider" min="1" max="200" value="100" 
+                                           oninput="updateMaxFactsLabel()" onchange="changeMaxFacts()" 
+                                           style="flex: 1;">
+                                    <span style="font-size: 12px;">200</span>
+                                </div>
+                                <div style="text-align: center; margin-top: 5px;">
+                                    <span id="max-facts-label" style="font-weight: bold; font-size: 13px;">100 fakta</span>
+                                    <span id="max-facts-status" style="font-size: 12px;"></span>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
+                                    Totalt antall fakta i kontekst
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <h5 style="margin: 5px 0; font-size: 14px;">🔍 Embedding Søk Limit</h5>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px;">10</span>
+                                    <input type="range" id="embedding-limit-slider" min="10" max="100" value="30" 
+                                           oninput="updateEmbeddingLimitLabel()" onchange="changeEmbeddingLimit()" 
+                                           style="flex: 1;">
+                                    <span style="font-size: 12px;">100</span>
+                                </div>
+                                <div style="text-align: center; margin-top: 5px;">
+                                    <span id="embedding-limit-value" style="font-weight: bold; font-size: 13px;">30</span> facts
+                                    <span id="embedding-limit-status" style="font-size: 12px;"></span>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
+                                    Hvor mange facts embedding-søk returnerer
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 20px;">
+                                <h5 style="margin: 5px 0; font-size: 14px;">💭 Minnegrense</h5>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px;">1</span>
+                                    <input type="range" id="memory-limit-slider" min="1" max="20" value="8" 
+                                           oninput="updateMemoryLimitLabel()" onchange="changeMemoryLimit()" 
+                                           style="flex: 1;">
+                                    <span style="font-size: 12px;">20</span>
+                                </div>
+                                <div style="text-align: center; margin-top: 5px;">
+                                    <span id="memory-limit-value" style="font-weight: bold; font-size: 13px;">8</span> minner
+                                    <span id="memory-limit-status" style="font-size: 12px;"></span>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
+                                    Antall episodiske minner i kontekst
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 0;">
+                                <h5 style="margin: 5px 0; font-size: 14px;">🎯 Minne Threshold</h5>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-size: 12px;">0.2</span>
+                                    <input type="range" id="memory-threshold-slider" min="20" max="80" value="35" 
+                                           oninput="updateMemoryThresholdLabel()" onchange="changeMemoryThreshold()" 
+                                           style="flex: 1;">
+                                    <span style="font-size: 12px;">0.8</span>
+                                </div>
+                                <div style="text-align: center; margin-top: 5px;">
+                                    <span id="memory-threshold-value" style="font-weight: bold; font-size: 13px;">0.35</span>
+                                    <span id="memory-threshold-status" style="font-size: 12px;"></span>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
+                                    Similarity threshold (lavere = mer inkluderende)
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="memory-view" style="display: none; margin-top: 15px;">
                             <!-- Recent Updates Timeline -->
                             <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">

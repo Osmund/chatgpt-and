@@ -694,6 +694,55 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/api/settings/max-context-facts':
+            # Hent nåværende max_context_facts setting
+            try:
+                mm = MemoryManager()
+                conn = mm._get_connection()
+                c = conn.cursor()
+                
+                c.execute("SELECT value FROM profile_facts WHERE key = 'max_context_facts' LIMIT 1")
+                row = c.fetchone()
+                max_facts = int(row['value']) if row else 100  # Default 100
+                
+                conn.close()
+                response = {'status': 'success', 'max_context_facts': max_facts}
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e), 'max_context_facts': 100}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/api/settings/memory':
+            # Hent alle memory settings
+            try:
+                mm = MemoryManager()
+                conn = mm._get_connection()
+                c = conn.cursor()
+                
+                settings = {}
+                for key in ['embedding_search_limit', 'memory_limit', 'memory_threshold']:
+                    c.execute("SELECT value FROM profile_facts WHERE key = ? LIMIT 1", (key,))
+                    row = c.fetchone()
+                    if row:
+                        settings[key] = float(row['value']) if 'threshold' in key else int(row['value'])
+                    else:
+                        # Defaults
+                        defaults = {'embedding_search_limit': 30, 'memory_limit': 8, 'memory_threshold': 0.35}
+                        settings[key] = defaults[key]
+                
+                conn.close()
+                response = {'status': 'success', **settings}
+            except Exception as e:
+                response = {'status': 'error', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         elif self.path == '/api/users/current':
             # Hent nåværende bruker
             try:
@@ -1418,6 +1467,107 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write('stop')
                 
                 response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/api/settings/memory':
+            # Oppdater memory settings
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                
+                mm = MemoryManager()
+                conn = mm._get_connection()
+                c = conn.cursor()
+                
+                updated = {}
+                
+                # Embedding search limit
+                if 'embedding_search_limit' in data:
+                    val = int(data['embedding_search_limit'])
+                    if not (10 <= val <= 100):
+                        raise ValueError("embedding_search_limit må være mellom 10 og 100")
+                    c.execute("""
+                        INSERT OR REPLACE INTO profile_facts 
+                        (key, value, topic, confidence, frequency, source, last_updated, metadata)
+                        VALUES (?, ?, 'system', 1.0, 10, 'user', datetime('now'), ?)
+                    """, ('embedding_search_limit', str(val), json.dumps({'source': 'control_panel'})))
+                    updated['embedding_search_limit'] = val
+                
+                # Memory limit  
+                if 'memory_limit' in data:
+                    val = int(data['memory_limit'])
+                    if not (1 <= val <= 20):
+                        raise ValueError("memory_limit må være mellom 1 og 20")
+                    c.execute("""
+                        INSERT OR REPLACE INTO profile_facts 
+                        (key, value, topic, confidence, frequency, source, last_updated, metadata)
+                        VALUES (?, ?, 'system', 1.0, 10, 'user', datetime('now'), ?)
+                    """, ('memory_limit', str(val), json.dumps({'source': 'control_panel'})))
+                    updated['memory_limit'] = val
+                
+                # Memory threshold
+                if 'memory_threshold' in data:
+                    val = float(data['memory_threshold'])
+                    if not (0.2 <= val <= 0.8):
+                        raise ValueError("memory_threshold må være mellom 0.2 og 0.8")
+                    c.execute("""
+                        INSERT OR REPLACE INTO profile_facts 
+                        (key, value, topic, confidence, frequency, source, last_updated, metadata)
+                        VALUES (?, ?, 'system', 1.0, 10, 'user', datetime('now'), ?)
+                    """, ('memory_threshold', str(val), json.dumps({'source': 'control_panel'})))
+                    updated['memory_threshold'] = val
+                
+                conn.commit()
+                conn.close()
+                
+                response = {'success': True, **updated}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/api/settings/max-context-facts':
+            # Oppdater max_context_facts setting
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                
+                max_facts = int(data.get('max_context_facts', 100))
+                
+                # Valider range
+                if not (1 <= max_facts <= 200):
+                    raise ValueError("max_context_facts må være mellom 1 og 200")
+                
+                mm = MemoryManager()
+                conn = mm._get_connection()
+                c = conn.cursor()
+                
+                # Insert eller update
+                c.execute("""
+                    INSERT OR REPLACE INTO profile_facts 
+                    (key, value, topic, confidence, frequency, source, last_updated, metadata)
+                    VALUES (?, ?, 'system', 1.0, 10, 'user', datetime('now'), ?)
+                """, ('max_context_facts', str(max_facts), json.dumps({'source': 'control_panel'})))
+                
+                conn.commit()
+                conn.close()
+                
+                response = {'success': True, 'max_context_facts': max_facts}
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()

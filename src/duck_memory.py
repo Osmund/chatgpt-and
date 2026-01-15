@@ -21,7 +21,14 @@ import numpy as np
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-from src.duck_config import DB_PATH as DEFAULT_DB_PATH
+from src.duck_config import (
+    DB_PATH as DEFAULT_DB_PATH,
+    MEMORY_EMBEDDING_SEARCH_LIMIT,
+    MEMORY_LIMIT,
+    MEMORY_THRESHOLD,
+    MEMORY_FREQUENT_FACTS_LIMIT,
+    MEMORY_EXPAND_THRESHOLD
+)
 
 # Last environment variables
 load_dotenv()
@@ -1155,18 +1162,15 @@ class MemoryManager:
                 if sister_num:
                     prefixes_to_expand.add(f'sister_{sister_num}')
                     
-                    # Hvis det er child-relatert, ekspander også child-prefixet
-                    if 'child' in key and len(parts) >= 4:
-                        child_num = parts[3] if parts[3].isdigit() else None
-                        if child_num:
-                            prefixes_to_expand.add(f'sister_{sister_num}_child_{child_num}')
+                    # Hvis det er child-relatert, ekspander ALLE barn under denne søsteren
+                    if 'child' in key:
+                        prefixes_to_expand.add(f'sister_{sister_num}_child')
         
         # Hent alle facts som matcher prefixene
         for prefix in prefixes_to_expand:
             c.execute("""
                 SELECT * FROM profile_facts 
                 WHERE key LIKE ? || '%'
-                LIMIT 20
             """, (prefix,))
             
             for row in c.fetchall():
@@ -1191,10 +1195,10 @@ class MemoryManager:
         Bygg komplett context for AI-prompt med smart expansion.
         
         Strategi:
-        1. Embedding search (topp 20 facts)
+        1. Embedding search (topp N facts - konfigurerbart)
         2. Expand relaterte facts (hvis vi finner sister_2_child_1, hent alle sister_2_*)
         3. Legg til frekvente facts hvis nødvendig
-        4. Begrens til totalt 40 facts for AI
+        4. Begrens til totalt max_context_facts for AI
         
         Args:
             query: Søkestreng
@@ -1208,16 +1212,37 @@ class MemoryManager:
         - recent_topics: Hva snakker vi om?
         - conversation_summary: Hvis tilgjengelig
         """
+        # Les dynamiske settings fra database
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Hent alle memory settings i én query
+        c.execute("""
+            SELECT key, value FROM profile_facts 
+            WHERE key IN ('embedding_search_limit', 'memory_limit', 'memory_threshold', 
+                          'memory_expand_threshold', 'memory_frequent_facts_limit', 'max_context_facts')
+        """)
+        settings = {row['key']: row['value'] for row in c.fetchall()}
+        
+        # Parse med fallback til config defaults
+        embedding_limit = int(settings.get('embedding_search_limit', MEMORY_EMBEDDING_SEARCH_LIMIT))
+        memory_limit = int(settings.get('memory_limit', MEMORY_LIMIT))
+        memory_threshold = float(settings.get('memory_threshold', MEMORY_THRESHOLD))
+        expand_threshold = int(settings.get('memory_expand_threshold', MEMORY_EXPAND_THRESHOLD))
+        frequent_limit = int(settings.get('memory_frequent_facts_limit', MEMORY_FREQUENT_FACTS_LIMIT))
+        max_facts = int(settings.get('max_context_facts', 100))
+        
+        conn.close()
+        
         # 1. Søk etter relevante facts basert på query (EMBEDDING SEARCH)
-        # Økt fra 10 til 20 for bedre dekning
-        searched_facts = self.search_by_embedding(query, limit=20)
+        searched_facts = self.search_by_embedding(query, limit=embedding_limit)
         
         # 2. Ekspander med relaterte facts
         expanded_facts = self._expand_related_facts(searched_facts)
         
         # 3. Hvis vi fremdeles har få facts, legg til frekvente
-        if len(expanded_facts) < 15:
-            frequent_facts = self.get_top_facts_cached(limit=15)
+        if len(expanded_facts) < expand_threshold:
+            frequent_facts = self.get_top_facts_cached(limit=frequent_limit)
         else:
             frequent_facts = []
         
@@ -1229,10 +1254,6 @@ class MemoryManager:
         for fact in expanded_facts:
             if fact.key not in seen_keys:
                 combined_facts.append(fact)
-                seen_keys.add(fact.key)        # Legg til frekvente facts
-        for fact in frequent_facts:
-            if fact.key not in seen_keys:
-                combined_facts.append(fact)
                 seen_keys.add(fact.key)
         
         # Legg til frekvente facts
@@ -1241,13 +1262,13 @@ class MemoryManager:
                 combined_facts.append(fact)
                 seen_keys.add(fact.key)
         
-        # Begrens til max 40 facts totalt (økt fra 15 for bedre context)
-        profile_facts = combined_facts[:40]
+        # Begrens til max N facts totalt (konfigurerbart via kontrollpanel)
+        profile_facts = combined_facts[:max_facts]
         
         # 5. Relevant memories (EMBEDDING SEARCH - semantisk søk)
-        # Senket threshold til 0.35 for bedre recall
         # IKKE filtrer på user_name - alle brukere skal se alle minner
-        relevant_memories_list = self.search_memories_by_embedding(query, limit=8, threshold=0.35, user_name=None)
+        conn = self._get_connection()  # Re-open connection
+        relevant_memories_list = self.search_memories_by_embedding(query, limit=MEMORY_LIMIT, threshold=MEMORY_THRESHOLD, user_name=None)
         # Convert to same format as old search_memories (List[Tuple[Memory, float]])
         # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
         relevant_memories = [(m, 1.0) for m in relevant_memories_list]
@@ -1256,7 +1277,6 @@ class MemoryManager:
         topic_stats = self.get_topic_stats(limit=5)
         
         # 7. Recent conversation (siste N meldinger)
-        conn = self._get_connection()
         c = conn.cursor()
         
         # Filter på user_name hvis oppgitt
