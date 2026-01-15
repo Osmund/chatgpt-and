@@ -566,8 +566,9 @@ def get_netatmo_temperature(room_name=None):
                             
                             parts = []
                             if temp is not None:
-                                # Skriv ut som "grader" for bedre norsk uttale
-                                parts.append(f"{round(temp)} grader")
+                                # Bruk komma for desimaltall (norsk standard) i stedet for punktum
+                                temp_str = f"{temp:.1f}".replace('.', ',')
+                                parts.append(f"{temp_str} grader")
                             if humidity is not None:
                                 parts.append(f"{humidity}% fuktighet")
                             if co2 is not None:
