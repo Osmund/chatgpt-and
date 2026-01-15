@@ -504,46 +504,51 @@ Dine fysiske egenskaper:
     message = response_data["choices"][0]["message"]
     
     if message.get("tool_calls"):
-        # Modellen vil kalle en funksjon
-        tool_call = message["tool_calls"][0]
-        function_name = tool_call["function"]["name"]
-        function_args = json.loads(tool_call["function"]["arguments"])
+        # Modellen vil kalle én eller flere funksjoner
+        tool_calls = message["tool_calls"]
         
-        print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
-        
-        # Kall faktisk funksjon
-        if function_name == "get_weather":
-            location = function_args.get("location", "")
-            timeframe = function_args.get("timeframe", "now")
-            result = get_weather(location, timeframe)
-        elif function_name == "control_hue_lights":
-            action = function_args.get("action")
-            room = function_args.get("room")
-            brightness = function_args.get("brightness")
-            color = function_args.get("color")
-            result = control_hue_lights(action, room, brightness, color)
-        elif function_name == "control_beak":
-            enabled = function_args.get("enabled")
-            beak_result = control_beak(enabled)
-            result = beak_result.get("status", "error") if isinstance(beak_result, dict) else str(beak_result)
-        elif function_name == "get_ip_address":
-            result = get_ip_address_tool()
-        elif function_name == "get_netatmo_temperature":
-            room_name = function_args.get("room_name")
-            result = get_netatmo_temperature(room_name)
-        else:
-            result = "Ukjent funksjon"
-        
-        # Legg til function call og resultat i conversation
+        # Legg til assistant message først
         final_messages.append(message)
-        final_messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call["id"],
-            "name": function_name,
-            "content": result
-        })
         
-        # Kall API igjen med værdata
+        # Prosesser alle tool calls
+        for tool_call in tool_calls:
+            function_name = tool_call["function"]["name"]
+            function_args = json.loads(tool_call["function"]["arguments"])
+            
+            print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
+            
+            # Kall faktisk funksjon
+            if function_name == "get_weather":
+                location = function_args.get("location", "")
+                timeframe = function_args.get("timeframe", "now")
+                result = get_weather(location, timeframe)
+            elif function_name == "control_hue_lights":
+                action = function_args.get("action")
+                room = function_args.get("room")
+                brightness = function_args.get("brightness")
+                color = function_args.get("color")
+                result = control_hue_lights(action, room, brightness, color)
+            elif function_name == "control_beak":
+                enabled = function_args.get("enabled")
+                beak_result = control_beak(enabled)
+                result = beak_result.get("status", "error") if isinstance(beak_result, dict) else str(beak_result)
+            elif function_name == "get_ip_address":
+                result = get_ip_address_tool()
+            elif function_name == "get_netatmo_temperature":
+                room_name = function_args.get("room_name")
+                result = get_netatmo_temperature(room_name)
+            else:
+                result = "Ukjent funksjon"
+            
+            # Legg til tool result for denne funksjonen
+            final_messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": result
+            })
+        
+        # Kall API igjen med all tool data
         data["messages"] = final_messages
         response2 = requests.post(url, headers=headers, json=data)
         
