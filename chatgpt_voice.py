@@ -1842,6 +1842,8 @@ def ask_for_user_switch(speech_config, beak, user_manager):
         # Ekstraher navnet (fjern "jeg er", "dette er", etc.)
         name_clean = name_response.strip().lower()
         name_clean = name_clean.replace("jeg er ", "").replace("dette er ", "").replace("jeg heter ", "")
+        # Fjern punktum og andre tegn som kan legges til av stemmegjenkjenning
+        name_clean = name_clean.rstrip('.!?,;:')
         name_clean = name_clean.strip().title()  # Kapitalisér første bokstav
         
         print(f"👤 Bruker sa navnet: {name_clean}", flush=True)
@@ -2163,13 +2165,15 @@ def main():
                     reply = result
                     is_thank_you = False
                 
-                # Sjekk om AI har markert samtalen som ferdig (med eller uten brackets)
-                ai_wants_to_end = "[AVSLUTT]" in reply or " AVSLUTT" in reply or reply.endswith("AVSLUTT")
+                # Sjekk om AI har markert samtalen som ferdig (case-insensitive, med eller uten brackets)
+                reply_upper = reply.upper()
+                ai_wants_to_end = "[AVSLUTT]" in reply_upper or " AVSLUTT" in reply_upper or reply_upper.endswith("AVSLUTT")
                 
-                # Fjern AVSLUTT markør før TTS (både med og uten brackets)
-                reply_for_speech = reply.replace("[AVSLUTT]", "").replace(" AVSLUTT", "").strip()
-                if reply_for_speech.endswith("AVSLUTT"):
-                    reply_for_speech = reply_for_speech[:-8].strip()
+                # Fjern AVSLUTT markør før TTS (case-insensitive, både med og uten brackets)
+                import re
+                reply_for_speech = re.sub(r'\[?AVSLUTT\]?\.?', '', reply, flags=re.IGNORECASE).strip()
+                # Fjern eventuelle ekstra spaces
+                reply_for_speech = ' '.join(reply_for_speech.split())
                 
                 print("ChatGPT svar:", reply_for_speech, flush=True)
                 if ai_wants_to_end:
