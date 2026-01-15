@@ -15,7 +15,7 @@ Kjøres daglig via systemd timer (03:00)
 import sys
 import time
 from datetime import datetime, timedelta
-from duck_memory import MemoryManager
+from src.duck_memory import MemoryManager
 
 # Flush stdout for journalctl
 sys.stdout.reconfigure(line_buffering=True)

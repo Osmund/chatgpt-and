@@ -2,7 +2,7 @@
 
 ## Oversikt
 
-ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer via fildeling og systemd-kontroll.
+ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer via fildeling og systemd-kontroll. Koden er organisert i en modulær struktur med `src/` mappen for alle hovedmoduler.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -39,40 +39,66 @@ ChatGPT Duck er et distribuert system med tre hovedkomponenter som kommuniserer 
     └──────────────┘        └──────────────┘
 ```
 
-## Komponentbeskrivelse
+## Kodestruktur
 
-### 1. chatgpt_voice.py - Hovedapplikasjon
+Prosjektet er organisert med en modulær arkitektur:
 
-**Ansvar**: Håndtere all AI-interaksjon, stemmegjenkjenning og lydavspilling.
-
-**Hovedmoduler**:
-
-#### Wake Word Detection
-```python
-def wait_for_wake_word():
-    """
-    Bruker Porcupine (Picovoice) wake word detection
-    - Trigger: "Samantha" (custom wake word)
-    - Krever Picovoice API key i .env
-    - Modell: samantha_en_raspberry-pi_v4_0_0.ppn
-    - Sample rate: 16000 Hz (resampler fra USB mic 48000 Hz)
-    - RGB LED: Blå under lytting
-    - Buffer: 6144 samples for stabilitet
-    """
 ```
+src/                              # Hovedmoduler
+├── duck_config.py                # Konfigurasjon og konstanter
+├── duck_audio.py                 # TTS, lydavspilling, beak-kontroll
+├── 2. src/duck_speech.py - Wake Word og Talegjenkjenning
 
-#### Speech Recognition
-```python
-def listen_for_speech():
-    """
-    Azure Speech-to-Text
-    - Høykvalitets cloud-basert gjenkjenning
-    - Norsk språkstøtte (nb-NO)
-    - Streaming recognition
-    - RGB LED: Grønn under innspilling, gul blinkende under prosessering
-    """
-```
+**Wake Word Detection**:
+- Bruker Porcupine (Picovoice) wake word detection
+- Trigger: "Samantha" (custom wake word)
+- Krever Picovoice API key i .env
+- Modell: samantha_en_raspberry-pi_v4_0_0.ppn
+- Sample rate: 16000 Hz (resampler fra USB mic 48000 Hz)
+- RGB LED: Blå under lytting
 
+**Speech Recognition**:
+- Azure Speech-to-Text
+- Høykvalitets cloud-basert gjenkjenning
+- Norsk språkstøtte (nb-NO)
+- Streaming recognition
+- RGB LED: Grønn under innspilling, gul blinkende under prosessering
+
+### 3. src/duck_ai.py - ChatGPT Integrasjon
+
+**ChatGPT Integration**:
+- Støtter gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4.1 mini
+- System prompts basert på personlighet (fra config/personalities.json)
+- Conversation history for kontekst
+- Memory integration (henter relevant kontekst)
+- Function calling for værmelding, lysstyring, IP-adresse, etc.
+- RGB LED: Lilla blinkende under venting på respons
+
+**Verktøy/Tools**:
+- `get_weather()`: Henter værdata basert på stedsnavn (fra config/locations.json)
+- `control_hue_lights()`: Kontrollerer Philips Hue-lys
+- `get_ip_address_tool()`: Returnerer Pi'ens IP-adresse
+- `open_beak_tool()`: Manuell kontroll av nebbet
+
+### 4. src/duck_audio.py - TTS og Lydavspilling
+
+**Text-to-Speech**:
+- Azure TTS med SSML
+- Norske neural voices (Finn, Pernille, Iselin)
+- SSML prosody rate control for hastighet
+- Synkron nebb-bevegelse via amplitude detection
+- RGB LED: Rød under tale
+- Markdown-rensing før TTS
+- Pitch-shift for "andestemme"
+
+**Lydavspilling**:
+- Automatisk deteksjon av HiFiBerry DAC
+- USB mikrofon support
+- Volum-kontroll via /tmp/duck_volume.txt
+
+### 5. src/duck_music.py - Musikkavspilling
+
+**Sang-avspilling**:
 #### ChatGPT Integration
 ```python
 def get_chatgpt_response(text, conversation_history):

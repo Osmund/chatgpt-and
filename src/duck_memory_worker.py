@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 import requests
-from duck_memory import MemoryManager, ProfileFact, Memory
+from src.duck_memory import MemoryManager, ProfileFact, Memory
 import sys
 
 # Flush stdout for journalctl

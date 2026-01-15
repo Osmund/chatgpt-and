@@ -11,7 +11,7 @@ WorkingDirectory=/home/admog/Code/chatgpt-and
 Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Kjør memory worker
-ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/duck_memory_worker.py
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python /home/admog/Code/chatgpt-and/src/duck_memory_worker.py
 
 # Restart automatisk ved feil
 Restart=always

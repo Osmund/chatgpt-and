@@ -441,12 +441,6 @@ Via kontrollpanel, velg hver personlighet og test respons:
 
 ## Del 6: Konfigurasjon og tilpasning
 
-### 6.1 Endre wake words
-
-Rediger `chatgpt_voice.py`:
-```python
-def wait_for_wake_word(model_path):
-    # ...
 ### 6.1 Wake Word
 
 Wake word er nå "Samantha" og bruker Porcupine wake word detection. Wake word er definert av modellen `porcupine/samantha_en_raspberry-pi_v4_0_0.ppn`.
@@ -455,7 +449,7 @@ For å endre wake word, må du enten:
 1. Lage en custom wake word på https://console.picovoice.ai/
 2. Eller bruke en annen forhåndstrent modell fra Picovoice
 
-Sensitivitet kan justeres i `chatgpt_voice.py`:
+Sensitivitet kan justeres i `src/duck_speech.py`:
 ```python
 porcupine = pvporcupine.create(
     access_key=access_key,

@@ -118,11 +118,10 @@ Software / kodeendringer
   - Konfigurasjon: `SERVO_CHANNEL`, `CLOSE_DEG`, `OPEN_DEG`, og pulse width range
     (`CLOSE_US_DEFAULT` / `OPEN_US_DEFAULT`) finnes i toppen av filen for enkel kalibrering.
 
-- `chatgpt_voice.py`:
-  - Støtter I2S (Google Voice HAT / MAX98357A). Endringer som ble vurdert/implementert
-    i utviklingsløpet inkluderte: styring av SD-pin via GPIO, pre/post silence, og
-    fade-in/fade-out for å redusere pop på Class-D-forsterkeren.
-  - Endelig anbefaling i dette prosjektet: koble `SD` til 3.3V og `GAIN` til GND,
+- `chatgpt_voice.py` (hovedorchestrator):
+  - Importerer og bruker moduler fra `src/` mappen
+  - Støtter I2S (Google Voice HAT / MAX98357A)
+  - TTS, wake word, AI-integrasjon håndteres av moduler
     og sett ALSA Master (~70%) for best kombinasjon av lydnivå og lav forvrengning.
   - Hvis du vil gjøre videre feilsøking: sjekk `journalctl -u chatgpt-duck.service` og
     `alsamixer -c 1`.
@@ -147,7 +146,8 @@ Feilsøking / tips
 
 Hvor i koden finner du dette?
 - `duck_beak.py` - servo & PCA9685
-- `chatgpt_voice.py` - lydkjøring (I2S), TTS, beak-synkronisering, wake-word
+- `chatgpt_voice.py` - hovedorchestrator
+- `src/` moduler - alle kjernefunksjoner (TTS, wake-word, AI, minne, etc.)
 
 Hvis du ønsker, kan jeg også:
 - Lage en liten pinout-skisse for plassering internt i anden
@@ -351,7 +351,7 @@ sudo systemctl start duck-control.service
 ### Manuell kjøring (for testing)
 ```bash
 source .venv/bin/activate
-python chatgpt_voice.py
+python3 chatgpt_voice.py
 ```
 
 ### Kjør kontrollpanel separat
@@ -507,17 +507,22 @@ ssml = f"""
 │   ├── duck-memory-worker.service     # Memory worker
 │   └── fan-control.service            # Viftekontroll
 │
-├── chatgpt_voice.py                   # 🦆 Hovedapplikasjon
+├── src/                               # 📦 Kildekode moduler
+│   ├── duck_ai.py                     # 🤖 ChatGPT integrasjon og verktøy
+│   ├── duck_audio.py                  # 🔊 TTS og lydavspilling
+│   ├── duck_config.py                 # ⚙️ Konfigurasjon og konstanter
+│   ├── duck_conversation.py           # 💬 Samtaleflyt og brukerhåndtering
+│   ├── duck_memory.py                 # 🧠 Memory manager
+│   ├── duck_memory_hygiene.py         # 🧠 Memory hygiene
+│   ├── duck_memory_worker.py          # 🧠 Memory worker
+│   ├── duck_music.py                  # 🎵 Musikkavspilling
+│   ├── duck_speech.py                 # 🎤 Wake word og talegjenkjenning
+│   └── duck_user_manager.py           # 👥 Brukerhåndtering
+│
+├── chatgpt_voice.py                   # 🦆 Hovedapplikasjon (entry point)
 ├── duck-control.py                    # 🌐 Web kontrollpanel (HTTP server)
 ├── duck_beak.py                       # 👄 Servo-kontroll for nebb
-├── duck_beak_gpiozero.py             # 👄 Alternativ nebb-implementering
-├── duck_memory.py                     # 🧠 Memory manager
-├── duck_memory_worker.py              # 🧠 Memory worker
-├── duck_memory_hygiene.py             # 🧠 Memory hygiene
-├── duck_speak.py                      # 🗣️ TTS helper
 ├── fan_control.py                     # 🌀 Viftekontroll
-├── main.py                            # 🚀 Main entry point
-├── oww_models.py                      # 🎤 Wake word modeller
 ├── rgb_duck.py                        # 💡 RGB LED-kontroll
 ├── wifi-portal.py                     # 📱 WiFi-oppsett portal
 │
