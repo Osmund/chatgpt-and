@@ -46,6 +46,15 @@ Prosjektet er organisert med en modulær arkitektur:
 ```
 src/                              # Hovedmoduler
 ├── duck_config.py                # Konfigurasjon og konstanter
+│                                 # - File paths (DB, wake word, temp files)
+│                                 # - AI model configuration
+│                                 # - Audio configuration (fade, beak timing)
+│                                 # - Memory system configuration (NEW!)
+│                                 #   * MEMORY_EMBEDDING_SEARCH_LIMIT = 30
+│                                 #   * MEMORY_LIMIT = 8
+│                                 #   * MEMORY_THRESHOLD = 0.35
+│                                 #   * MEMORY_FREQUENT_FACTS_LIMIT = 15
+│                                 #   * MEMORY_EXPAND_THRESHOLD = 15
 ├── duck_audio.py                 # TTS, lydavspilling, beak-kontroll
 ├── 2. src/duck_speech.py - Wake Word og Talegjenkjenning
 
@@ -489,6 +498,28 @@ Alle IPC-filer ligger i `/tmp/` for kommunikasjon mellom services:
 | `/tmp/duck_speed.txt` | → chatgpt_voice.py | Talehastighet | Integer (0-100) | `50` (normal), `75` (rask) |
 | `/tmp/duck_beak.txt` | → chatgpt_voice.py | Nebb på/av | String | `on`, `off` |
 | `/tmp/duck_model.txt` | → chatgpt_voice.py | GPT-modell | String | `gpt-3.5-turbo`, `gpt-4` |
+| `/tmp/duck_song_request.txt` | → chatgpt_voice.py | Sang-forespørsel | String (path) | `/path/to/song/folder` |
+| `/tmp/duck_song_stop.txt` | → chatgpt_voice.py | Stopp sang | String | `stop` |
+| `/tmp/duck_fan.txt` | → fan_control.py | Viftemodus | String | `auto`, `on`, `off` |
+| `/tmp/duck_fan_status.txt` | ← fan_control.py | Viftestatus | CSV | `auto,running,58.2` |
+
+### Database Storage (NEW!)
+
+Memory-innstillinger lagres i `duck_memory.db` (`profile_facts` tabell) med `topic='system'`:
+
+| Key | Type | Default | Range | Beskrivelse |
+|-----|------|---------|-------|-------------|
+| `max_context_facts` | int | 100 | 1-200 | Totalt antall fakta i AI kontekst |
+| `embedding_search_limit` | int | 30 | 10-100 | Antall facts fra embedding-søk |
+| `memory_limit` | int | 8 | 1-20 | Episodiske minner i kontekst |
+| `memory_threshold` | float | 0.35 | 0.2-0.8 | Similarity threshold for embeddings |
+
+**Fallback**: Hvis ikke satt i database, brukes defaults fra `duck_config.py`:
+- `MEMORY_EMBEDDING_SEARCH_LIMIT`
+- `MEMORY_LIMIT`
+- `MEMORY_THRESHOLD`
+- `MEMORY_FREQUENT_FACTS_LIMIT`
+- `MEMORY_EXPAND_THRESHOLD`
 | `/tmp/duck_message.txt` | → chatgpt_voice.py | Direktemelding | String | `Hva er været i dag?` |
 | `/tmp/duck_song_request.txt` | → chatgpt_voice.py | Sang-forespørsel | String | `A-ha - Take on me` |
 | `/tmp/duck_song_stop.txt` | → chatgpt_voice.py | Stopp sang | Eksistens | Fil eksisterer = stopp |

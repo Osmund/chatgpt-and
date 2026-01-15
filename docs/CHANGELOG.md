@@ -4,6 +4,55 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.3] - 2026-01-15
+
+### Ny funksjonalitet
+
+#### ⚙️ Konfigurerbare Memory-innstillinger
+
+**Beskrivelse**: Alle viktige minnessystem-innstillinger kan nå justeres direkte i kontrollpanelet!
+
+**Nye sliders under "🧠 Andas Minne" → "⚙️ Minneinnstillinger"**:
+1. **Max Kontekst Fakta** (1-200, default: 100)
+   - Totalt antall fakta som sendes til AI i hver query
+   - Øk for bedre kontekst, senk for raskere respons
+
+2. **Embedding Søk Limit** (10-100, default: 30)
+   - Hvor mange facts embedding-søket returnerer før expansion
+   - Øk for bredere søk, senk for mer fokusert
+
+3. **Minnegrense** (1-20, default: 8)
+   - Antall episodiske minner som inkluderes i kontekst
+   - Øk for mer samtalehistorikk, senk for kortere context
+
+4. **Minne Threshold** (0.2-0.8, default: 0.35)
+   - Similarity threshold for embedding search
+   - Senk for flere treff, øk for mer relevante treff
+
+**Funksjoner**:
+- ✓/✗ status feedback ved lagring
+- Lagres umiddelbart i database
+- Brukes ved neste query (ingen restart nødvendig)
+- Fallback til config-defaults hvis ikke satt
+- Live preview av verdier mens du drar sliderne
+
+**API Endpoints**:
+```http
+GET  /api/settings/memory              # Hent alle memory settings
+POST /api/settings/memory              # Oppdater en eller flere settings
+GET  /api/settings/max-context-facts   # Hent max context facts
+POST /api/settings/max-context-facts   # Oppdater max context facts
+```
+
+**Teknisk implementering**:
+- Ny `duck_config.py`: Sentral konfigurasjonsfil med MEMORY_* konstanter
+- Settings lagres i `profile_facts` tabell med `topic='system'`
+- `duck_memory.py` leser settings dynamisk fra database
+- JavaScript-funksjoner for hver slider med live updates
+- Backend validering av input-ranges
+
+**Resultat**: Enkelt å eksperimentere med memory-systemet uten kodeendringer! 🎛️
+
 ## [2.1.2] - 2026-01-09
 
 ### Ny funksjonalitet

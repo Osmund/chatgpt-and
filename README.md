@@ -248,6 +248,19 @@ Systemet inkluderer et komplett web-basert kontrollpanel tilgjengelig på `http:
   - 50%: Normal hastighet
   - 100%: Dobbel hastighet (+100%)
 
+#### 🧠 Minnessystem
+- **Statistikk**: Antall meldinger, fakta, minner og topics
+- **Quick Facts**: De 10 mest brukte fakta om deg
+- **Embedding Status**: Se om embeddings er klare eller genereres
+- **Worker Status**: Overvåk background memory processing
+- **⚙️ Minneinnstillinger**: Juster memory-systemet i sanntid
+  - **Max Kontekst Fakta** (1-200): Totalt antall fakta i AI kontekst
+  - **Embedding Søk Limit** (10-100): Bredde på embedding-søk
+  - **Minnegrense** (1-20): Episodiske minner i kontekst
+  - **Minne Threshold** (0.2-0.8): Similarity threshold (lavere = mer inkluderende)
+- **Detaljert visning**: Se, søk og slett profile facts og minner
+- **Topic statistikk**: Visualisering av samtaleemner
+
 #### 👄 Nebb-kontroll
 - **På/Av**: Aktiver eller deaktiver nebb-bevegelse
 - **Test**: Send testmelding for å verifisere funksjonalitet

@@ -360,29 +360,47 @@ DELETE /api/memory/memories/{id}  # Slett minne
    - Profile facts count
    - Memories count
    - Topics count
+   - Embedding status (ready/generating)
+   - Worker status (running/stopped)
 
-2. **Profile Facts Viewer**
+2. **Memory Settings (⚙️ Minneinnstillinger)**
+   - **Max Kontekst Fakta** (1-200): Slider med live preview
+   - **Embedding Søk Limit** (10-100): Justerer søkebredde
+   - **Minnegrense** (1-20): Episodiske minner i kontekst
+   - **Minne Threshold** (0.2-0.8): Similarity threshold
+   - ✓/✗ status feedback ved lagring
+   - Lagres umiddelbart i database
+   - Brukes ved neste query (ingen restart nødvendig)
+
+3. **Profile Facts Viewer**
    - Color-coded confidence (grønn: 80%+, oransje: 50-80%, rød: <50%)
    - Frequency counter
    - Topic categorization
    - Delete button (🗑️)
+   - Search/filter funksjon
 
-3. **Memory Search**
+4. **Memory Search**
    - FTS5 full-text search
    - Score-based ranking
    - Topic filtering
    - Delete button (🗑️)
+   - Real-time search
 
-4. **Topic Statistics**
+5. **Topic Statistics**
    - Bar chart visualization
    - Mention counts
    - Last mentioned timestamp
+
+6. **Quick Facts**
+   - Top 10 mest brukte facts
+   - One-click access
 
 **UI Design:**
 - Responsive layout (mobilvennlig)
 - Diskrete delete buttons (grå → rød ved hover)
 - Absolute positioning for minimal space
 - Auto-refresh hvert 10. sekund
+- Real-time slider updates med visuell feedback
 
 ## Installation
 
@@ -639,6 +657,94 @@ python3 -c "from duck_memory import MemoryManager; m = MemoryManager(); print(m.
 # 3. Add indexes
 ```
 
+## Configuration
+
+### Memory Settings (Configurable via Web UI)
+
+Alle viktige memory-innstillinger kan justeres via kontrollpanelet under "🧠 Andas Minne" → "⚙️ Minneinnstillinger":
+
+#### 1. Max Kontekst Fakta (1-200)
+- **Default**: 100
+- **Beskrivelse**: Totalt antall fakta som sendes til AI i hver query
+- **Bruk**: Øk for bedre kontekst, senk for raskere respons
+- **Database key**: `max_context_facts`
+
+#### 2. Embedding Søk Limit (10-100)
+- **Default**: 30
+- **Beskrivelse**: Hvor mange facts embedding-søket returnerer før expansion
+- **Bruk**: Øk for bredere søk, senk for mer fokusert
+- **Database key**: `embedding_search_limit`
+- **Config fallback**: `MEMORY_EMBEDDING_SEARCH_LIMIT` i `duck_config.py`
+
+#### 3. Minnegrense (1-20)
+- **Default**: 8
+- **Beskrivelse**: Antall episodiske minner som inkluderes i kontekst
+- **Bruk**: Øk for mer samtalehistorikk, senk for kortere context
+- **Database key**: `memory_limit`
+- **Config fallback**: `MEMORY_LIMIT` i `duck_config.py`
+
+#### 4. Minne Threshold (0.2-0.8)
+- **Default**: 0.35
+- **Beskrivelse**: Similarity threshold for embedding search (lavere = mer inkluderende)
+- **Bruk**: Senk for flere treff, øk for mer relevante treff
+- **Database key**: `memory_threshold`
+- **Config fallback**: `MEMORY_THRESHOLD` i `duck_config.py`
+
+### API Endpoints for Settings
+
+```python
+# GET alle memory settings
+GET /api/settings/memory
+# Returns: {status, embedding_search_limit, memory_limit, memory_threshold}
+
+# POST oppdater settings (kan sende én eller flere)
+POST /api/settings/memory
+# Body: {embedding_search_limit: 40, memory_limit: 10, memory_threshold: 0.4}
+# Returns: {success: true, ...updated_values}
+
+# GET max context facts (legacy endpoint)
+GET /api/settings/max-context-facts
+# Returns: {status, max_context_facts}
+
+# POST oppdater max context facts
+POST /api/settings/max-context-facts
+# Body: {max_context_facts: 150}
+# Returns: {success: true, max_context_facts: 150}
+```
+
+### Hvordan innstillingene brukes
+
+```python
+# I duck_memory.py build_context_for_ai()
+
+# 1. Les settings fra database (med fallback til config)
+embedding_limit = int(settings.get('embedding_search_limit', MEMORY_EMBEDDING_SEARCH_LIMIT))
+memory_limit = int(settings.get('memory_limit', MEMORY_LIMIT))
+memory_threshold = float(settings.get('memory_threshold', MEMORY_THRESHOLD))
+max_facts = int(settings.get('max_context_facts', 100))
+
+# 2. Bruk settings i søk
+searched_facts = self.search_by_embedding(query, limit=embedding_limit)
+relevant_memories = self.search_memories_by_embedding(
+    query, limit=memory_limit, threshold=memory_threshold
+)
+
+# 3. Begrens total output
+profile_facts = combined_facts[:max_facts]
+```
+
+### Storage i Database
+
+Settings lagres i `profile_facts` tabellen med `topic='system'`:
+
+```sql
+INSERT INTO profile_facts 
+(key, value, topic, confidence, frequency, source, last_updated, metadata)
+VALUES 
+('embedding_search_limit', '30', 'system', 1.0, 10, 'user', datetime('now'), 
+ '{"source": "control_panel"}');
+```
+
 ## Best Practices
 
 ### 1. Profile Facts
@@ -658,6 +764,7 @@ python3 -c "from duck_memory import MemoryManager; m = MemoryManager(); print(m.
 - Keep database size reasonable (<10 MB for typical use)
 - Run hygiene regularly (daily recommended)
 - Use FTS5 search instead of LIKE queries
+- **Tune memory settings** via web UI for optimal balance mellom accuracy og speed
 
 ### 4. Privacy
 - Memory database contains personal information
