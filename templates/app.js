@@ -460,13 +460,92 @@ async function changeModel() {
 
 async function loadCurrentModel() {
     try {
+        // Først last inn tilgjengelige modeller
+        await loadAvailableModels();
+        
+        // Deretter sett current model
         const response = await fetch('/current-model');
         const data = await response.json();
         const select = document.getElementById('model-select');
-        select.value = data.model;
+        if (select && data.model) {
+            select.value = data.model;
+        }
     } catch (error) {
         console.error('Kunne ikke laste modell:', error);
+        // Fallback: Legg til minst noen modeller hvis API feiler
+        loadFallbackModels();
     }
+}
+
+async function loadAvailableModels() {
+    try {
+        const response = await fetch('/available-models');
+        if (!response.ok) {
+            console.warn('API returned ' + response.status + ', keeping default models');
+            return; // Behold modeller fra HTML
+        }
+        
+        const data = await response.json();
+        
+        if (data.models && data.models.length > 0) {
+            const select = document.getElementById('model-select');
+            if (!select) {
+                console.error('model-select element not found');
+                return;
+            }
+            
+            // Oppdater eksisterende modeller i stedet for å erstatte
+            select.innerHTML = ''; // Tøm for å legge til oppdaterte
+            
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                
+                // Bygg visningsnavn
+                let displayName = model.name;
+                if (model.is_default) {
+                    displayName += ' ⭐ (Anbefalt)';
+                }
+                if (model.cost === 'svært lav') {
+                    displayName += ' (Billig)';
+                } else if (model.cost === 'høy' || model.cost === 'svært høy') {
+                    displayName += ' (Dyr)';
+                }
+                
+                option.textContent = displayName;
+                select.appendChild(option);
+            });
+            
+            console.log('Loaded ' + data.models.length + ' models from API');
+        }
+    } catch (error) {
+        console.warn('Kunne ikke laste modeller fra API, bruker HTML-defaults:', error);
+        // Behold modeller som er hardkodet i HTML
+    }
+}
+
+function loadFallbackModels() {
+    // Fallback hvis API feiler
+    const select = document.getElementById('model-select');
+    if (!select) return;
+    
+    select.innerHTML = '';
+    const fallbackModels = [
+        {id: 'gpt-4-turbo-2024-04-09', name: 'GPT-4.1 Mini ⭐'},
+        {id: 'gpt-4', name: 'GPT-4'},
+        {id: 'gpt-4-turbo', name: 'GPT-4.1 Turbo'},
+        {id: 'gpt-4o-mini', name: 'GPT-4o Mini'},
+        {id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo'}
+    ];
+    
+    fallbackModels.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.name;
+        select.appendChild(option);
+    });
+    
+    console.log('Loaded fallback models');
 }
 
 async function loadWakeWords() {

@@ -58,7 +58,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/app.js':
             self.send_response(200)
             self.send_header('Content-type', 'application/javascript; charset=utf-8')
-            self.send_header('Cache-Control', 'public, max-age=3600')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
             self.end_headers()
             js_content = load_template('app.js')
             self.wfile.write(js_content.encode())
@@ -164,20 +166,46 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/current-model':
             # Hent gjeldende AI-modell
             try:
+                from src.duck_config import DEFAULT_MODEL
                 model_file = '/tmp/duck_model.txt'
-                default_model = 'gpt-3.5-turbo'
                 
                 if os.path.exists(model_file):
                     with open(model_file, 'r') as f:
                         model = f.read().strip()
                         if not model:
-                            model = default_model
+                            model = DEFAULT_MODEL
                 else:
-                    model = default_model
+                    model = DEFAULT_MODEL
                 
                 response = {'model': model}
             except Exception as e:
-                response = {'model': 'gpt-3.5-turbo', 'error': str(e)}
+                response = {'model': 'gpt-4-turbo-2024-04-09', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/available-models':
+            # Hent liste over alle tilgjengelige modeller fra config
+            try:
+                from src.duck_config import AVAILABLE_MODELS, DEFAULT_MODEL
+                
+                # Konverter til liste for frontend
+                models = []
+                for model_id, info in AVAILABLE_MODELS.items():
+                    models.append({
+                        'id': model_id,
+                        'name': info['name'],
+                        'accuracy': info.get('accuracy', 'N/A'),
+                        'latency': info.get('latency', 'N/A'),
+                        'cost': info.get('cost', 'N/A'),
+                        'is_default': model_id == DEFAULT_MODEL
+                    })
+                
+                response = {'models': models, 'default': DEFAULT_MODEL}
+            except Exception as e:
+                response = {'models': [], 'error': str(e)}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
