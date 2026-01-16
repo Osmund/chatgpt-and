@@ -15,6 +15,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature
 
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
@@ -45,7 +46,9 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'home': ['hus', 'leilighet', 'rom', 'kjøkken', 'bad', 'soverom'],
         'food': ['mat', 'middag', 'lunsj', 'frokost', 'spise', 'sultne'],
         'music': ['sang', 'musikk', 'spill', 'syng', 'låt'],
-        'lights': ['lys', 'lampe', 'skru på', 'skru av', 'dimme']
+        'lights': ['lys', 'lampe', 'skru på', 'skru av', 'dimme'],
+        'tv': ['tv', 'fjernsyn', 'samsung', 'netflix', 'spill av', 'pause'],
+        'ac': ['ac', 'aircondition', 'klimaanlegg', 'varme', 'kjøle', 'temperatur']
     }
     
     for topic, keywords in topic_keywords.items():
@@ -486,6 +489,69 @@ Dine fysiske egenskaper:
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_tv",
+                "description": "Kontroller Samsung Smart TV via Home Assistant. Kan skru på/av, play, pause, stop, next, previous, mute, unmute.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["turn_on", "turn_off", "play", "pause", "stop", "next", "previous", "mute", "unmute"],
+                            "description": "Hva som skal gjøres med TV-en"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_ac",
+                "description": "Kontroller Panasonic klimaanlegg (AC) via Home Assistant. Kan skru på/av, endre temperatur, modus, og hente status/temperatur.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["turn_on", "turn_off", "set_temperature", "set_mode", "get_status"],
+                            "description": "Hva som skal gjøres: turn_on/off, set_temperature, set_mode, eller get_status for å sjekke nåværende innstillinger"
+                        },
+                        "temperature": {
+                            "type": "integer",
+                            "description": "Ønsket temperatur i grader Celsius (kun for set_temperature)"
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["heat", "cool", "auto", "dry", "fan_only"],
+                            "description": "Driftsmodus (kun for set_mode): heat=varme, cool=kjøle, auto=automatisk"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_ac_temperature",
+                "description": "Hent temperatur fra AC-sensorene (inne og/eller ute). Bruk denne når brukeren spør om temperaturen som AC måler, eller utetemperaturen fra AC.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "temp_type": {
+                            "type": "string",
+                            "enum": ["inside", "outside", "both"],
+                            "description": "Hvilken temperatur som skal hentes: inside=inne, outside=ute, both=begge (default)"
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
     ]
     
@@ -537,6 +603,17 @@ Dine fysiske egenskaper:
             elif function_name == "get_netatmo_temperature":
                 room_name = function_args.get("room_name")
                 result = get_netatmo_temperature(room_name)
+            elif function_name == "control_tv":
+                action = function_args.get("action")
+                result = control_tv(action)
+            elif function_name == "control_ac":
+                action = function_args.get("action")
+                temperature = function_args.get("temperature")
+                mode = function_args.get("mode")
+                result = control_ac(action, temperature, mode)
+            elif function_name == "get_ac_temperature":
+                temp_type = function_args.get("temp_type", "both")
+                result = get_ac_temperature(temp_type)
             else:
                 result = "Ukjent funksjon"
             
