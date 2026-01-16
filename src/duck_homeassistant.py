@@ -137,6 +137,25 @@ def get_ac_temperature(temp_type="both"):
         return f"❌ Kunne ikke hente temperatur: {e}"
 
 
+def control_vacuum(action):
+    """Kontroller Saros Z70 støvsuger via HA"""
+    entity = "vacuum.saros_z70"
+    
+    actions = {
+        "start": ("vacuum", "start"),
+        "pause": ("vacuum", "pause"),
+        "stop": ("vacuum", "stop"),
+        "return_to_base": ("vacuum", "return_to_base"),
+        "locate": ("vacuum", "locate"),
+    }
+    
+    if action not in actions:
+        return f"Ugyldig støvsuger-kommando: {action}"
+    
+    domain, service = actions[action]
+    return call_ha_service(domain, service, entity)
+
+
 def control_blinds(action, room=None, position=None):
     """Kontroller Luxaflex gardiner via HA (når du får Gateway)"""
     

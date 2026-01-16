@@ -15,7 +15,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
-from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum
 
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
@@ -48,7 +48,8 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'music': ['sang', 'musikk', 'spill', 'syng', 'låt'],
         'lights': ['lys', 'lampe', 'skru på', 'skru av', 'dimme'],
         'tv': ['tv', 'fjernsyn', 'samsung', 'netflix', 'spill av', 'pause'],
-        'ac': ['ac', 'aircondition', 'klimaanlegg', 'varme', 'kjøle', 'temperatur']
+        'ac': ['ac', 'aircondition', 'klimaanlegg', 'varme', 'kjøle', 'temperatur'],
+        'vacuum': ['støvsuger', 'vacuum', 'robotstøvsuger', 'saros']
     }
     
     for topic, keywords in topic_keywords.items():
@@ -552,6 +553,24 @@ Dine fysiske egenskaper:
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_vacuum",
+                "description": "Kontroller Saros Z70 robotstøvsuger via Home Assistant. Kan starte støvsuging, pause, stoppe, returnere til base, eller locate (spill lyd).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["start", "pause", "stop", "return_to_base", "locate"],
+                            "description": "Hva som skal gjøres: start=start støvsuging, pause=pause, stop=stopp, return_to_base=hjem til base, locate=finn støvsugeren (spill lyd)"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
         }
     ]
     
@@ -614,6 +633,9 @@ Dine fysiske egenskaper:
             elif function_name == "get_ac_temperature":
                 temp_type = function_args.get("temp_type", "both")
                 result = get_ac_temperature(temp_type)
+            elif function_name == "control_vacuum":
+                action = function_args.get("action")
+                result = control_vacuum(action)
             else:
                 result = "Ukjent funksjon"
             
