@@ -159,9 +159,12 @@ duck-control.log
 
 # Migration scripts
 migrations/
-tests/
-test_*.py
 
-# ============ Test Files ============
+# ============ Test Files (KRITISK - KAN INNEHOLDE SENSITIVE DATA) ============
+# Testfiler kan inneholde API-nøkler, IP-adresser, personlig data
 tests/
 test_*.py
+**/tests/
+src/tests/
+check_*.py
+find_*.py
