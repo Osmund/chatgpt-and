@@ -15,7 +15,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
-from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene
 
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
@@ -736,6 +736,24 @@ Dine fysiske egenskaper:
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "activate_scene",
+                "description": "Aktiver en forhåndsdefinert smart home scene. Tilgjengelige scener: filmkveld (dimmer lys, TV på, Netflix), god_natt (alt av, blinds ned), god_morgen (lys på, blinds opp), hjemmekontor (jobb-lys, AC 22°C)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "scene_name": {
+                            "type": "string",
+                            "enum": ["filmkveld", "god_natt", "god_morgen", "hjemmekontor"],
+                            "description": "Navnet på scenen som skal aktiveres"
+                        }
+                    },
+                    "required": ["scene_name"]
+                }
+            }
         }
     ]
     
@@ -830,6 +848,9 @@ Dine fysiske egenskaper:
                 result = get_teams_status()
             elif function_name == "get_teams_chat":
                 result = get_teams_chat()
+            elif function_name == "activate_scene":
+                scene_name = args.get("scene_name", "")
+                result = activate_scene(scene_name)
             else:
                 result = "Ukjent funksjon"
             

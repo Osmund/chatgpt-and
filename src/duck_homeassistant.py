@@ -493,8 +493,92 @@ def get_teams_chat():
         return f"❌ Feil ved henting av Teams-chat: {str(e)}"
 
 
+def activate_scene(scene_name):
+    """Aktiver en forhåndsdefinert scene i Home Assistant"""
+    
+    scenes = {
+        "filmkveld": "scene.filmkveld",
+        "god_natt": "scene.god_natt",
+        "god_morgen": "scene.god_morgen",
+        "hjemmekontor": "scene.hjemmekontor"
+    }
+    
+    scene_entity = scenes.get(scene_name.lower().replace(" ", "_"))
+    
+    if not scene_entity:
+        return f"❌ Ukjent scene: {scene_name}. Tilgjengelige: {', '.join(scenes.keys())}"
+    
+    result = call_ha_service("scene", "turn_on", scene_entity)
+    
+    # Spesialhåndtering for filmkveld: Start Netflix etter scene
+    if scene_name.lower() == "filmkveld" and "✅" in str(result):
+        import time
+        time.sleep(2)  # Vent på at TV'en skrur seg på
+        netflix_result = launch_tv_app("netflix")
+        return f"✅ Filmkveld aktivert! Lys dimmet, TV på, Netflix starter..."
+    
+    if "✅" in str(result):
+        return f"✅ Scene '{scene_name}' aktivert!"
+    return result
+
+
+def create_movie_scene():
+    """Opprett 'Filmkveld' scene i Home Assistant"""
+    
+    scene_data = {
+        "scene_id": "filmkveld",
+        "snapshot_entities": [],
+        "entities": {
+            # Dimmer stue-lys til 10%
+            "light.stue": {
+                "state": "on",
+                "brightness": 26  # 10% av 255
+            },
+            "light.stue_tv": {
+                "state": "on",
+                "brightness": 26
+            },
+            "light.stue_spisebord": {
+                "state": "off"
+            },
+            # TV på
+            "media_player.samsung_8_series_65_ue65ru8005uxxc": {
+                "state": "on"
+            },
+            # PowerView blinds (når du får gateway)
+            # "cover.luxaflex_tv": {"state": "closed"},
+        }
+    }
+    
+    try:
+        HA_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
+        HA_TOKEN = os.getenv("HA_TOKEN")
+        
+        if not HA_TOKEN:
+            return "❌ HA_TOKEN mangler i .env"
+        
+        headers = {
+            "Authorization": f"Bearer {HA_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            f"{HA_URL}/api/services/scene/create",
+            headers=headers,
+            json=scene_data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return "✅ Filmkveld scene opprettet! Bruk 'activate_scene(\"filmkveld\")' for å aktivere."
+        else:
+            return f"❌ Kunne ikke opprette scene: {response.status_code}"
+    except Exception as e:
+        return f"❌ Feil ved oppretting av scene: {str(e)}"
+
+
 def control_blinds(action, room=None, position=None):
-    """Kontroller Luxaflex gardiner via HA (når du får Gateway)"""
+    """Kontroller Luxaflex gardiner via PowerView Gateway (når installert)"""
     
     # Gardin entities
     entities = {
