@@ -147,6 +147,41 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/ha-status':
+            # Sjekk Home Assistant tilgjengelighet
+            try:
+                import requests
+                from dotenv import load_dotenv
+                load_dotenv()
+                
+                HA_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
+                HA_TOKEN = os.getenv("HA_TOKEN")
+                
+                if not HA_TOKEN:
+                    response = {'available': False, 'error': 'HA_TOKEN ikke konfigurert'}
+                else:
+                    try:
+                        r = requests.get(f"{HA_URL}/api/", 
+                                       headers={"Authorization": f"Bearer {HA_TOKEN}"}, 
+                                       timeout=3)
+                        if r.status_code == 200:
+                            response = {'available': True, 'url': HA_URL}
+                        else:
+                            response = {'available': False, 'error': f'HTTP {r.status_code}'}
+                    except requests.exceptions.Timeout:
+                        response = {'available': False, 'error': 'Timeout (3s)'}
+                    except requests.exceptions.ConnectionError:
+                        response = {'available': False, 'error': 'Connection refused'}
+                    except Exception as e:
+                        response = {'available': False, 'error': str(e)}
+            except Exception as e:
+                response = {'available': False, 'error': f'Config error: {str(e)}'}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         elif self.path == '/logs':
             # Hent siste logger
             try:

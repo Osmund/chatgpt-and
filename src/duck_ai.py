@@ -15,7 +15,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
-from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat
 
 
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
@@ -49,7 +49,12 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'lights': ['lys', 'lampe', 'skru på', 'skru av', 'dimme'],
         'tv': ['tv', 'fjernsyn', 'samsung', 'netflix', 'spill av', 'pause'],
         'ac': ['ac', 'aircondition', 'klimaanlegg', 'varme', 'kjøle', 'temperatur'],
-        'vacuum': ['støvsuger', 'vacuum', 'robotstøvsuger', 'saros']
+        'vacuum': ['støvsuger', 'vacuum', 'robotstøvsuger', 'saros'],
+        'twinkly': ['twinkly', 'led', 'ledvegg', 'led vegg', 'vegg'],
+        'email': ['epost', 'e-post', 'mail', 'melding', 'innboks'],
+        'calendar': ['kalender', 'avtale', 'møte'],
+        'todo': ['handleliste', 'todo', 'å gjøre', 'huskeliste'],
+        'teams': ['teams', 'status', 'tilgjengelig', 'chat', 'melding']
     }
     
     for topic, keywords in topic_keywords.items():
@@ -512,6 +517,24 @@ Dine fysiske egenskaper:
         {
             "type": "function",
             "function": {
+                "name": "launch_tv_app",
+                "description": "Start en app på Samsung TV. Støttede apper: Netflix, YouTube, Disney+, Prime Video, HBO Max, Spotify, Viaplay, NRK TV, Plex, Twitch, SkyShowtime, Apple TV.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "app_name": {
+                            "type": "string",
+                            "enum": ["netflix", "youtube", "disney", "prime", "hbo", "spotify", "viaplay", "nrk", "plex", "twitch", "skyshowtime", "appletv"],
+                            "description": "Navnet på appen som skal startes"
+                        }
+                    },
+                    "required": ["app_name"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "control_ac",
                 "description": "Kontroller Panasonic klimaanlegg (AC) via Home Assistant. Kan skru på/av, endre temperatur, modus, og hente status/temperatur.",
                 "parameters": {
@@ -571,6 +594,148 @@ Dine fysiske egenskaper:
                     "required": ["action"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_twinkly",
+                "description": "Kontroller Twinkly LED-vegg via Home Assistant. Kan skru på/av, endre lysstyrke, og velge effekt-modus.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["turn_on", "turn_off", "set_brightness", "set_mode"],
+                            "description": "Hva som skal gjøres: turn_on/off, set_brightness (med brightness parameter), set_mode (med mode parameter)"
+                        },
+                        "brightness": {
+                            "type": "integer",
+                            "description": "Lysstyrke i prosent (0-100), kun for set_brightness"
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["color", "demo", "effect", "movie", "off", "playlist", "rt"],
+                            "description": "Effekt-modus: color=fast farge, demo=demo-modus, effect=effekter, movie=film, playlist=spilleliste, rt=real-time"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_email_status",
+                "description": "Hent e-post status fra Office 365/Microsoft 365. Kan vise antall uleste, siste e-post, eller liste med siste e-poster.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["summary", "latest", "list", "read"],
+                            "description": "Hva som skal hentes: summary=antall uleste, latest=siste e-post (emne+avsender), list=siste 3 e-poster, read=les innholdet i siste e-post"
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_calendar_events",
+                "description": "Hent kalenderavtaler fra Office 365 Calendar. Kan vise pågående, neste eller dagens avtaler.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["current", "next", "today"],
+                            "description": "Hvilken type avtaler: current=pågående nå, next=neste avtale, today=alle i dag"
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_calendar_event",
+                "description": "Opprett ny kalenderavtale i Office 365 Calendar. Krever tittel og tidspunkt i format YYYY-MM-DD HH:MM:SS.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "Tittel/emne på avtalen"
+                        },
+                        "start_datetime": {
+                            "type": "string",
+                            "description": "Starttid i format YYYY-MM-DD HH:MM:SS (f.eks. 2026-01-17 10:00:00)"
+                        },
+                        "end_datetime": {
+                            "type": "string",
+                            "description": "Sluttid i format YYYY-MM-DD HH:MM:SS (f.eks. 2026-01-17 11:00:00)"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Beskrivelse/notater (valgfri)"
+                        },
+                        "location": {
+                            "type": "string",
+                            "description": "Sted/lokasjon (valgfri)"
+                        }
+                    },
+                    "required": ["summary", "start_datetime", "end_datetime"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "manage_todo",
+                "description": "Administrer handleliste/To Do-liste i Office 365. Kan vise, legge til, fjerne, fullføre items eller slette alle fullførte.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["list", "add", "remove", "complete", "clear"],
+                            "description": "Handling: list=vis items, add=legg til, remove=fjern, complete=marker ferdig, clear=slett alle fullførte"
+                        },
+                        "item": {
+                            "type": "string",
+                            "description": "Navn på item som skal legges til, fjernes eller markeres ferdig"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_teams_status",
+                "description": "Hent din Microsoft Teams-status (Tilgjengelig, Opptatt, Borte, etc.)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_teams_chat",
+                "description": "Hent siste Teams-melding med avsender og innhold",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
         }
     ]
     
@@ -625,6 +790,9 @@ Dine fysiske egenskaper:
             elif function_name == "control_tv":
                 action = function_args.get("action")
                 result = control_tv(action)
+            elif function_name == "launch_tv_app":
+                app_name = function_args.get("app_name")
+                result = launch_tv_app(app_name)
             elif function_name == "control_ac":
                 action = function_args.get("action")
                 temperature = function_args.get("temperature")
@@ -636,6 +804,32 @@ Dine fysiske egenskaper:
             elif function_name == "control_vacuum":
                 action = function_args.get("action")
                 result = control_vacuum(action)
+            elif function_name == "control_twinkly":
+                action = function_args.get("action")
+                brightness = function_args.get("brightness")
+                mode = function_args.get("mode")
+                result = control_twinkly(action, brightness, mode)
+            elif function_name == "get_email_status":
+                action = function_args.get("action", "summary")
+                result = get_email_status(action)
+            elif function_name == "get_calendar_events":
+                action = function_args.get("action", "next")
+                result = get_calendar_events(action)
+            elif function_name == "create_calendar_event":
+                summary = function_args.get("summary")
+                start_datetime = function_args.get("start_datetime")
+                end_datetime = function_args.get("end_datetime")
+                description = function_args.get("description")
+                location = function_args.get("location")
+                result = create_calendar_event(summary, start_datetime, end_datetime, description, location)
+            elif function_name == "manage_todo":
+                action = function_args.get("action", "list")
+                item = function_args.get("item")
+                result = manage_todo(action, item)
+            elif function_name == "get_teams_status":
+                result = get_teams_status()
+            elif function_name == "get_teams_chat":
+                result = get_teams_chat()
             else:
                 result = "Ukjent funksjon"
             

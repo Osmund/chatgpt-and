@@ -22,14 +22,31 @@
             Henter status...
         </div>
         
-        <button class="btn-start" onclick="controlDuck('start')">▶️ Start Duck</button>
-        <button class="btn-stop" onclick="controlDuck('stop')">⏹️ Stopp Duck</button>
-        <button class="btn-restart" onclick="controlDuck('restart')">🔄 Restart Duck</button>
-        <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
-        <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
-        <button class="btn-wifi" onclick="switchToHotspot()">📡 Bytt WiFi-nettverk</button>
-        <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
-        <button class="btn-shutdown" onclick="shutdownPi()">🔌 Skru av Pi</button>
+        <!-- Home Assistant Status -->
+        <div id="ha-status" style="text-align: center; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; font-size: 0.95em; border: 1px solid #ddd;">
+            <span style="color: #666;">🏠 Home Assistant:</span> 
+            <span id="ha-status-text" style="font-weight: bold;">...</span>
+        </div>
+        
+        <!-- Control Panel Section -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎛️ Kontrollpanel</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <button class="btn-start" onclick="controlDuck('start')">▶️ Start Duck</button>
+                    <button class="btn-stop" onclick="controlDuck('stop')">⏹️ Stopp Duck</button>
+                    <button class="btn-restart" onclick="controlDuck('restart')">🔄 Restart Duck</button>
+                    <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
+                    <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
+                    <button class="btn-wifi" onclick="switchToHotspot()">📡 Bytt WiFi-nettverk</button>
+                    <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
+                    <button class="btn-shutdown" onclick="shutdownPi()">🔌 Skru av Pi</button>
+                </div>
+            </div>
+        </div>
         
         <div id="log-output" style="display: none; margin: 20px 0; padding: 20px; background: #1e1e1e; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333; max-height: 400px; overflow-y: auto;">
             <div id="log-content" style="font-family: 'Courier New', monospace; font-size: 12px; color: #00ff00; line-height: 1.4; white-space: pre-wrap; word-break: break-all;">
@@ -573,6 +590,37 @@
                 console.error('Kunne ikke laste viftestatus:', error);
             }
         }
+
+        async function checkHAStatus() {
+            try {
+                const response = await fetch('/ha-status');
+                const data = await response.json();
+                
+                const statusElement = document.getElementById('ha-status-text');
+                const containerElement = document.getElementById('ha-status');
+                
+                if (data.available) {
+                    statusElement.textContent = '✅ Tilkoblet';
+                    statusElement.style.color = '#28a745';
+                    containerElement.style.borderColor = '#28a745';
+                    containerElement.style.background = '#d4edda';
+                } else {
+                    statusElement.textContent = `❌ Ikke tilgjengelig (${data.error})`;
+                    statusElement.style.color = '#dc3545';
+                    containerElement.style.borderColor = '#dc3545';
+                    containerElement.style.background = '#f8d7da';
+                }
+            } catch (error) {
+                console.error('Kunne ikke sjekke HA-status:', error);
+                const statusElement = document.getElementById('ha-status-text');
+                statusElement.textContent = '⚠️ Ukjent';
+                statusElement.style.color = '#ffc107';
+            }
+        }
+        
+        // Sjekk HA-status ved oppstart og hver 30. sekund
+        checkHAStatus();
+        setInterval(checkHAStatus, 30000);
     </script>
     <script src="app.js"></script>
 </body>

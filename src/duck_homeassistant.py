@@ -52,7 +52,7 @@ def call_ha_service(domain, service, entity_id=None, data=None):
 
 def control_tv(action):
     """Kontroller Samsung TV via HA"""
-    entity = "media_player.samsung_tv"
+    entity = "media_player.samsung_8_series_65_ue65ru8005uxxc"
     
     actions = {
         "turn_on": ("media_player", "turn_on"),
@@ -74,6 +74,36 @@ def control_tv(action):
     extra_data = action_data[2] if len(action_data) > 2 else None
     
     return call_ha_service(domain, service, entity, extra_data)
+
+
+def launch_tv_app(app_name):
+    """Start en app på Samsung TV"""
+    entity = "media_player.samsung_8_series_65_ue65ru8005uxxc"
+    
+    # Samsung TV source names (from source_list)
+    apps = {
+        "netflix": "Netflix",
+        "youtube": "YouTube",
+        "disney": "Disney+",
+        "prime": "Prime Video",
+        "hbo": "HBO Max",
+        "spotify": "Spotify - Music and Podcasts",
+        "viaplay": "Viaplay",
+        "nrk": "NRK TV",
+        "plex": "Plex",
+        "twitch": "Twitch",
+        "skyshowtime": "SkyShowtime",
+        "appletv": "Apple TV",
+    }
+    
+    source = apps.get(app_name.lower())
+    if not source:
+        return f"Ukjent app: {app_name}. Tilgjengelige: {', '.join(apps.keys())}"
+    
+    # Samsung TV bruker select_source, ikke play_media
+    return call_ha_service("media_player", "select_source", entity, {
+        "source": source
+    })
 
 
 def control_ac(action, temperature=None, mode=None):
@@ -154,6 +184,313 @@ def control_vacuum(action):
     
     domain, service = actions[action]
     return call_ha_service(domain, service, entity)
+
+
+def control_twinkly(action, brightness=None, mode=None):
+    """Kontroller Twinkly LED-vegg via HA"""
+    light_entity = "light.otwinkley"
+    mode_entity = "select.otwinkley_mode"
+    
+    if action == "turn_on":
+        return call_ha_service("light", "turn_on", light_entity)
+    elif action == "turn_off":
+        return call_ha_service("light", "turn_off", light_entity)
+    elif action == "set_brightness" and brightness:
+        return call_ha_service("light", "turn_on", light_entity, 
+                              {"brightness_pct": brightness})
+    elif action == "set_mode" and mode:
+        # Modes: color, demo, effect, movie, off, playlist, rt
+        return call_ha_service("select", "select_option", mode_entity,
+                              {"option": mode})
+    else:
+        return f"Ugyldig Twinkly-kommando: {action}"
+
+
+def get_email_status(action="summary"):
+    """
+    Hent e-post status fra MS365 Mail
+    
+    Args:
+        action: "summary" (antall uleste), "latest" (siste e-post), "list" (siste 3)
+    
+    Returns:
+        str: E-post informasjon
+    """
+    if not HA_TOKEN:
+        return "Home Assistant token mangler"
+    
+    entity = "sensor.m365_mail_mail"
+    url = f"{HA_URL}/api/states/{entity}"
+    headers = {"Authorization": f"Bearer {HA_TOKEN}"}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        total_count = data.get('state', '0')
+        emails = data.get('attributes', {}).get('data', [])
+        
+        # Tell faktisk uleste e-poster
+        unread_emails = [e for e in emails if not e.get('is_read', True)]
+        unread_count = len(unread_emails)
+        
+        if action == "summary":
+            if unread_count > 0:
+                return f"Ja, du har {unread_count} uleste e-poster blant de {total_count} siste"
+            else:
+                return f"Nei, alle de {total_count} siste e-postene er lest"
+        
+        elif action == "latest" and emails:
+            latest = emails[0]
+            subject = latest.get('subject', 'Ingen emne')
+            sender = latest.get('sender', 'Ukjent')
+            received = latest.get('received', '')
+            is_read = latest.get('is_read', False)
+            
+            read_status = "lest" if is_read else "ulest"
+            return f"Siste e-post ({read_status}): '{subject}' fra {sender}"
+        
+        elif action == "list" and emails:
+            result = f"Siste {min(3, len(emails))} e-poster:\n"
+            for i, email in enumerate(emails[:3], 1):
+                subject = email.get('subject', 'Ingen emne')
+                sender = email.get('sender', 'Ukjent')
+                is_read = "✓" if email.get('is_read') else "✉"
+                result += f"{i}. {is_read} '{subject}' fra {sender}\n"
+            return result.strip()
+        
+        elif action == "read" and emails:
+            # Les innholdet i siste e-post
+            latest = emails[0]
+            subject = latest.get('subject', 'Ingen emne')
+            sender = latest.get('sender', 'Ukjent')
+            body_html = latest.get('body', '')
+            
+            if not body_html:
+                return "E-posten har ikke noe innhold tilgjengelig"
+            
+            # Rens HTML-tags
+            import re
+            clean_body = re.sub(r'<[^>]+>', '', body_html)
+            clean_body = clean_body.replace('&nbsp;', ' ').replace('&quot;', '"').replace('&amp;', '&')
+            clean_body = clean_body.strip()
+            
+            # Begrens lengde for TTS (maks ~500 tegn)
+            if len(clean_body) > 500:
+                clean_body = clean_body[:500] + "..."
+            
+            return f"E-post fra {sender} med emne '{subject}':\n\n{clean_body}"
+        
+        else:
+            return "Ingen e-poster funnet"
+            
+    except requests.exceptions.RequestException as e:
+        return f"❌ Kunne ikke hente e-post: {e}"
+
+
+def get_calendar_events(action="next", calendar="calendar.m365_calendar_calendar"):
+    """Hent kalenderavtaler fra M365 Calendar"""
+    try:
+        response = requests.get(
+            f"{HA_URL}/api/states/{calendar}",
+            headers={"Authorization": f"Bearer {HA_TOKEN}"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            state = data.get("state")
+            attributes = data.get("attributes", {})
+            
+            if action == "current":
+                # Vis pågående avtale
+                if state == "on":
+                    message = attributes.get("message", "Ukjent")
+                    start = attributes.get("start_time", "")
+                    end = attributes.get("end_time", "")
+                    location = attributes.get("location", "")
+                    loc_str = f" på {location}" if location else ""
+                    return f"Pågående: '{message}'{loc_str} (til {end})"
+                else:
+                    return "Ingen pågående avtaler nå"
+            
+            elif action == "next":
+                # Vis neste avtale
+                events = attributes.get("data", [])
+                if events and len(events) > 0:
+                    next_event = events[0]
+                    summary = next_event.get("summary", "Ukjent")
+                    start = next_event.get("start", "")
+                    location = next_event.get("location", "")
+                    loc_str = f" på {location}" if location else ""
+                    return f"Neste avtale: '{summary}'{loc_str} ({start})"
+                else:
+                    return "Ingen kommende avtaler"
+            
+            elif action == "today":
+                # Vis avtaler i dag
+                events = attributes.get("data", [])
+                if events:
+                    event_list = []
+                    for event in events[:5]:  # Max 5 avtaler
+                        summary = event.get("summary", "Ukjent")
+                        start = event.get("start", "")
+                        event_list.append(f"  - {summary} ({start})")
+                    return f"Avtaler i dag:\n" + "\n".join(event_list)
+                else:
+                    return "Ingen avtaler i dag"
+        
+        return f"❌ Kunne ikke hente kalender: {response.status_code}"
+    except Exception as e:
+        return f"❌ Feil ved henting av kalender: {str(e)}"
+
+
+def create_calendar_event(summary, start_datetime, end_datetime, description=None, location=None, calendar="calendar.m365_calendar_calendar"):
+    """Opprett ny kalenderavtale i M365"""
+    try:
+        data = {
+            "summary": summary,
+            "start_date_time": start_datetime,
+            "end_date_time": end_datetime
+        }
+        
+        if description:
+            data["description"] = description
+        if location:
+            data["location"] = location
+        
+        result = call_ha_service(
+            "calendar",
+            "create_event",
+            calendar,
+            data
+        )
+        
+        return result
+    except Exception as e:
+        return f"❌ Feil ved opprettelse av avtale: {str(e)}"
+
+
+def manage_todo(action="list", item=None, todo_list="todo.m365_todo_tasks"):
+    """Administrer To Do-liste i M365"""
+    try:
+        if action == "list":
+            # Hent alle items fra state attributes
+            response = requests.get(
+                f"{HA_URL}/api/states/{todo_list}",
+                headers={"Authorization": f"Bearer {HA_TOKEN}"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                state = data.get("state", "0")
+                return f"Handlelisten har {state} items"
+        
+        elif action == "add" and item:
+            # Legg til item
+            result = call_ha_service(
+                "todo",
+                "add_item",
+                todo_list,
+                {"item": item}
+            )
+            return result
+        
+        elif action == "remove" and item:
+            # Fjern item
+            result = call_ha_service(
+                "todo",
+                "remove_item",
+                todo_list,
+                {"item": item}
+            )
+            return result
+        
+        elif action == "complete" and item:
+            # Marker som fullført
+            result = call_ha_service(
+                "todo",
+                "update_item",
+                todo_list,
+                {"item": item, "status": "completed"}
+            )
+            return result
+        
+        elif action == "clear":
+            # Fjern alle fullførte items
+            result = call_ha_service(
+                "todo",
+                "remove_completed_items",
+                todo_list,
+                {}
+            )
+            return result
+        
+        return "❌ Ugyldig handling eller mangler item-navn"
+    except Exception as e:
+        return f"❌ Feil ved To Do: {str(e)}"
+
+
+def get_teams_status():
+    """Hent Teams-status"""
+    try:
+        response = requests.get(
+            f"{HA_URL}/api/states/sensor.m365_teams_status",
+            headers={"Authorization": f"Bearer {HA_TOKEN}"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            status = data.get("state", "Ukjent")
+            
+            # Oversett status til norsk
+            status_map = {
+                "Available": "Tilgjengelig",
+                "Busy": "Opptatt",
+                "DoNotDisturb": "Ikke forstyrr",
+                "BeRightBack": "Straks tilbake",
+                "Away": "Borte",
+                "Offline": "Frakoblet"
+            }
+            
+            norwegian_status = status_map.get(status, status)
+            return f"Teams-status: {norwegian_status}"
+        
+        return f"❌ Kunne ikke hente Teams-status: {response.status_code}"
+    except Exception as e:
+        return f"❌ Feil ved henting av Teams-status: {str(e)}"
+
+
+def get_teams_chat():
+    """Hent siste Teams-melding"""
+    try:
+        response = requests.get(
+            f"{HA_URL}/api/states/sensor.m365_teams_chat",
+            headers={"Authorization": f"Bearer {HA_TOKEN}"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            attributes = data.get("attributes", {})
+            
+            from_name = attributes.get("from_display_name", "Ukjent")
+            content = attributes.get("content", "")
+            importance = attributes.get("importance", "normal")
+            
+            # Rens HTML-tags fra innhold
+            import re
+            clean_content = re.sub(r'<[^>]+>', '', content)
+            clean_content = clean_content.replace('&nbsp;', ' ').strip()
+            
+            if clean_content:
+                importance_str = " (viktig!)" if importance == "high" else ""
+                return f"Siste Teams-melding{importance_str}:\nFra: {from_name}\n{clean_content}"
+            else:
+                return "Ingen Teams-meldinger funnet"
+        
+        return f"❌ Kunne ikke hente Teams-chat: {response.status_code}"
+    except Exception as e:
+        return f"❌ Feil ved henting av Teams-chat: {str(e)}"
 
 
 def control_blinds(action, room=None, position=None):

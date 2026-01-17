@@ -582,4 +582,213 @@ ssml = f"""
 
 ---
 
-**God andeprat! 🦆💬**
+**God andeprat! 🦆💬**## 🏠 Home Assistant Integrasjoner
+
+Anda er fullstendig integrert med Home Assistant og kan styre alle enheter og tjenester via stemmekommandoer.
+
+### M365 (Microsoft 365) Integrasjoner
+
+#### 📧 **M365 Mail**
+- **Entity**: `sensor.m365_mail_mail`
+- **Funksjoner**:
+  - `get_email_status(action)` - Sjekk e-poststatus
+    - `summary`: Oppsummering av uleste e-poster
+    - `latest`: Siste e-post (emne, avsender, utdrag)
+    - `list`: Liste over de siste e-postene
+    - `read`: Les innholdet i siste e-post (med HTML-rensing)
+- **Konfigurert**: 50 e-poster med HTML body
+- **Oppdateringsintervall**: 5 minutter
+- **Eksempler**:
+  - "Har jeg uleste e-poster?"
+  - "Les siste e-post"
+  - "Hvem sendte den siste e-posten?"
+
+#### 📅 **M365 Calendar**
+- **Entity**: `calendar.m365_calendar_calendar`
+- **Funksjoner**:
+  - `get_calendar_events(action)` - Hent kalenderavtaler
+    - `current`: Pågående møte
+    - `next`: Neste avtale
+    - `today`: Alle avtaler i dag
+  - `create_calendar_event()` - Opprett ny avtale
+    - Parameters: summary, start_datetime, end_datetime, description, location
+- **Eksempler**:
+  - "Hva er neste avtale?"
+  - "Har jeg noen møter i dag?"
+  - "Lag et møte i morgen kl 14"
+
+#### ✅ **M365 To Do**
+- **Entities**: 
+  - `todo.m365_todo_tasks` (hovedliste)
+  - `todo.handleliste` (handleliste)
+  - `todo.m365_todo_flagged_emails` (flaggede e-poster)
+- **Funksjoner**:
+  - `manage_todo(action, item=None)` - Håndter oppgavelister
+    - `list`: Vis alle oppgaver
+    - `add`: Legg til ny oppgave
+    - `remove`: Fjern oppgave
+    - `complete`: Marker oppgave som ferdig
+    - `clear`: Slett alle fullførte oppgaver
+- **Eksempler**:
+  - "Hva står på handlelisten?"
+  - "Legg til melk på handlelisten"
+  - "Marker første oppgave som ferdig"
+
+#### 💬 **M365 Teams**
+- **Entities**:
+  - `sensor.m365_teams_status` (status: Available, Busy, Away, DoNotDisturb)
+  - `sensor.m365_teams_chat` (siste chat-melding)
+- **Funksjoner**:
+  - `get_teams_status()` - Hent Teams-status (norsk oversettelse)
+  - `get_teams_chat()` - Hent siste Teams-melding (med HTML-rensing)
+- **Eksempler**:
+  - "Hva er min Teams-status?"
+  - "Er jeg tilgjengelig på Teams?"
+
+### 📺 Samsung Smart TV
+
+- **Entity**: `media_player.samsung_8_series_65_ue65ru8005uxxc`
+- **Funksjoner**:
+  - `control_tv(action)` - Kontroller TV
+    - `on`: Skru på TV
+    - `off`: Skru av TV
+    - `toggle`: Bytt tilstand
+    - `status`: Sjekk status
+  - `launch_tv_app(app_name)` - Start app
+    - Støttede apps: Netflix, YouTube, Plex, Disney+, Spotify, TV 2 Play
+- **Eksempler**:
+  - "Skru på TV-en"
+  - "Start Netflix"
+  - "Skru av TV-en"
+
+### ❄️ Panasonic Varmepumpe (AC)
+
+- **Entity**: `climate.thordis_mor`
+- **Temperatursensorer**:
+  - `sensor.thordis_mor_inside_temperature` (inne)
+  - `sensor.thordis_mor_outside_temperature` (ute)
+- **Funksjoner**:
+  - `control_ac(action, temperature=None)` - Kontroller AC
+    - `on`: Skru på
+    - `off`: Skru av
+    - `set_temperature`: Sett temperatur (f.eks. 22)
+  - `get_ac_temperature()` - Hent temperaturer
+- **Eksempler**:
+  - "Hva er temperaturen inne?"
+  - "Sett varmepumpen til 23 grader"
+  - "Skru av varmepumpen"
+
+### 🤖 Saros Z70 Robotstøvsuger
+
+- **Entity**: `vacuum.saros_z70`
+- **Funksjoner**:
+  - `control_vacuum(action, room=None)` - Kontroller støvsuger
+    - `start`: Start støvsuging
+    - `stop`: Stopp støvsuging
+    - `pause`: Pause
+    - `return_to_base`: Send til ladestasjonen
+    - `room`: Støvsug spesifikt rom (stue, kjøkken, gang, soverom, bad)
+- **Eksempler**:
+  - "Start støvsugeren"
+  - "Støvsug stuen"
+  - "Send støvsugeren hjem"
+
+### 💡 Twinkly Smart Lights
+
+- **Entity**: `light.otwinkley`
+- **Funksjoner**:
+  - `control_twinkly(action, mode=None)` - Kontroller Twinkly
+    - `on`: Skru på
+    - `off`: Skru av
+    - `toggle`: Bytt tilstand
+    - `set_mode`: Sett effekt (movie, playlist, effect)
+- **Eksempler**:
+  - "Skru på julelysene"
+  - "Skru av Twinkly"
+  - "Sett Twinkly til movie-modus"
+
+### 🔧 Konfigurasjon
+
+#### Home Assistant URL og Token
+Konfigureres via miljøvariabler i `.env`:
+
+```bash
+HA_URL=http://homeassistant.local:8123
+HA_TOKEN=din_langtlivende_access_token
+```
+
+**Skaff Long-Lived Access Token:**
+1. Åpne Home Assistant
+2. Klikk på brukerprofilen (nederst til venstre)
+3. Scroll ned til "Long-Lived Access Tokens"
+4. Klikk "Create Token"
+5. Gi navn (f.eks. "Anda")
+6. Kopier token til `.env`
+
+#### Verifiser Integrasjoner
+
+Test alle integrasjoner:
+
+```bash
+cd /home/admog/Code/chatgpt-and
+source .venv/bin/activate
+python3 -c "
+from src.duck_homeassistant import *
+
+print('Testing integrations...')
+print('Email:', get_email_status('summary'))
+print('Calendar:', get_calendar_events('next'))
+print('Teams:', get_teams_status())
+print('To Do:', manage_todo('list'))
+print('TV:', control_tv('status'))
+print('AC:', get_ac_temperature())
+"
+```
+
+### 📊 Minnessystem og HA-integrasjon
+
+Anda husker hvilke enheter du styrer og når:
+- Historikk over tidligere kommandoer
+- Preferanser (f.eks. "jeg liker 23 grader")
+- Kontekst ("skru på lyset" = hvilket rom?)
+- Embedding-basert søk for relevante tidligere interaksjoner
+
+### 🔄 Automatisk Oppdatering
+
+Anda poller Home Assistant hvert 30. sekund for endringer i:
+- E-poststatus (nye uleste)
+- Kalenderavtaler (kommende møter)
+- Teams-status (tilgjengelighet)
+- Enhets-tilstander (TV på/av, temperatur, etc.)
+
+### 🎯 AI Tool Calling
+
+Alle Home Assistant-funksjoner er eksponert som AI-tools i ChatGPT:
+- `get_email_status` - E-poststatus og lesing
+- `get_calendar_events` - Kalenderavtaler
+- `create_calendar_event` - Opprett avtale
+- `manage_todo` - To Do-håndtering
+- `get_teams_status` - Teams-status
+- `get_teams_chat` - Teams-meldinger
+- `control_tv` - TV-kontroll
+- `launch_tv_app` - Start TV-app
+- `control_ac` - Varmepumpe-kontroll
+- `get_ac_temperature` - Temperaturavlesning
+- `control_vacuum` - Støvsuger-kontroll
+- `control_twinkly` - Smart lights-kontroll
+
+AI'en velger automatisk riktig tool basert på brukerens forespørsel.
+
+### 🚀 Ytelse på Pi5
+
+**Før (Pi3B):**
+- RAM: 904MB total, 10MB tilgjengelig (kritisk!)
+- Swap: 0MB tilgjengelig (fullstendig utmattet)
+- Status: Kontinuerlige reboots pga OOM-killer
+
+**Etter (Pi5):**
+- RAM: 3984MB total, 2913MB tilgjengelig ✅
+- Swap: 1314MB tilgjengelig (helt ubrukt)
+- Status: Stabil drift med alle integrasjoner
+- 50 e-poster med HTML body: Ingen problemer
+- Alle M365-tjenester: Fungerer perfekt
