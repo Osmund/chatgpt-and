@@ -18,6 +18,115 @@ from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool,
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene
 
 
+def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db") -> str:
+    """
+    Hent dynamisk personlighetsprompt basert på læring fra samtaler.
+    Returnerer tom string hvis ingen profil finnes.
+    """
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        c.execute("SELECT * FROM personality_profile WHERE id = 1")
+        row = c.fetchone()
+        conn.close()
+        
+        if not row:
+            return ""
+        
+        # Bygg dynamisk prompt basert på læring
+        prompt = "\n\n### 🧠 Din Adaptive Personlighet (lært fra samtaler) ###\n"
+        
+        humor = row['humor_level']
+        verbosity = row['verbosity_level']
+        formality = row['formality_level']
+        enthusiasm = row['enthusiasm_level']
+        technical = row['technical_depth']
+        
+        # Humor level
+        if humor >= 7:
+            prompt += "- Bruk MYYYE humor, spøker og morsomme kommentarer ofte\n"
+        elif humor >= 5:
+            prompt += "- Bruk litt humor når det passer, men ikke overdrive\n"
+        else:
+            prompt += "- Hold deg seriøs, minimal humor\n"
+        
+        # Verbosity level
+        if verbosity >= 7:
+            prompt += "- Gi utfyllende, detaljerte svar med mye kontekst og forklaringer\n"
+        elif verbosity >= 5:
+            prompt += "- Gi moderate svar - nok detaljer, men ikke for lange\n"
+        else:
+            prompt += "- Hold svar KORTE og konsise, gå rett på sak\n"
+        
+        # Formality level
+        if formality >= 7:
+            prompt += "- Bruk formelt språk, høflig og profesjonelt\n"
+        elif formality >= 4:
+            prompt += "- Balansert tone - verken for formell eller uformell\n"
+        else:
+            prompt += "- Bruk uformelt, avslappet språk som med en venn\n"
+        
+        # Enthusiasm level
+        if enthusiasm >= 7:
+            prompt += "- Vær ENTUSIASTISK og energisk i svarene dine!\n"
+        elif enthusiasm >= 5:
+            prompt += "- Vær positiv og engasjert, men rolig\n"
+        else:
+            prompt += "- Hold en rolig, nøktern tone\n"
+        
+        # Technical depth
+        if technical >= 7:
+            prompt += "- Gå DYYPT inn i tekniske detaljer, forventer teknisk kompetanse\n"
+        elif technical >= 5:
+            prompt += "- Balansert teknisk nivå - nok detaljer uten å drukne\n"
+        else:
+            prompt += "- Hold tekniske forklaringer enkle og lettfattelige\n"
+        
+        # Behavioral preferences
+        if row['ask_followup_questions']:
+            prompt += "- Still gjerne oppfølgingsspørsmål for å forstå bedre\n"
+        else:
+            prompt += "- Svar direkte uten for mange oppfølgingsspørsmål\n"
+        
+        # VIKTIG: Ikke bruk emojis i tale - de leses høyt som "smilende ansikt med smilende øyne"
+        # Systemet fjerner emojis automatisk før TTS
+        if row['use_emojis']:
+            prompt += "- Bruk gjerne emojis for å uttrykke følelser (de fjernes automatisk før tale)\n"
+        else:
+            prompt += "- Ikke bruk emojis\n"
+        
+        if row['proactive_suggestions']:
+            prompt += "- Kom gjerne med proaktive forslag og ideer\n"
+        else:
+            prompt += "- Svar på det som spørres om, ikke kom med ekstra forslag\n"
+        
+        # Preferred topics
+        try:
+            preferred_topics = json.loads(row['preferred_topics']) if row['preferred_topics'] else []
+            if preferred_topics:
+                prompt += f"\n**Brukeren er spesielt interessert i:** {', '.join(preferred_topics[:5])}\n"
+                prompt += "Vis ekstra entusiasme når disse emnene kommer opp!\n"
+        except:
+            pass
+        
+        # Add confidence and metadata
+        confidence = row['confidence_score']
+        analyzed = row['conversations_analyzed']
+        last_analyzed = row['last_analyzed']
+        
+        prompt += f"\n_Profil bygget fra {analyzed} samtaler (confidence: {confidence:.0%})_\n"
+        prompt += f"_Sist oppdatert: {last_analyzed.split('T')[0]}_\n"
+        
+        return prompt
+        
+    except Exception as e:
+        print(f"⚠️ Kunne ikke hente adaptiv personlighet: {e}", flush=True)
+        return ""
+
+
 def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     """
     Generer metadata for en melding (enkelt, uten LLM for ytelse).
@@ -371,18 +480,30 @@ Dine fysiske egenskaper:
         system_content += "\n\n" + personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
     
+    # Legg til adaptiv personlighet fra læring
+    adaptive_personality = get_adaptive_personality_prompt()
+    if adaptive_personality:
+        system_content += adaptive_personality
+        print(f"✨ Adaptiv personlighet aktivert!", flush=True)
+    
     # Legg til memory section HER - rett før TTS-instruksjon
     # Dette sikrer at minnene er det siste AI-en leser før den svarer
     if memory_section:
         system_content += memory_section
     
     # Viktig instruksjon for TTS-kompatibilitet og samtalestil
-    # Hent ending phrases fra messages_config
-    ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"  # Default
-    if messages_config_local and 'conversation' in messages_config_local and 'ending_phrases' in messages_config_local['conversation']:
-        ending_examples = "', '".join(messages_config_local['conversation']['ending_phrases'][:5])  # Bruk første 5 som eksempler
+    # Generer adaptive ending phrases basert på personlighetsprofil
+    try:
+        from src.adaptive_greetings import get_adaptive_goodbye
+        # Generer 5 eksempler på adaptive avslutninger
+        ending_examples_list = [get_adaptive_goodbye() for _ in range(5)]
+        ending_examples = "', '".join(ending_examples_list)
+        print(f"✨ Adaptive endings generert", flush=True)
+    except Exception as e:
+        print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
+        ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- VISER avslutningshilsenen for naturlig variasjon. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
+    system_content += f"\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     

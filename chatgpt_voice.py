@@ -25,6 +25,7 @@ from src.duck_speech import wait_for_wake_word, recognize_speech_from_mic
 from src.duck_music import play_song
 from src.duck_conversation import check_ai_queries, ask_for_user_switch, is_conversation_ending
 from src.duck_ai import chatgpt_query, generate_message_metadata
+from src.adaptive_greetings import get_adaptive_greeting, get_adaptive_goodbye
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -235,16 +236,17 @@ def main():
                 speak(external_message, speech_config, beak)
                 continue
         else:
-            # Normal wake word - si hilsen
-            greeting_msg = messages_config['conversation']['greeting']
-            
+            # Normal wake word - si adaptiv hilsen
             # Hent nåværende bruker fra user_manager
             if user_manager:
                 current_user = user_manager.get_current_user()
                 user_name = current_user['display_name']
-                greeting_msg = greeting_msg.replace('{name}', user_name)
             else:
-                greeting_msg = greeting_msg.replace('{name}', 'på du')
+                user_name = 'på du'
+            
+            # Generer adaptiv hilsen basert på personlighetsprofil
+            greeting_msg = get_adaptive_greeting(user_name=user_name)
+            print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
         
@@ -308,17 +310,20 @@ def main():
                 reply_upper = reply.upper()
                 ai_wants_to_end = "[AVSLUTT]" in reply_upper or " AVSLUTT" in reply_upper or reply_upper.endswith("AVSLUTT")
                 
-                # Fjern AVSLUTT markør før TTS
+                # Fjern AVSLUTT markør
                 import re
-                reply_for_speech = re.sub(r'\[?AVSLUTT\]?\.?', '', reply, flags=re.IGNORECASE).strip()
-                reply_for_speech = ' '.join(reply_for_speech.split())
+                reply_clean = re.sub(r'\[?AVSLUTT\]?\.?', '', reply, flags=re.IGNORECASE).strip()
+                reply_clean = ' '.join(reply_clean.split())
                 
-                print("ChatGPT svar:", reply_for_speech, flush=True)
+                # For TTS: fjern også emojis (de leses høyt som "smilende ansikt med smilende øyne")
+                reply_for_speech = re.sub(r'[😀😁😂😃😄😅😆😇😈😉😊😋😌😍😎😏😐😑😒😓😔😕😖😗😘😙😚😛😜😝😞😟😠😡😢😣😤😥😦😧😨😩😪😫😬😭😮😯😰😱😲😳😴😵😶😷😸😹😺😻😼😽😾😿🙀🙁🙂🙃🙄🙅🙆🙇🙈🙉🙊🙋🙌🙍🙎🙏✨💡🎉🎭👍👎💬🔧📚🎯🚀✅❌⚠️🏠🌡️💻📱⏰🔔🎵🎶📧📅✉️🔥💪🤔🤗🤩🥳🤪🤨🤯🤬😺🎃👻💀☠️👽🤖💩🦆🐦🐤]', '', reply_clean).strip()
+                
+                print("ChatGPT svar:", reply_clean, flush=True)  # Logg med emojis
                 if ai_wants_to_end:
                     print("🔚 AI detekterte samtale-avslutning", flush=True)
                 
-                speak(reply_for_speech, speech_config, beak)
-                messages.append({"role": "assistant", "content": reply_for_speech})
+                speak(reply_for_speech, speech_config, beak)  # TTS uten emojis
+                messages.append({"role": "assistant", "content": reply_clean})  # Historikk med emojis
                 
                 # Lagre melding til memory database
                 if memory_manager and user_manager:
