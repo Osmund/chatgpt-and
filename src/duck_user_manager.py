@@ -94,6 +94,24 @@ class UserManager:
         with open(self.session_file, 'w') as f:
             json.dump(session, f, indent=2)
     
+    def get_primary_user(self) -> Dict:
+        """
+        Hent primary user (eieren av systemet)
+        Default: Osmund
+        
+        Returns:
+            {
+                'username': str,
+                'display_name': str,
+                'relation': str
+            }
+        """
+        return {
+            'username': 'Osmund',
+            'display_name': 'Osmund',
+            'relation': 'owner'
+        }
+    
     def switch_user(self, username: str, display_name: str = None, relation: str = None) -> bool:
         """
         Bytt til annen bruker

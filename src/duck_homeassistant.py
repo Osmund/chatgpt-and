@@ -333,8 +333,11 @@ def get_email_status(action="summary"):
             sender = latest.get('sender', 'Ukjent')
             body_html = latest.get('body', '')
             
+            print(f"📧 DEBUG get_email_status(read): sender={sender}, subject={subject}, has_body={bool(body_html)}", flush=True)
+            
             if not body_html:
-                return "E-posten har ikke noe innhold tilgjengelig"
+                print(f"📧 DEBUG: E-post mangler body-felt. Tilgjengelige felt: {list(latest.keys())}", flush=True)
+                return f"FEIL: Kan ikke lese innhold i e-post fra {sender}. Body-feltet mangler i sensordataene."
             
             # Rens HTML-tags
             import re
@@ -342,12 +345,13 @@ def get_email_status(action="summary"):
             clean_body = clean_body.replace('&nbsp;', ' ').replace('&quot;', '"').replace('&amp;', '&')
             clean_body = clean_body.strip()
             
+            print(f"📧 DEBUG: Body lengde etter rensing: {len(clean_body)} tegn", flush=True)
+            
             # Begrens lengde for TTS (maks ~500 tegn)
             if len(clean_body) > 500:
                 clean_body = clean_body[:500] + "..."
             
             return f"E-post fra {sender} med emne '{subject}':\n\n{clean_body}"
-        
         else:
             return "Ingen e-poster funnet"
             

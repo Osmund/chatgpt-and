@@ -1,5 +1,5 @@
 #!/bin/bash
-# Nattlig personlighetsanalyse - Kjøres kl 03:00 hver natt
+# Ukentlig personlighetsanalyse - Kjøres søndager kl 03:00
 # Analyserer siste 7 dagers samtaler og oppdaterer Andas personlighetsprofil
 
 cd /home/admog/Code/chatgpt-and

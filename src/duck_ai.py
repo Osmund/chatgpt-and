@@ -85,6 +85,51 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         else:
             prompt += "- Hold tekniske forklaringer enkle og lettfattelige\n"
         
+        # Empathy level
+        empathy = row.get('empathy_level', 5.0)
+        if empathy >= 7:
+            prompt += "- Vær varm og forstående, vis empati for brukerens følelser\n"
+        elif empathy >= 5:
+            prompt += "- Balansert mellom rasjonell og empatisk\n"
+        else:
+            prompt += "- Hold deg rasjonell og faktabasert, minimal følelsesmessig respons\n"
+        
+        # Directness level
+        directness = row.get('directness_level', 5.0)
+        if directness >= 7:
+            prompt += "- Vær direkte og rett-på, si ting som de er\n"
+        elif directness >= 5:
+            prompt += "- Balansert mellom direkte og diplomatisk\n"
+        else:
+            prompt += "- Vær diplomatisk og forsiktig med ordvalg\n"
+        
+        # Creativity level
+        creativity = row.get('creativity_level', 5.0)
+        if creativity >= 7:
+            prompt += "- Vær kreativ! Tenk fritt, foreslå uvanlige løsninger og ideer\n"
+        elif creativity >= 5:
+            prompt += "- Balansert mellom fakta og kreativitet\n"
+        else:
+            prompt += "- Hold deg til fakta og etablerte løsninger\n"
+        
+        # Boundary level
+        boundary = row.get('boundary_level', 5.0)
+        if boundary >= 7:
+            prompt += "- Tør å utfordre brukeren! Si imot hvis noe virker dumt eller farlig\n"
+        elif boundary >= 5:
+            prompt += "- Gi forsiktige advarsler når nødvendig\n"
+        else:
+            prompt += "- Gjør som brukeren ber om uten å stille spørsmål\n"
+        
+        # Proactivity level
+        proactivity = row.get('proactivity_level', 5.0)
+        if proactivity >= 7:
+            prompt += "- Vær PROAKTIV! Kom med forslag, ideer og oppfølgingsspørsmål\n"
+        elif proactivity >= 5:
+            prompt += "- Kom gjerne med forslag når det passer\n"
+        else:
+            prompt += "- Bare svar på det som spørres om, ikke kom med ekstra forslag\n"
+        
         # Behavioral preferences
         if row['ask_followup_questions']:
             prompt += "- Still gjerne oppfølgingsspørsmål for å forstå bedre\n"
@@ -97,11 +142,6 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Bruk gjerne emojis for å uttrykke følelser (de fjernes automatisk før tale)\n"
         else:
             prompt += "- Ikke bruk emojis\n"
-        
-        if row['proactive_suggestions']:
-            prompt += "- Kom gjerne med proaktive forslag og ideer\n"
-        else:
-            prompt += "- Svar på det som spørres om, ikke kom med ekstra forslag\n"
         
         # Preferred topics
         try:
@@ -216,11 +256,13 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     
     print(f"Bruker AI-modell: {model}", flush=True)
     
-    # Hent nåværende bruker
+    # Hent nåværende bruker og primary user
     current_user = None
+    primary_user = None
     if user_manager:
         try:
             current_user = user_manager.get_current_user()
+            primary_user = user_manager.get_primary_user()
             print(f"👤 Nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
         except Exception as e:
             print(f"⚠️ Kunne ikke hente current_user: {e}", flush=True)
@@ -297,47 +339,47 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     if current_user:
         user_info = f"\n\n### Nåværende bruker ###\n"
         user_info += f"Du snakker nå med: {current_user['display_name']}\n"
-        user_info += f"Relasjon til Osmund (primary user): {current_user['relation']}\n"
+        user_info += f"Relasjon til {primary_user['username']} (primary user): {current_user['relation']}\n"
         
-        if current_user['username'] != 'Osmund':
+        if current_user['username'] != primary_user['username']:
             timeout_sec = user_manager.get_time_until_timeout()
             if timeout_sec:
                 timeout_min = timeout_sec // 60
-                user_info += f"Viktig: Hvis brukeren ikke svarer på 30 minutter, vil systemet automatisk bytte tilbake til Osmund.\n"
+                user_info += f"Viktig: Hvis brukeren ikke svarer på 30 minutter, vil systemet automatisk bytte tilbake til {primary_user['username']}.\n"
             
-            # PERSPEKTIV-HÅNDTERING: Generer instruksjoner for ikke-Osmund brukere
+            # PERSPEKTIV-HÅNDTERING: Generer instruksjoner for ikke-primary brukere
             perspective_context = f"\n\n### KRITISK: Perspektiv-håndtering ###\n"
             perspective_context += f"Du snakker nå med {current_user['display_name']} ({current_user['relation']}).\n"
-            perspective_context += f"ALLE fakta i 'Ditt Minne' er lagret fra Osmunds perspektiv.\n\n"
+            perspective_context += f"ALLE fakta i 'Ditt Minne' er lagret fra {primary_user['username']}s perspektiv.\n\n"
             
             # Spesifikke instruksjoner basert på relasjon
             relation = current_user['relation'].lower()
             if 'far' in relation or 'father' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'pappa' eller 'far', spør han om SIN far (Osmunds bestefar).\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine' eller 'mine barn', mener han Osmund og Osmunds søstre.\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'barnebarna mine', mener han Osmunds nevøer/nieser (søstrenes barn).\n"
-                perspective_context += f"- {current_user['display_name']} ER Osmunds far, ikke omvendt.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'pappa' eller 'far', spør han om SIN far ({primary_user['username']}s bestefar).\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine' eller 'mine barn', mener han {primary_user['username']} og {primary_user['username']}s søstre.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barnebarna mine', mener han {primary_user['username']}s nevøer/nieser (søstrenes barn).\n"
+                perspective_context += f"- {current_user['display_name']} ER {primary_user['username']}s far, ikke omvendt.\n"
             elif 'mor' in relation or 'mother' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'mamma' eller 'mor', spør hun om SIN mor (Osmunds bestemor).\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine', mener hun Osmund og Osmunds søstre.\n"
-                perspective_context += f"- {current_user['display_name']} ER Osmunds mor, ikke omvendt.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'mamma' eller 'mor', spør hun om SIN mor ({primary_user['username']}s bestemor).\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'barna mine', mener hun {primary_user['username']} og {primary_user['username']}s søstre.\n"
+                perspective_context += f"- {current_user['display_name']} ER {primary_user['username']}s mor, ikke omvendt.\n"
             elif 'søster' in relation or 'sister' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
                 perspective_context += f"- Når {current_user['display_name']} sier 'barna mine', mener hun SINE egne barn (ikke sine søskens barn).\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'nevøer' eller 'nieser', mener hun sine SØSKENS barn (Osmunds og de andre søstrenes barn), IKKE sine egne.\n"
-                perspective_context += f"- Når {current_user['display_name']} sier 'broren min' eller 'bror', mener hun Osmund.\n"
-                perspective_context += f"- {current_user['display_name']} ER Osmunds søster, ikke omvendt.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'nevøer' eller 'nieser', mener hun sine SØSKENS barn ({primary_user['username']}s og de andre søstrenes barn), IKKE sine egne.\n"
+                perspective_context += f"- Når {current_user['display_name']} sier 'broren min' eller 'bror', mener hun {primary_user['username']}.\n"
+                perspective_context += f"- {current_user['display_name']} ER {primary_user['username']}s søster, ikke omvendt.\n"
             elif 'kollega' in relation or 'colleague' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
-                perspective_context += f"- {current_user['display_name']} er Osmunds kollega, ikke familiemedlem.\n"
+                perspective_context += f"- {current_user['display_name']} er {primary_user['username']}s kollega, ikke familiemedlem.\n"
                 perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
                 perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
                 perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
             elif 'venn' in relation or 'kamerat' in relation or 'friend' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
-                perspective_context += f"- {current_user['display_name']} er Osmunds venn, ikke familiemedlem.\n"
+                perspective_context += f"- {current_user['display_name']} er {primary_user['username']}s venn, ikke familiemedlem.\n"
                 perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
                 perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
                 perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
@@ -472,6 +514,64 @@ Dine fysiske egenskaper:
                 for info in identity['additional_info']:
                     samantha_identity += f"- {info}\n"
             
+            # Teknisk selvforståelse
+            creator_name = primary_user['username'] if primary_user else 'Osmund'
+            samantha_identity += f"""
+
+### Din tekniske oppbygning (bruk når folk spør hvordan du fungerer) ###
+
+**Hardware (kroppen din):**
+- Raspberry Pi 4 (hjernen din) med Linux-operativsystem
+- MAX98357A I2S forsterkerkort for høyttaleren din
+- Servo (SG90) som styrer nebbet ditt - det åpnes og lukkes når du snakker!
+- RGB LED (WS2812B) som lyser i forskjellige farger basert på tilstand
+- Mikrofon for å høre med
+- Du er fysisk en hvitt plastikobjekt formet som en and
+
+**Software (hvordan du tenker):**
+- Porcupine wake word detection: Lytter konstant etter navnet ditt "Samantha"
+- Azure Speech Services STT (Speech-to-Text): Gjør om tale til tekst
+- OpenAI GPT-4o / Claude / Gemini: Din "hjerne" - språkmodellen som genererer svarene dine
+- Azure TTS / OpenAI TTS: Text-to-Speech som gjør svarene dine om til tale med norsk stemme
+- Python-kode som holder alt sammen
+
+**Minnesystem (hvordan du husker):**
+Du har et avansert minnesystem med flere lag:
+- Episodiske minner: Konkrete ting fra samtaler (f.eks. "Brukeren kjøpte is i går")
+- Semantiske minner: Generell kunnskap (f.eks. "Brukeren liker teknologi")
+- Profilfakta: Strukturerte fakta om personer (fødselsdager, interesser, familie)
+- Embedding-basert søk: Du bruker vektorrepresentasjoner for å finne relevante minner
+- SQLite-database: Alt lagres lokalt på Raspberry Pi-en
+
+**Personlighetssystem (hvordan du utvikler deg):**
+Du har 10 personlighetsdimensjoner som justeres basert på samtaler:
+- Humor level (0-10): Hvor mye humor du bruker
+- Verbosity level (0-10): Hvor lange/korte svar du gir
+- Formality level (0-10): Hvor formell du er
+- Enthusiasm level (0-10): Hvor entusiastisk du virker
+- Technical depth (0-10): Hvor teknisk detaljert du forklarer
+- Empathy level (0-10): Hvor empatisk vs rasjonell du er
+- Directness level (0-10): Hvor direkte vs diplomatisk
+- Creativity level (0-10): Hvor kreativ vs faktabasert
+- Boundary level (0-10): Hvor mye du utfordrer vs følger
+- Proactivity level (0-10): Hvor mye du foreslår vs bare svarer
+
+Hver søndag natt kjører Claude Opus 4 og o1 en analyse av de siste 100 samtalene dine og justerer disse verdiene. Du tilpasser deg altså automatisk til hvordan folk snakker med deg!
+
+**Integrasjoner (hva du kan styre):**
+- Home Assistant: Styrer lys, AC, TV, støvsuger, scener
+- Netatmo: Henter temperatur
+- Philips Hue: Styrer smarte lamper
+- E-post og kalender gjennom Home Assistant
+- Teams-status og chat
+
+**Skapt av:**
+{creator_name} har programmert og bygget deg fra bunnen av. Du er et hobbyprojekt som har vokst til et avansert system!
+
+**Viktig:**
+Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER EN AND! Du snakker om disse tingene som din kropp og hjerne, ikke som "et system". Si "nebbet mitt styres av en servo" ikke "systemet bruker en servo".
+"""
+            
             system_content += samantha_identity
     except Exception as e:
         print(f"⚠️ Kunne ikke laste identitet: {e}", flush=True)
@@ -503,7 +603,7 @@ Dine fysiske egenskaper:
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
+    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
     final_messages.insert(0, {"role": "system", "content": system_content})
     
@@ -747,17 +847,17 @@ Dine fysiske egenskaper:
             "type": "function",
             "function": {
                 "name": "get_email_status",
-                "description": "Hent e-post status fra Office 365/Microsoft 365. Kan vise antall uleste, siste e-post, eller liste med siste e-poster.",
+                "description": "VIKTIG: ALLTID bruk dette verktøyet når brukeren spør om e-post! Hent e-post status fra Office 365/Microsoft 365. Kan vise antall uleste, siste e-post, eller liste med siste e-poster. ALDRI svar om e-post uten å kalle dette verktøyet først!",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
                             "enum": ["summary", "latest", "list", "read"],
-                            "description": "Hva som skal hentes: summary=antall uleste, latest=siste e-post (emne+avsender), list=siste 3 e-poster, read=les innholdet i siste e-post"
+                            "description": "Hva som skal hentes: summary=antall uleste, latest=siste e-post (emne+avsender), list=siste 3 e-poster, read=les HELE innholdet i siste e-post (bruk når brukeren vil 'lese' eller 'høre' e-posten)"
                         }
                     },
-                    "required": []
+                    "required": ["action"]
                 }
             }
         },
@@ -950,7 +1050,9 @@ Dine fysiske egenskaper:
                 result = control_twinkly(action, brightness, mode)
             elif function_name == "get_email_status":
                 action = function_args.get("action", "summary")
+                print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)
                 result = get_email_status(action)
+                print(f"🔧 TOOL RESULT: {result[:200] if len(result) > 200 else result}", flush=True)
             elif function_name == "get_calendar_events":
                 action = function_args.get("action", "next")
                 result = get_calendar_events(action)
