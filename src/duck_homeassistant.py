@@ -10,13 +10,65 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Home Assistant konfig (legges i .env)
-HA_URL = os.getenv('HA_URL', 'http://homeassistant.local:8123')
+HA_LOCAL_URL = os.getenv('HA_URL', 'http://homeassistant.local:8123')
+HA_CLOUD_URL = os.getenv('HA_CLOUD_URL', '')
 HA_TOKEN = os.getenv('HA_TOKEN', '')
+
+# Global cache for aktiv URL (oppdateres ved fallback)
+_active_ha_url = HA_LOCAL_URL
+
+
+def get_ha_url():
+    """
+    Returner aktiv HA URL med smart fallback.
+    Prøver lokal først (rask), deretter cloud (fungerer overalt).
+    """
+    global _active_ha_url
+    return _active_ha_url
+
+
+def _get_working_ha_url():
+    """
+    Test og returner en fungerende HA URL (lokal først, deretter cloud).
+    Oppdaterer også _active_ha_url cache.
+    """
+    global _active_ha_url
+    
+    headers = {"Authorization": f"Bearer {HA_TOKEN}"}
+    
+    # Test lokal først
+    test_url_local = f"{HA_LOCAL_URL}/api/"
+    if _try_ha_request(test_url_local, method='get', headers=headers, timeout=2):
+        _active_ha_url = HA_LOCAL_URL
+        return HA_LOCAL_URL
+    
+    # Fallback til cloud
+    if HA_CLOUD_URL:
+        test_url_cloud = f"{HA_CLOUD_URL}/api/"
+        if _try_ha_request(test_url_cloud, method='get', headers=headers, timeout=5):
+            _active_ha_url = HA_CLOUD_URL
+            print(f"🌍 Byttet til HA Cloud", flush=True)
+            return HA_CLOUD_URL
+    
+    return HA_LOCAL_URL  # Fallback til lokal selv om den feiler
+
+
+def _try_ha_request(url, method='get', headers=None, json=None, timeout=3):
+    """Helper for å prøve HA request med gitt URL"""
+    try:
+        if method == 'get':
+            response = requests.get(url, headers=headers, timeout=timeout)
+        else:
+            response = requests.post(url, headers=headers, json=json, timeout=timeout)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.RequestException:
+        return None
 
 
 def call_ha_service(domain, service, entity_id=None, data=None):
     """
-    Kall en Home Assistant service
+    Kall en Home Assistant service med smart fallback (lokal → cloud)
     
     Args:
         domain: f.eks. 'light', 'climate', 'media_player', 'cover'
@@ -27,10 +79,11 @@ def call_ha_service(domain, service, entity_id=None, data=None):
     Returns:
         dict: Response fra HA eller feilmelding
     """
+    global _active_ha_url
+    
     if not HA_TOKEN:
         return "Home Assistant token mangler i .env (HA_TOKEN)"
     
-    url = f"{HA_URL}/api/services/{domain}/{service}"
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
@@ -42,12 +95,25 @@ def call_ha_service(domain, service, entity_id=None, data=None):
     if data:
         payload.update(data)
     
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=5)
-        response.raise_for_status()
-        return f"✅ {service} utført på {entity_id or 'alle enheter'}"
-    except requests.exceptions.RequestException as e:
-        return f"❌ Home Assistant feil: {e}"
+    # Prøv lokal URL først (rask)
+    url_local = f"{HA_LOCAL_URL}/api/services/{domain}/{service}"
+    response = _try_ha_request(url_local, method='post', headers=headers, json=payload, timeout=3)
+    
+    if response:
+        _active_ha_url = HA_LOCAL_URL  # Oppdater cache
+        return f"✅ {service} utført på {entity_id or 'alle enheter'} (lokal)"
+    
+    # Fallback til cloud URL hvis lokal feiler
+    if HA_CLOUD_URL:
+        url_cloud = f"{HA_CLOUD_URL}/api/services/{domain}/{service}"
+        response = _try_ha_request(url_cloud, method='post', headers=headers, json=payload, timeout=10)
+        
+        if response:
+            _active_ha_url = HA_CLOUD_URL  # Oppdater cache
+            print(f"🌍 Bruker HA Cloud (lokal ikke tilgjengelig)", flush=True)
+            return f"✅ {service} utført på {entity_id or 'alle enheter'} (cloud)"
+    
+    return f"❌ Home Assistant ikke tilgjengelig (prøvde lokal og cloud)"
 
 
 def control_tv(action):
@@ -143,7 +209,7 @@ def get_ac_temperature(temp_type="both"):
     inside_entity = "sensor.thordis_mor_inside_temperature"
     outside_entity = "sensor.thordis_mor_outside_temperature"
     
-    url_base = f"{HA_URL}/api/states/"
+    url_base = f"{_get_working_ha_url()}/api/states/"
     headers = {"Authorization": f"Bearer {HA_TOKEN}"}
     
     try:
@@ -220,7 +286,7 @@ def get_email_status(action="summary"):
         return "Home Assistant token mangler"
     
     entity = "sensor.m365_mail_mail"
-    url = f"{HA_URL}/api/states/{entity}"
+    url = f"{_get_working_ha_url()}/api/states/{entity}"
     headers = {"Authorization": f"Bearer {HA_TOKEN}"}
     
     try:
@@ -293,7 +359,7 @@ def get_calendar_events(action="next", calendar="calendar.m365_calendar_calendar
     """Hent kalenderavtaler fra M365 Calendar"""
     try:
         response = requests.get(
-            f"{HA_URL}/api/states/{calendar}",
+            f"{_get_working_ha_url()}/api/states/{calendar}",
             headers={"Authorization": f"Bearer {HA_TOKEN}"}
         )
         
@@ -377,7 +443,7 @@ def manage_todo(action="list", item=None, todo_list="todo.m365_todo_tasks"):
         if action == "list":
             # Hent alle items fra state attributes
             response = requests.get(
-                f"{HA_URL}/api/states/{todo_list}",
+                f"{_get_working_ha_url()}/api/states/{todo_list}",
                 headers={"Authorization": f"Bearer {HA_TOKEN}"}
             )
             
@@ -435,7 +501,7 @@ def get_teams_status():
     """Hent Teams-status"""
     try:
         response = requests.get(
-            f"{HA_URL}/api/states/sensor.m365_teams_status",
+            f"{_get_working_ha_url()}/api/states/sensor.m365_teams_status",
             headers={"Authorization": f"Bearer {HA_TOKEN}"}
         )
         
@@ -465,7 +531,7 @@ def get_teams_chat():
     """Hent siste Teams-melding"""
     try:
         response = requests.get(
-            f"{HA_URL}/api/states/sensor.m365_teams_chat",
+            f"{_get_working_ha_url()}/api/states/sensor.m365_teams_chat",
             headers={"Authorization": f"Bearer {HA_TOKEN}"}
         )
         
@@ -563,7 +629,7 @@ def create_movie_scene():
         }
         
         response = requests.post(
-            f"{HA_URL}/api/services/scene/create",
+            f"{_get_working_ha_url()}/api/services/scene/create",
             headers=headers,
             json=scene_data,
             timeout=10
@@ -603,18 +669,33 @@ def control_blinds(action, room=None, position=None):
 
 
 def get_ha_state(entity_id):
-    """Hent tilstand for en enhet fra HA"""
+    """Hent tilstand for en enhet fra HA med smart fallback"""
+    global _active_ha_url
+    
     if not HA_TOKEN:
         return "Home Assistant token mangler"
     
-    url = f"{HA_URL}/api/states/{entity_id}"
     headers = {"Authorization": f"Bearer {HA_TOKEN}"}
     
+    # Prøv lokal først
+    url_local = f"{HA_LOCAL_URL}/api/states/{entity_id}"
+    response = _try_ha_request(url_local, method='get', headers=headers, timeout=3)
+    
+    if not response and HA_CLOUD_URL:
+        # Fallback til cloud
+        url_cloud = f"{HA_CLOUD_URL}/api/states/{entity_id}"
+        response = _try_ha_request(url_cloud, method='get', headers=headers, timeout=10)
+        if response:
+            _active_ha_url = HA_CLOUD_URL
+            print(f"🌍 Bruker HA Cloud for state query", flush=True)
+    else:
+        _active_ha_url = HA_LOCAL_URL
+    
+    if not response:
+        return f"❌ Kunne ikke hente state for {entity_id}"
+    
     try:
-        response = requests.get(url, headers=headers, timeout=5)
-        response.raise_for_status()
         data = response.json()
-        
         state = data.get('state', 'unknown')
         attrs = data.get('attributes', {})
         

@@ -148,30 +148,43 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
         
         elif self.path == '/ha-status':
-            # Sjekk Home Assistant tilgjengelighet
+            # Sjekk Home Assistant tilgjengelighet (prøver lokal og cloud)
             try:
                 import requests
                 from dotenv import load_dotenv
                 load_dotenv()
                 
-                HA_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
+                HA_LOCAL_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
+                HA_CLOUD_URL = os.getenv("HA_CLOUD_URL", "")
                 HA_TOKEN = os.getenv("HA_TOKEN")
                 
                 if not HA_TOKEN:
                     response = {'available': False, 'error': 'HA_TOKEN ikke konfigurert'}
                 else:
+                    # Prøv lokal først
                     try:
-                        r = requests.get(f"{HA_URL}/api/", 
+                        r = requests.get(f"{HA_LOCAL_URL}/api/", 
                                        headers={"Authorization": f"Bearer {HA_TOKEN}"}, 
                                        timeout=3)
                         if r.status_code == 200:
-                            response = {'available': True, 'url': HA_URL}
+                            response = {'available': True, 'url': HA_LOCAL_URL, 'mode': 'local'}
                         else:
                             response = {'available': False, 'error': f'HTTP {r.status_code}'}
-                    except requests.exceptions.Timeout:
-                        response = {'available': False, 'error': 'Timeout (3s)'}
-                    except requests.exceptions.ConnectionError:
-                        response = {'available': False, 'error': 'Connection refused'}
+                    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                        # Fallback til cloud
+                        if HA_CLOUD_URL:
+                            try:
+                                r = requests.get(f"{HA_CLOUD_URL}/api/",
+                                               headers={"Authorization": f"Bearer {HA_TOKEN}"},
+                                               timeout=10)
+                                if r.status_code == 200:
+                                    response = {'available': True, 'url': HA_CLOUD_URL, 'mode': 'cloud'}
+                                else:
+                                    response = {'available': False, 'error': 'Lokal og cloud ikke tilgjengelig'}
+                            except Exception as e:
+                                response = {'available': False, 'error': f'Lokal og cloud feilet: {str(e)}'}
+                        else:
+                            response = {'available': False, 'error': 'Lokal timeout, cloud URL ikke konfigurert'}
                     except Exception as e:
                         response = {'available': False, 'error': str(e)}
             except Exception as e:
