@@ -863,6 +863,46 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
         
+        elif self.path == '/api/personality':
+            # Hent personlighetsprofil
+            try:
+                import sqlite3
+                conn = sqlite3.connect('/home/admog/Code/chatgpt-and/duck_memory.db')
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                
+                c.execute("SELECT * FROM personality_profile WHERE id = 1")
+                row = c.fetchone()
+                conn.close()
+                
+                if row:
+                    response = {
+                        'humor_level': row['humor_level'],
+                        'verbosity_level': row['verbosity_level'],
+                        'formality_level': row['formality_level'],
+                        'enthusiasm_level': row['enthusiasm_level'],
+                        'technical_depth': row['technical_depth'],
+                        'empathy_level': row['empathy_level'] if 'empathy_level' in row.keys() else 5.0,
+                        'directness_level': row['directness_level'] if 'directness_level' in row.keys() else 5.0,
+                        'creativity_level': row['creativity_level'] if 'creativity_level' in row.keys() else 5.0,
+                        'boundary_level': row['boundary_level'] if 'boundary_level' in row.keys() else 5.0,
+                        'proactivity_level': row['proactivity_level'] if 'proactivity_level' in row.keys() else 5.0,
+                        'ask_followup_questions': bool(row['ask_followup_questions']),
+                        'use_emojis': bool(row['use_emojis']),
+                        'confidence_score': row['confidence_score'],
+                        'conversations_analyzed': row['conversations_analyzed'],
+                        'last_analyzed': row['last_analyzed']
+                    }
+                else:
+                    response = {'error': 'Ingen profil funnet'}
+            except Exception as e:
+                response = {'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         else:
             self.send_response(404)
             self.end_headers()
@@ -1705,6 +1745,64 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     'display_name': found_user['display_name']
                 }
                 
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/api/personality/update':
+            # Oppdater personlighetsprofil
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                
+                import sqlite3
+                conn = sqlite3.connect('/home/admog/Code/chatgpt-and/duck_memory.db')
+                c = conn.cursor()
+                
+                # Oppdater alle dimensjoner
+                c.execute("""
+                    UPDATE personality_profile SET
+                        humor_level = ?,
+                        verbosity_level = ?,
+                        formality_level = ?,
+                        enthusiasm_level = ?,
+                        technical_depth = ?,
+                        empathy_level = ?,
+                        directness_level = ?,
+                        creativity_level = ?,
+                        boundary_level = ?,
+                        proactivity_level = ?
+                    WHERE id = 1
+                """, (
+                    float(data.get('humor_level', 5.0)),
+                    float(data.get('verbosity_level', 5.0)),
+                    float(data.get('formality_level', 3.0)),
+                    float(data.get('enthusiasm_level', 5.0)),
+                    float(data.get('technical_depth', 5.0)),
+                    float(data.get('empathy_level', 5.0)),
+                    float(data.get('directness_level', 5.0)),
+                    float(data.get('creativity_level', 5.0)),
+                    float(data.get('boundary_level', 5.0)),
+                    float(data.get('proactivity_level', 5.0))
+                ))
+                
+                conn.commit()
+                conn.close()
+                
+                # Restart service for å laste ny profil
+                subprocess.run(
+                    ['sudo', 'systemctl', 'restart', 'chatgpt-duck.service'],
+                    capture_output=True, timeout=10
+                )
+                
+                response = {'success': True, 'message': 'Personlighet oppdatert og service restartet'}
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()

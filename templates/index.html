@@ -225,6 +225,147 @@
             </div>
         </div>
         
+        <!-- Personlighet -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎭 Andas Personlighet</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="speak-section" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
+                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎭 Juster Andas Personlighet</h3>
+                        
+                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 20px; margin-bottom: 15px;">
+                            <div id="personality-stats" style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                                <span id="confidence-text">Confidence: --% | </span>
+                                <span id="analyzed-text">Analysert: -- samtaler | </span>
+                                <span id="last-analyzed-text">Sist: --</span>
+                            </div>
+                            
+                            <!-- Humor -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    💬 Humor <span id="humor-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="humor-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('humor', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Lite humor ← → Mye humor</div>
+                            </div>
+                            
+                            <!-- Verbosity -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    📝 Verbosity <span id="verbosity-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="verbosity-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('verbosity', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Korte svar ← → Lange svar</div>
+                            </div>
+                            
+                            <!-- Formality -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    👔 Formality <span id="formality-value" style="color: #ff6b6b;">3.0</span>/10
+                                </label>
+                                <input type="range" id="formality-slider" min="0" max="10" step="0.5" value="3" 
+                                       oninput="updateSlider('formality', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Uformell ← → Formell</div>
+                            </div>
+                            
+                            <!-- Enthusiasm -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🎉 Enthusiasm <span id="enthusiasm-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="enthusiasm-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('enthusiasm', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Rolig ← → Entusiastisk</div>
+                            </div>
+                            
+                            <!-- Technical -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🔧 Technical <span id="technical-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="technical-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('technical', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Enkel ← → Teknisk dyp</div>
+                            </div>
+                            
+                            <!-- Empathy -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    ❤️ Empathy <span id="empathy-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="empathy-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('empathy', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Kald/rasjonell ← → Varm/forstående</div>
+                            </div>
+                            
+                            <!-- Directness -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🎯 Directness <span id="directness-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="directness-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('directness', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Diplomatisk ← → Direkte</div>
+                            </div>
+                            
+                            <!-- Creativity -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🧠 Creativity <span id="creativity-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="creativity-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('creativity', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Faktabasert ← → Kreativ</div>
+                            </div>
+                            
+                            <!-- Boundary -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🧭 Boundary <span id="boundary-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="boundary-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('boundary', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Følger ordre ← → Utfordrer</div>
+                            </div>
+                            
+                            <!-- Proactivity -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
+                                    🚀 Proactivity <span id="proactivity-value" style="color: #ff6b6b;">5.0</span>/10
+                                </label>
+                                <input type="range" id="proactivity-slider" min="0" max="10" step="0.5" value="5" 
+                                       oninput="updateSlider('proactivity', this.value)"
+                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Bare svarer ← → Foreslår aktivt</div>
+                            </div>
+                            
+                            <button onclick="savePersonality()" 
+                                    style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: #ff6b6b; color: white; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;"
+                                    onmouseover="this.style.background='#ee5a6f'" 
+                                    onmouseout="this.style.background='#ff6b6b'">
+                                💾 Lagre Personlighet
+                            </button>
+                            <div id="personality-status" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Minne -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
@@ -618,6 +759,91 @@
                 statusElement.style.color = '#ffc107';
             }
         }
+        
+        // Personality functions
+        function updateSlider(dimension, value) {
+            document.getElementById(dimension + '-value').textContent = parseFloat(value).toFixed(1);
+        }
+
+        async function loadPersonality() {
+            try {
+                const response = await fetch('/api/personality');
+                const data = await response.json();
+                
+                // Update sliders and values
+                const dimensions = ['humor', 'verbosity', 'formality', 'enthusiasm', 'technical', 
+                                   'empathy', 'directness', 'creativity', 'boundary', 'proactivity'];
+                
+                dimensions.forEach(dim => {
+                    const slider = document.getElementById(dim + '-slider');
+                    const value = data[dim + '_level'] || 5.0;
+                    slider.value = value;
+                    document.getElementById(dim + '-value').textContent = value.toFixed(1);
+                });
+                
+                // Update stats
+                document.getElementById('confidence-text').textContent = 
+                    `Confidence: ${(data.confidence_score || 0).toFixed(0)}% | `;
+                document.getElementById('analyzed-text').textContent = 
+                    `Analysert: ${data.conversations_analyzed || 0} samtaler | `;
+                document.getElementById('last-analyzed-text').textContent = 
+                    `Sist: ${data.last_analyzed || '--'}`;
+                
+            } catch (error) {
+                console.error('Kunne ikke laste personlighet:', error);
+            }
+        }
+
+        async function savePersonality() {
+            const statusElement = document.getElementById('personality-status');
+            statusElement.style.display = 'block';
+            statusElement.style.background = 'rgba(255, 235, 59, 0.9)';
+            statusElement.style.color = '#333';
+            statusElement.textContent = '⏳ Lagrer og restarter service...';
+            
+            try {
+                const data = {
+                    humor_level: parseFloat(document.getElementById('humor-slider').value),
+                    verbosity_level: parseFloat(document.getElementById('verbosity-slider').value),
+                    formality_level: parseFloat(document.getElementById('formality-slider').value),
+                    enthusiasm_level: parseFloat(document.getElementById('enthusiasm-slider').value),
+                    technical_depth: parseFloat(document.getElementById('technical-slider').value),
+                    empathy_level: parseFloat(document.getElementById('empathy-slider').value),
+                    directness_level: parseFloat(document.getElementById('directness-slider').value),
+                    creativity_level: parseFloat(document.getElementById('creativity-slider').value),
+                    boundary_level: parseFloat(document.getElementById('boundary-slider').value),
+                    proactivity_level: parseFloat(document.getElementById('proactivity-slider').value)
+                };
+                
+                const response = await fetch('/api/personality/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusElement.style.background = 'rgba(76, 175, 80, 0.9)';
+                    statusElement.style.color = 'white';
+                    statusElement.textContent = '✓ ' + (result.message || 'Personlighet oppdatert!');
+                    setTimeout(() => {
+                        statusElement.style.display = 'none';
+                    }, 3000);
+                } else {
+                    statusElement.style.background = 'rgba(244, 67, 54, 0.9)';
+                    statusElement.style.color = 'white';
+                    statusElement.textContent = '✗ Feil: ' + (result.message || 'Ukjent feil');
+                }
+            } catch (error) {
+                statusElement.style.background = 'rgba(244, 67, 54, 0.9)';
+                statusElement.style.color = 'white';
+                statusElement.textContent = '✗ Feil: ' + error.message;
+            }
+        }
+
+        // Load personality on page load
+        window.addEventListener('load', loadPersonality);
         
         // Sjekk HA-status ved oppstart og hver 30. sekund
         checkHAStatus();
