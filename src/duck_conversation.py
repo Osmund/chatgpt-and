@@ -10,7 +10,7 @@ from src.duck_speech import recognize_speech_from_mic
 from src.duck_audio import speak
 
 
-def check_ai_queries(api_key, speech_config, beak, memory_manager=None, user_manager=None):
+def check_ai_queries(api_key, speech_config, beak, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None):
     """
     Bakgrunnstråd som sjekker for AI-queries fra kontrollpanelet.
     Kjører kontinuerlig og prosesserer queries når de dukker opp.
@@ -31,7 +31,14 @@ def check_ai_queries(api_key, speech_config, beak, memory_manager=None, user_man
                     
                     # Spør ChatGPT
                     messages = [{"role": "user", "content": query}]
-                    response = chatgpt_query(messages, api_key, memory_manager=memory_manager, user_manager=user_manager)
+                    response = chatgpt_query(
+                        messages, 
+                        api_key, 
+                        memory_manager=memory_manager, 
+                        user_manager=user_manager,
+                        sms_manager=sms_manager,
+                        hunger_manager=hunger_manager
+                    )
                     
                     # Håndter tuple response
                     if isinstance(response, tuple):

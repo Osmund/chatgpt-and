@@ -1235,13 +1235,55 @@ window.onload = function() {
     loadMemoryStats();  // Last memory stats
     loadMaxContextFacts();  // Last max context facts setting
     loadMemorySettings();  // Last alle memory settings
+    loadBoredomStatus();  // Last kjedsomhetsnivå
+    loadHungerStatus();  // Last hunger nivå
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
     setInterval(loadCurrentUser, 10000);  // Oppdater current user hvert 10. sekund
     setInterval(loadFanStatus, 5000);
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
+    setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
+    setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
 };
+
+// Boredom Status
+async function loadBoredomStatus() {
+    try {
+        const response = await fetch('/boredom-status');
+        const data = await response.json();
+        
+        document.getElementById('boredom-emoji').textContent = data.emoji;
+        document.getElementById('boredom-level').textContent = data.level;
+        document.getElementById('boredom-status').textContent = data.status;
+        
+        const bar = document.getElementById('boredom-bar');
+        bar.style.width = (data.level * 10) + '%';
+        bar.style.background = data.color;
+    } catch (error) {
+        console.error('Kunne ikke laste kjedsomhetsnivå:', error);
+    }
+}
+
+// Hunger Status (Tamagotchi!)
+async function loadHungerStatus() {
+    try {
+        const response = await fetch('/hunger-status');
+        const data = await response.json();
+        
+        document.getElementById('hunger-emoji').textContent = data.emoji;
+        document.getElementById('hunger-level').textContent = data.level;
+        document.getElementById('hunger-status').textContent = data.status;
+        document.getElementById('meals-today').textContent = data.meals_today || 0;
+        document.getElementById('next-meal').textContent = data.next_meal_time || '12:00';
+        
+        const bar = document.getElementById('hunger-bar');
+        bar.style.width = (data.level * 10) + '%';
+        bar.style.background = data.color;
+    } catch (error) {
+        console.error('Kunne ikke laste hunger nivå:', error);
+    }
+}
 
 // Max Context Facts
 function updateMaxFactsLabel() {

@@ -226,7 +226,7 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     return metadata
 
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None):
     """
     Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
     
@@ -236,6 +236,8 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         model: Modell-navn (default fra config)
         memory_manager: MemoryManager instans
         user_manager: UserManager instans
+        sms_manager: SMSManager instans (for boredom status)
+        hunger_manager: HungerManager instans (for hunger status)
     
     Returns:
         tuple: (reply_text, is_thank_you) eller bare reply_text
@@ -333,6 +335,49 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     month_name = norwegian_months[now.strftime('%B')]
     date_time_info = f"Nåværende dato og tid: {day_name} {now.day}. {month_name} {now.year}, klokken {now.strftime('%H:%M')}. "
     
+    # Hent status for hunger og boredom (Tamagotchi-status)
+    tamagotchi_status = ""
+    try:
+        if hunger_manager:
+            hunger_level = hunger_manager.get_hunger_level()
+            hunger_mood = hunger_manager.get_hunger_mood()
+            last_meal_info = hunger_manager.get_last_meal_info()
+            
+            tamagotchi_status += f"\n\n### Din nåværende tilstand ###\n"
+            tamagotchi_status += f"Sult: {hunger_level:.1f}/10 (stemning: {hunger_mood})\n"
+            
+            # Legg til info om siste måltid
+            if last_meal_info['ate_today']:
+                tamagotchi_status += f"Siste måltid: {last_meal_info['food_emoji']} {last_meal_info['food_name']} kl {last_meal_info['time']}\n"
+            else:
+                tamagotchi_status += f"Du har ikke spist i dag ennå.\n"
+            
+            # Legg til info om neste måltid
+            next_meal_time = last_meal_info.get('next_meal_time')
+            if next_meal_time:
+                tamagotchi_status += f"Neste måltid: kl {next_meal_time}\n"
+        
+        if sms_manager:
+            boredom_level = sms_manager.get_boredom_level()
+            tamagotchi_status += f"Kjedsomhet: {boredom_level:.1f}/10\n"
+            
+            if boredom_level < 3:
+                tamagotchi_status += "(Du føler deg fornøyd og underholder deg selv.)\n"
+            elif boredom_level < 5:
+                tamagotchi_status += "(Du begynner å kjede deg litt.)\n"
+            elif boredom_level < 7:
+                tamagotchi_status += "(Du kjeder deg ganske mye.)\n"
+            else:
+                tamagotchi_status += "(Du kjeder deg veldig! Du lengter etter interaksjon.)\n"
+        
+        if tamagotchi_status:
+            tamagotchi_status += "\nViktig: Når noen spør hvordan du har det eller om du er sulten/kjeder deg, BRUK denne informasjonen! "
+            tamagotchi_status += "Du vet faktisk om din egen tilstand. Svar ærlig basert på disse tallene. "
+            tamagotchi_status += "Hvis du er sulten (>5), si det! Hvis du kjeder deg (>5), si det!\n"
+    
+    except Exception as e:
+        print(f"⚠️ Kunne ikke hente Tamagotchi-status: {e}", flush=True)
+    
     # Legg til brukerinfo hvis tilgjengelig
     user_info = ""
     perspective_context = ""
@@ -393,7 +438,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     
     # Legg til dato/tid + personlighet i system-prompt
     final_messages = messages.copy()
-    system_content = date_time_info + user_info + perspective_context
+    system_content = date_time_info + tamagotchi_status + user_info + perspective_context
     
     # Samle memory context først (men legg til senere)
     memory_section = ""

@@ -1,0 +1,269 @@
+"""
+Duckberry SMS Relay Server
+Routes Twilio SMS webhooks to correct Duck instance based on registry.
+Version: 2.0
+"""
+import os
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = Flask(__name__)
+
+# Registry: {twilio_number: {name, current_ip, last_heartbeat}}
+DUCK_REGISTRY = {}
+
+# Message queue: {twilio_number: [messages]}
+MESSAGE_QUEUE = {}
+
+# Configuration
+HEARTBEAT_TIMEOUT = int(os.getenv('HEARTBEAT_TIMEOUT_MINUTES', 10))
+DUCK_WEBHOOK_PATH = '/webhook/sms'
+DUCK_PORT = '3000'
+MAX_QUEUE_SIZE = 100  # Max messages per duck
+
+
+@app.route('/webhook/sms/<twilio_number>', methods=['POST'])
+def twilio_webhook(twilio_number):
+    """
+    Receive SMS from Twilio, route to correct Anda Pi.
+    Twilio sends: From, Body, To, MessageSid, etc.
+    """
+    try:
+        # Parse Twilio webhook data
+        from_number = request.form.get('From')
+        message_body = request.form.get('Body')
+        to_number = request.form.get('To')
+        message_sid = request.form.get('MessageSid')
+        
+        print(f"📨 Incoming SMS: {message_sid}")
+        print(f"   From: {from_number}")
+        print(f"   To: {to_number}")
+        print(f"   Body: {message_body[:50]}...")
+        
+        # Look up Duck instance by Twilio number
+        if to_number not in DUCK_REGISTRY:
+            print(f"❌ No Duck registered for {to_number}")
+            return jsonify({
+                'status': 'error',
+                'message': f'No Duck instance registered for {to_number}'
+            }), 404
+        
+        duck = DUCK_REGISTRY[to_number]
+        
+        # Queue message for Duck to poll
+        if to_number not in MESSAGE_QUEUE:
+            MESSAGE_QUEUE[to_number] = []
+        
+        message = {
+            'from': from_number,
+            'to': to_number,
+            'message': message_body,
+            'sid': message_sid,
+            'timestamp': datetime.now().isoformat(),
+            'id': message_sid  # Unique ID for tracking
+        }
+        
+        MESSAGE_QUEUE[to_number].append(message)
+        
+        # Limit queue size
+        if len(MESSAGE_QUEUE[to_number]) > MAX_QUEUE_SIZE:
+            MESSAGE_QUEUE[to_number] = MESSAGE_QUEUE[to_number][-MAX_QUEUE_SIZE:]
+        
+        print(f"✅ SMS queued for {duck['name']} (queue size: {len(MESSAGE_QUEUE[to_number])})")
+        
+        return jsonify({
+            'status': 'queued',
+            'duck': duck['name'],
+            'queue_size': len(MESSAGE_QUEUE[to_number])
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Error routing SMS: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/register', methods=['POST'])
+def register_duck():
+    """
+    Duck Pi registers on startup and sends heartbeat.
+    POST body: {
+        "twilio_number": "+12025551234",
+        "name": "Duck-Oslo",
+        "ip": "192.168.1.50"
+    }
+    """
+    try:
+        data = request.json
+        twilio_number = data.get('twilio_number')
+        name = data.get('name')
+        ip = data.get('ip')
+        
+        if not all([twilio_number, name, ip]):
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing required fields'
+            }), 400
+        
+        # Update registry
+        DUCK_REGISTRY[twilio_number] = {
+            'name': name,
+            'current_ip': ip,
+            'last_heartbeat': datetime.now().isoformat()
+        }
+        
+        print(f"✅ Registered {name} ({twilio_number}) at {ip}")
+        
+        return jsonify({
+            'status': 'registered',
+            'name': name,
+            'ip': ip,
+            'heartbeat_timeout': HEARTBEAT_TIMEOUT
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Registration error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/unregister', methods=['POST'])
+def unregister_duck():
+    """
+    Duck Pi unregisters on shutdown.
+    POST body: {"twilio_number": "+12025551234"}
+    """
+    try:
+        data = request.json
+        twilio_number = data.get('twilio_number')
+        
+        if twilio_number in DUCK_REGISTRY:
+            duck_name = DUCK_REGISTRY[twilio_number]['name']
+            del DUCK_REGISTRY[twilio_number]
+            print(f"🔌 Unregistered {duck_name}")
+            return jsonify({'status': 'unregistered', 'name': duck_name}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Not registered'}), 404
+    
+    except Exception as e:
+        print(f"❌ Unregister error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/poll/<twilio_number>', methods=['GET'])
+def poll_messages(twilio_number):
+    """
+    Duck polls for new messages.
+    Returns all pending messages and clears the queue.
+    """
+    try:
+        # Check if Duck is registered
+        if twilio_number not in DUCK_REGISTRY:
+            return jsonify({
+                'status': 'error',
+                'message': 'Not registered'
+            }), 404
+        
+        # Update heartbeat
+        DUCK_REGISTRY[twilio_number]['last_heartbeat'] = datetime.now().isoformat()
+        
+        # Get pending messages
+        messages = MESSAGE_QUEUE.get(twilio_number, [])
+        
+        if messages:
+            print(f"📬 {DUCK_REGISTRY[twilio_number]['name']} polling: {len(messages)} message(s)")
+            # Clear queue after retrieval
+            MESSAGE_QUEUE[twilio_number] = []
+        
+        return jsonify({
+            'status': 'ok',
+            'messages': messages,
+            'count': len(messages)
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Poll error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/status', methods=['GET'])
+def status():
+    """
+    View current registry status.
+    """
+    registry_status = {}
+    
+    for number, duck in DUCK_REGISTRY.items():
+        registry_status[number] = {
+            'name': duck['name'],
+            'ip': duck['current_ip'],
+            'last_heartbeat': duck['last_heartbeat'],
+            'online': is_duck_online(duck),
+            'pending_messages': len(MESSAGE_QUEUE.get(number, []))
+        }
+    
+    return jsonify({
+        'status': 'ok',
+        'registry': registry_status,
+        'registered_ducks': len(DUCK_REGISTRY)
+    }), 200
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """
+    Health check for Azure monitoring.
+    """
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'registered_ducks': len(DUCK_REGISTRY)
+    }), 200
+
+
+def is_duck_online(duck):
+    """
+    Check if Duck Pi is online based on last heartbeat.
+    """
+    if not duck.get('last_heartbeat'):
+        return False
+    
+    last_heartbeat = datetime.fromisoformat(duck['last_heartbeat'])
+    timeout = timedelta(minutes=HEARTBEAT_TIMEOUT)
+    
+    return datetime.now() - last_heartbeat < timeout
+
+
+@app.route('/')
+def index():
+    """
+    Simple landing page.
+    """
+    return """
+    <html>
+    <head><title>Duckberry SMS Relay</title></head>
+    <body>
+        <h1>🦆 Duckberry SMS Relay Server</h1>
+        <p>Routes Twilio SMS webhooks to correct Duck instance.</p>
+        <ul>
+            <li><a href="/status">View Registry Status</a></li>
+            <li><a href="/health">Health Check</a></li>
+        </ul>
+        <p>Registered Ducks: {}</p>
+    </body>
+    </html>
+    """.format(len(DUCK_REGISTRY))
+
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 8000))
+    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    print("🦆 Starting Duckberry SMS Relay Server...")
+    print(f"   Port: {port}")
+    print(f"   Heartbeat timeout: {HEARTBEAT_TIMEOUT} minutes")
+    print(f"   Duck webhook path: {DUCK_WEBHOOK_PATH}")
+    
+    app.run(host='0.0.0.0', port=port, debug=debug)

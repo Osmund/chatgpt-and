@@ -103,6 +103,32 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"Feil ved lesing av meldingsfil: {e}", flush=True)
                     
+                    # Sjekk om det finnes SMS-annonseringer
+                    sms_announcement_file = '/tmp/duck_sms_announcement.txt'
+                    if os.path.exists(sms_announcement_file):
+                        try:
+                            with open(sms_announcement_file, 'r', encoding='utf-8') as f:
+                                announcement = f.read().strip()
+                            os.remove(sms_announcement_file)
+                            if announcement:
+                                print(f"📬 SMS announcement: {announcement[:50]}...", flush=True)
+                                return f"__SMS_ANNOUNCEMENT__{announcement}"
+                        except Exception as e:
+                            print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+                    
+                    # Sjekk om det finnes hunger-annonseringer
+                    hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
+                    if os.path.exists(hunger_announcement_file):
+                        try:
+                            with open(hunger_announcement_file, 'r', encoding='utf-8') as f:
+                                announcement = f.read().strip()
+                            os.remove(hunger_announcement_file)
+                            if announcement:
+                                print(f"😋 Hunger announcement: {announcement[:50]}...", flush=True)
+                                return f"__HUNGER_ANNOUNCEMENT__{announcement}"
+                        except Exception as e:
+                            print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
+                    
                     # Sjekk om det finnes en sang-forespørsel
                     if os.path.exists(SONG_REQUEST_FILE):
                         try:

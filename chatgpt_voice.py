@@ -10,6 +10,9 @@ import signal
 import atexit
 import json
 import uuid
+import threading
+import socket
+import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
@@ -48,6 +51,241 @@ signal.signal(signal.SIGTERM, lambda sig, frame: (cleanup(), sys.exit(0)))
 signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), sys.exit(0)))
 
 
+def register_with_relay():
+    """Register Duck with SMS relay server on startup"""
+    relay_url = os.getenv('SMS_RELAY_URL', 'https://relay.duckberry.no/register')
+    twilio_number = os.getenv('TWILIO_NUMBER')
+    duck_name = os.getenv('DUCK_NAME', 'Duck-Oslo')
+    
+    if not twilio_number:
+        print("⚠️ TWILIO_NUMBER not set - skipping SMS relay registration", flush=True)
+        return
+    
+    try:
+        # Get current IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        current_ip = s.getsockname()[0]
+        s.close()
+        
+        # Register with relay
+        response = requests.post(relay_url, json={
+            'twilio_number': twilio_number,
+            'name': duck_name,
+            'ip': current_ip
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            print(f"✅ Registered with SMS relay: {duck_name} at {current_ip}", flush=True)
+            print(f"   Twilio number: {twilio_number}", flush=True)
+        else:
+            print(f"⚠️ Failed to register with SMS relay: {response.status_code} - {response.text}", flush=True)
+    except Exception as e:
+        print(f"⚠️ SMS relay registration failed: {e}", flush=True)
+
+
+def sms_polling_loop():
+    """Poll relay for new SMS messages every 10 seconds"""
+    relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no/register')
+    base_url = relay_url.replace('/register', '')
+    twilio_number = os.getenv('TWILIO_NUMBER')
+    
+    if not twilio_number:
+        print("⚠️ TWILIO_NUMBER not set - skipping SMS polling", flush=True)
+        return
+    
+    # URL encode the number
+    import urllib.parse
+    encoded_number = urllib.parse.quote(twilio_number, safe='')
+    poll_url = f"{base_url}/poll/{encoded_number}"
+    
+    while True:
+        time.sleep(10)  # Poll every 10 seconds
+        try:
+            response = requests.get(poll_url, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get('messages', [])
+                
+                if messages:
+                    print(f"📨 Received {len(messages)} SMS message(s)", flush=True)
+                    
+                    # Process each message
+                    for msg in messages:
+                        try:
+                            from_number = msg.get('from')
+                            message_text = msg.get('message')
+                            
+                            print(f"📱 SMS from {from_number}: {message_text[:50]}...", flush=True)
+                            
+                            # Forward to SMS handler
+                            import sys
+                            sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+                            from duck_sms import SMSManager
+                            from duck_audio import speak
+                            
+                            sms_manager = SMSManager()
+                            result = sms_manager.handle_incoming_sms(from_number, message_text)
+                            
+                            # Announce SMS with voice
+                            if result.get('status') == 'ok':
+                                contact = result.get('contact')
+                                
+                                # Check if we were fed!
+                                if result.get('fed'):
+                                    contact_name = contact.get('name', from_number) if contact else from_number
+                                    # Announce feeding
+                                    if '🍪' in message_text:
+                                        announcement = f"Mmm! Takk for cookien, {contact_name}! Jeg er mett nå! 😋🍪"
+                                    elif '🍕' in message_text:
+                                        announcement = f"Wow! Pizza! Takk {contact_name}! Så god! 😋🍕"
+                                    else:
+                                        announcement = f"Takk for maten, {contact_name}! 😋"
+                                    
+                                    print(f"🔊 Food announcement: {announcement}", flush=True)
+                                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                                        f.write(announcement)
+                                    
+                                    # Send thank you SMS
+                                    thank_you = f"Takk {contact_name}! 😋🦆"
+                                    sms_manager.send_sms(contact['phone'], thank_you)
+                                else:
+                                    # Normal SMS announcement
+                                    if contact:
+                                        contact_name = contact.get('name', from_number)
+                                        announcement = f"Jeg fikk en melding fra {contact_name}, den sier: {message_text}"
+                                    else:
+                                        announcement = f"Jeg fikk en melding fra {from_number}, den sier: {message_text}"
+                                    
+                                    print(f"🔊 Announcing SMS: {announcement[:50]}...", flush=True)
+                                    
+                                    # Write announcement to file for main loop to speak
+                                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                                        f.write(announcement)
+                                
+                                # Send AI-generated response if appropriate (not if fed)
+                                if result.get('should_respond') and not result.get('fed'):
+                                    response_result = sms_manager.generate_and_send_response(
+                                        contact, message_text
+                                    )
+                                    if response_result.get('status') == 'sent':
+                                        response_text = response_result.get('message', '')
+                                        print(f"📤 Sent response: {response_text[:50]}...", flush=True)
+                                        # Write response announcement to file
+                                        with open('/tmp/duck_sms_response.txt', 'w', encoding='utf-8') as f:
+                                            f.write(f"Jeg sendte svar: {response_text}")
+                            
+                            print(f"✅ SMS processed", flush=True)
+                        except Exception as msg_error:
+                            print(f"⚠️ Error processing SMS: {msg_error}", flush=True)
+        except Exception as e:
+            print(f"⚠️ SMS polling error: {e}", flush=True)
+
+
+def boredom_timer_loop():
+    """Increase boredom gradually every hour and check for triggers"""
+    import sys
+    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+    from duck_sms import SMSManager
+    
+    while True:
+        time.sleep(3600)  # Every hour
+        try:
+            sms_manager = SMSManager()
+            
+            # Increase boredom
+            new_level = sms_manager.increase_boredom(amount=0.5)
+            
+            # Check if threshold reached
+            if sms_manager.check_boredom_trigger():
+                print(f"🥱 Boredom threshold reached ({new_level:.1f}/10) - sending message", flush=True)
+                result = sms_manager.send_bored_message()
+                
+                if result.get('status') == 'sent':
+                    contact = result.get('contact')
+                    message = result.get('message')
+                    print(f"📤 Sent bored message to {contact['name']}: {message[:50]}...", flush=True)
+                    
+                    # Write announcement to file
+                    announcement = f"Jeg sendte en melding til {contact['name']} fordi jeg kjeder meg."
+                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                        f.write(announcement)
+                elif result.get('status') == 'no_contact':
+                    print("😔 Ingen kontakter tilgjengelig for kjed-melding", flush=True)
+        except Exception as e:
+            print(f"⚠️ Boredom timer error: {e}", flush=True)
+
+
+def hunger_timer_loop():
+    """Manage hunger system - Tamagotchi style!"""
+    import sys
+    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+    from duck_hunger import HungerManager
+    from duck_sms import SMSManager
+    
+    hunger_manager = HungerManager()
+    sms_manager = SMSManager()
+    
+    # Reset at morning (6 AM)
+    last_reset_day = None
+    
+    while True:
+        time.sleep(60)  # Check every minute
+        try:
+            current_time = datetime.now()
+            current_hour = current_time.hour
+            
+            # Morning reset at 6 AM
+            if current_hour == 6 and current_time.day != last_reset_day:
+                hunger_manager.reset_daily()
+                last_reset_day = current_time.day
+            
+            # Increase hunger every hour (at XX:00)
+            if current_time.minute == 0:
+                hunger_manager.increase_hunger(amount=1.0)
+            
+            # Check if we should announce hunger (30 min after meal time)
+            if hunger_manager.should_announce_hunger():
+                announcement = "Jeg er sulten! Kan du gi meg mat? Send meg 🍪 cookie eller 🍕 pizza!"
+                print(f"😋 {announcement}", flush=True)
+                
+                # Write announcement to file for voice
+                with open('/tmp/duck_hunger_announcement.txt', 'w', encoding='utf-8') as f:
+                    f.write(announcement)
+                
+                hunger_manager.mark_announcement_made()
+            
+            # Check if we should send SMS nag (10 min after announcement)
+            if hunger_manager.should_send_sms_nag():
+                # Get next contact to nag
+                contacts = sms_manager.get_all_contacts()
+                if contacts:
+                    # Rotate through contacts
+                    import random
+                    contact = random.choice(contacts)
+                    
+                    message = f"Hei {contact['name']}! 🦆 Jeg er veldig sulten! Kan du sende meg 🍪 eller 🍕 på SMS? 😋"
+                    result = sms_manager.send_sms(contact['phone'], message)
+                    
+                    if result['status'] == 'sent':
+                        print(f"📤 Sent hunger SMS to {contact['name']}", flush=True)
+                        hunger_manager.mark_sms_nag_sent()
+                
+        except Exception as e:
+            print(f"⚠️ Hunger timer error: {e}", flush=True)
+
+
+def heartbeat_loop():
+    """Send heartbeat to relay every 5 minutes"""
+    while True:
+        time.sleep(300)  # 5 minutes
+        try:
+            register_with_relay()
+        except Exception as e:
+            print(f"⚠️ Heartbeat failed: {e}", flush=True)
+
+
 def main():
     """Hovedloop for stemmeassistenten"""
     # Prøv å initialisere servo, men fortsett uten hvis den ikke finnes
@@ -75,6 +313,48 @@ def main():
     except Exception as e:
         print(f"⚠️ User system feilet (fortsetter uten): {e}", flush=True)
         user_manager = None
+    
+    # Initialiser SMS manager (for boredom status)
+    try:
+        from src.duck_sms import SMSManager
+        sms_manager = SMSManager()
+        print(f"✅ SMS Manager initialisert (boredom level: {sms_manager.get_boredom_level():.1f}/10)", flush=True)
+    except Exception as e:
+        print(f"⚠️ SMS Manager feilet (fortsetter uten): {e}", flush=True)
+        sms_manager = None
+    
+    # Initialiser Hunger manager (for Tamagotchi hunger status)
+    try:
+        from src.duck_hunger import HungerManager
+        hunger_manager = HungerManager()
+        print(f"✅ Hunger Manager initialisert (hunger level: {hunger_manager.get_hunger_level():.1f}/10)", flush=True)
+    except Exception as e:
+        print(f"⚠️ Hunger Manager feilet (fortsetter uten): {e}", flush=True)
+        hunger_manager = None
+    
+    # Register with SMS relay server
+    register_with_relay()
+    
+    # Start heartbeat thread
+    import threading  # Import here to avoid scope issues
+    heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
+    heartbeat_thread.start()
+    print("✅ SMS relay heartbeat started", flush=True)
+    
+    # Start SMS polling thread
+    sms_polling_thread = threading.Thread(target=sms_polling_loop, daemon=True)
+    sms_polling_thread.start()
+    print("✅ SMS polling started", flush=True)
+    
+    # Start boredom timer thread
+    boredom_timer_thread = threading.Thread(target=boredom_timer_loop, daemon=True)
+    boredom_timer_thread.start()
+    print("✅ Boredom timer started (checks every hour)", flush=True)
+    
+    # Start hunger timer thread
+    hunger_timer_thread = threading.Thread(target=hunger_timer_loop, daemon=True)
+    hunger_timer_thread.start()
+    print("✅ Hunger timer started (Tamagotchi mode activated! 🍪🍕)", flush=True)
     
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -112,7 +392,7 @@ def main():
 
     # Start bakgrunnstråd for AI-queries fra kontrollpanelet
     import threading
-    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager, user_manager), daemon=True)
+    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager, user_manager, sms_manager, hunger_manager), daemon=True)
     ai_thread.start()
     print("AI-query tråd startet", flush=True)
 
@@ -226,6 +506,30 @@ def main():
                     greeting_msg = greeting_msg.replace('{name}', 'på du')
                 
                 speak(greeting_msg, speech_config, beak)
+            elif external_message.startswith('__SMS_ANNOUNCEMENT__'):
+                # SMS-annonsering mottatt
+                announcement = external_message.replace('__SMS_ANNOUNCEMENT__', '', 1)
+                speak(announcement, speech_config, beak)
+                
+                # Sjekk om det er en respons-annonsering
+                sms_response_file = '/tmp/duck_sms_response.txt'
+                time.sleep(1)
+                if os.path.exists(sms_response_file):
+                    try:
+                        with open(sms_response_file, 'r', encoding='utf-8') as f:
+                            response_announcement = f.read().strip()
+                        if response_announcement:
+                            time.sleep(0.5)
+                            speak(response_announcement, speech_config, beak)
+                        os.remove(sms_response_file)
+                    except Exception as e:
+                        print(f"⚠️ Error reading SMS response: {e}", flush=True)
+                continue  # Gå tilbake til wake word etter SMS
+            elif external_message.startswith('__HUNGER_ANNOUNCEMENT__'):
+                # Hunger announcement
+                announcement = external_message.replace('__HUNGER_ANNOUNCEMENT__', '', 1)
+                speak(announcement, speech_config, beak)
+                continue  # Gå tilbake til wake word
             elif external_message.startswith('__PLAY_SONG__'):
                 # Spill av en sang
                 song_path = external_message.replace('__PLAY_SONG__', '', 1)
@@ -249,6 +553,16 @@ def main():
             print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
+        
+        # Reduce boredom when conversation starts
+        try:
+            import sys
+            sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+            from duck_sms import SMSManager
+            sms_manager = SMSManager()
+            sms_manager.reduce_boredom(amount=2.0)
+        except Exception as e:
+            print(f"⚠️ Could not reduce boredom: {e}", flush=True)
         
         # Start samtale (enten fra wake word eller samtale-trigger)
         messages = []
@@ -296,7 +610,14 @@ def main():
             messages.append({"role": "user", "content": prompt})
             try:
                 blink_yellow_purple()  # Start blinkende gul LED under tenkepause
-                result = chatgpt_query(messages, api_key, memory_manager=memory_manager, user_manager=user_manager)
+                result = chatgpt_query(
+                    messages, 
+                    api_key, 
+                    memory_manager=memory_manager, 
+                    user_manager=user_manager,
+                    sms_manager=sms_manager,
+                    hunger_manager=hunger_manager
+                )
                 off()  # Slå av blinking når svaret er klart
                 
                 # Håndter tuple-retur (svar, is_thank_you)

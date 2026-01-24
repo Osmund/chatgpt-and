@@ -18,6 +18,40 @@
             <span id="user-relation" style="color: #888; font-size: 0.9em;"></span>
         </div>
         
+        <!-- Boredom Meter -->
+        <div id="boredom-meter" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 2px solid #ddd;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Kjedsomhetsbarometer</div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                <span id="boredom-emoji" style="font-size: 2em;">😊</span>
+                <div style="flex: 1; max-width: 300px;">
+                    <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
+                        <div id="boredom-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                    </div>
+                    <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                        <span id="boredom-level">0.0</span>/10 - <span id="boredom-status">Fornøyd</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Hunger Meter (Tamagotchi!) -->
+        <div id="hunger-meter" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #fff5e6 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ffb74d;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🍕 Sultbarometer 🍪</div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                <span id="hunger-emoji" style="font-size: 2em;">😊</span>
+                <div style="flex: 1; max-width: 300px;">
+                    <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
+                        <div id="hunger-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                    </div>
+                    <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                        <span id="hunger-level">0.0</span>/10 - <span id="hunger-status">Mett</span>
+                        <br>
+                        <span style="font-size: 0.8em;">Måltider i dag: <span id="meals-today">0</span> | Neste: <span id="next-meal">12:00</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div id="status" class="status-box status-unknown">
             Henter status...
         </div>

@@ -134,13 +134,24 @@ secrets/
 *.crt
 
 # ============ Database ============
-# If SQLite is added in future
+# SQLite database files contain personal data (phone numbers, messages, etc.)
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+duck_memory.db
+duck_memory.db-journal
 
 # Documentation with personal data
 docs/DATABASE_CLEANUP_*.md
+
+# ============ One-time Setup Scripts ============
+# Scripts used once that may contain personal info
+add_contacts.py
+send_intro_*.py
+send_apology_*.py
+test_awareness.py
+test_twilio_sms.py
 
 # ============ Cache ============
 .cache/

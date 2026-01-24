@@ -195,6 +195,106 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/boredom-status':
+            # Hent kjedsomhetsnivå fra database
+            try:
+                import sqlite3
+                db_path = Path(__file__).parent / 'duck_memory.db'
+                conn = sqlite3.connect(str(db_path))
+                c = conn.cursor()
+                c.execute("SELECT current_level, last_check FROM boredom_state WHERE id = 1")
+                row = c.fetchone()
+                conn.close()
+                
+                if row:
+                    level, last_check = row
+                    # Bestem emoji og farge basert på nivå
+                    if level < 3:
+                        emoji = "😊"
+                        color = "#4ade80"  # grønn
+                        status = "Fornøyd"
+                    elif level < 5:
+                        emoji = "😐"
+                        color = "#fbbf24"  # gul
+                        status = "OK"
+                    elif level < 7:
+                        emoji = "😕"
+                        color = "#fb923c"  # oransje
+                        status = "Litt kjed"
+                    else:
+                        emoji = "😞"
+                        color = "#ef4444"  # rød
+                        status = "Veldig kjed"
+                    
+                    response = {
+                        'level': round(level, 1),
+                        'emoji': emoji,
+                        'color': color,
+                        'status': status,
+                        'last_check': last_check
+                    }
+                else:
+                    response = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'Fornøyd'}
+            except Exception as e:
+                response = {'level': 0, 'emoji': '❓', 'color': '#gray', 'status': 'Ukjent', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        elif self.path == '/hunger-status':
+            # Hent sultbarometer fra database
+            try:
+                import sqlite3
+                import sys
+                sys.path.insert(0, str(Path(__file__).parent / 'src'))
+                from duck_hunger import HungerManager
+                
+                hunger_manager = HungerManager()
+                status = hunger_manager.get_status()
+                
+                level = status.get('level', 0)
+                
+                # Bestem emoji og farge basert på nivå
+                if level < 3:
+                    emoji = "😊"
+                    color = "#4ade80"  # grønn
+                    status_text = "Mett"
+                elif level < 5:
+                    emoji = "🙂"
+                    color = "#a3e635"  # lime
+                    status_text = "OK"
+                elif level < 7:
+                    emoji = "😐"
+                    color = "#fbbf24"  # gul
+                    status_text = "Litt sulten"
+                elif level < 9:
+                    emoji = "😟"
+                    color = "#fb923c"  # oransje
+                    status_text = "Sulten"
+                else:
+                    emoji = "😩"
+                    color = "#ef4444"  # rød
+                    status_text = "VELDIG SULTEN!"
+                
+                response = {
+                    'level': level,
+                    'emoji': emoji,
+                    'color': color,
+                    'status': status_text,
+                    'mood': status.get('mood', 'content'),
+                    'meals_today': status.get('meals_today', 0),
+                    'next_meal_time': status.get('next_meal_time', '12:00')
+                }
+            except Exception as e:
+                response = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'Mett', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         elif self.path == '/logs':
             # Hent siste logger
             try:
@@ -1812,6 +1912,42 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/webhook/sms':
+            # SMS webhook from relay server
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                from_number = data.get('from')
+                message = data.get('message')
+                
+                print(f"📨 Incoming SMS from {from_number}: {message[:50]}...", flush=True)
+                
+                # Import SMS manager and handle
+                try:
+                    import sys
+                    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+                    from duck_sms import SMSManager
+                    
+                    sms_manager = SMSManager()
+                    sms_manager.handle_incoming_sms(from_number, message)
+                    print(f"✅ SMS processed successfully", flush=True)
+                except Exception as sms_error:
+                    print(f"⚠️ SMS handling error: {sms_error}", flush=True)
+                
+                response = {'status': 'received', 'from': from_number}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                print(f"❌ SMS webhook error: {e}", flush=True)
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
         
         else:
             self.send_response(404)
