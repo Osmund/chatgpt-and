@@ -211,10 +211,6 @@ class SMSManager:
         # Check if we should respond
         should_respond = self._should_respond(message, contact)
         
-        # If fed, don't send regular response, just thank
-        if fed:
-            should_respond = False
-        
         return {
             'status': 'ok',
             'contact': contact,
