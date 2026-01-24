@@ -586,7 +586,6 @@ def main():
                     
                     # Koble ned alle WiFi-connections først
                     import subprocess
-                    import time
                     get_active = subprocess.run(
                         ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
                         capture_output=True, text=True, timeout=5
