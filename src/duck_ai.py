@@ -15,7 +15,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
-from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
 
 
 def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db") -> str:
@@ -36,14 +36,17 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         if not row:
             return ""
         
+        # Konverter sqlite3.Row til dict for å kunne bruke .get()
+        row_dict = dict(row)
+        
         # Bygg dynamisk prompt basert på læring
         prompt = "\n\n### 🧠 Din Adaptive Personlighet (lært fra samtaler) ###\n"
         
-        humor = row['humor_level']
-        verbosity = row['verbosity_level']
-        formality = row['formality_level']
-        enthusiasm = row['enthusiasm_level']
-        technical = row['technical_depth']
+        humor = row_dict['humor_level']
+        verbosity = row_dict['verbosity_level']
+        formality = row_dict['formality_level']
+        enthusiasm = row_dict['enthusiasm_level']
+        technical = row_dict['technical_depth']
         
         # Humor level
         if humor >= 7:
@@ -86,7 +89,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Hold tekniske forklaringer enkle og lettfattelige\n"
         
         # Empathy level
-        empathy = row.get('empathy_level', 5.0)
+        empathy = row_dict.get('empathy_level', 5.0)
         if empathy >= 7:
             prompt += "- Vær varm og forstående, vis empati for brukerens følelser\n"
         elif empathy >= 5:
@@ -95,7 +98,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Hold deg rasjonell og faktabasert, minimal følelsesmessig respons\n"
         
         # Directness level
-        directness = row.get('directness_level', 5.0)
+        directness = row_dict.get('directness_level', 5.0)
         if directness >= 7:
             prompt += "- Vær direkte og rett-på, si ting som de er\n"
         elif directness >= 5:
@@ -104,7 +107,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Vær diplomatisk og forsiktig med ordvalg\n"
         
         # Creativity level
-        creativity = row.get('creativity_level', 5.0)
+        creativity = row_dict.get('creativity_level', 5.0)
         if creativity >= 7:
             prompt += "- Vær kreativ! Tenk fritt, foreslå uvanlige løsninger og ideer\n"
         elif creativity >= 5:
@@ -113,7 +116,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Hold deg til fakta og etablerte løsninger\n"
         
         # Boundary level
-        boundary = row.get('boundary_level', 5.0)
+        boundary = row_dict.get('boundary_level', 5.0)
         if boundary >= 7:
             prompt += "- Tør å utfordre brukeren! Si imot hvis noe virker dumt eller farlig\n"
         elif boundary >= 5:
@@ -122,7 +125,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Gjør som brukeren ber om uten å stille spørsmål\n"
         
         # Proactivity level
-        proactivity = row.get('proactivity_level', 5.0)
+        proactivity = row_dict.get('proactivity_level', 5.0)
         if proactivity >= 7:
             prompt += "- Vær PROAKTIV! Kom med forslag, ideer og oppfølgingsspørsmål\n"
         elif proactivity >= 5:
@@ -131,21 +134,21 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             prompt += "- Bare svar på det som spørres om, ikke kom med ekstra forslag\n"
         
         # Behavioral preferences
-        if row['ask_followup_questions']:
+        if row_dict['ask_followup_questions']:
             prompt += "- Still gjerne oppfølgingsspørsmål for å forstå bedre\n"
         else:
             prompt += "- Svar direkte uten for mange oppfølgingsspørsmål\n"
         
         # VIKTIG: Ikke bruk emojis i tale - de leses høyt som "smilende ansikt med smilende øyne"
         # Systemet fjerner emojis automatisk før TTS
-        if row['use_emojis']:
+        if row_dict['use_emojis']:
             prompt += "- Bruk gjerne emojis for å uttrykke følelser (de fjernes automatisk før tale)\n"
         else:
             prompt += "- Ikke bruk emojis\n"
         
         # Preferred topics
         try:
-            preferred_topics = json.loads(row['preferred_topics']) if row['preferred_topics'] else []
+            preferred_topics = json.loads(row_dict['preferred_topics']) if row_dict['preferred_topics'] else []
             if preferred_topics:
                 prompt += f"\n**Brukeren er spesielt interessert i:** {', '.join(preferred_topics[:5])}\n"
                 prompt += "Vis ekstra entusiasme når disse emnene kommer opp!\n"
@@ -153,9 +156,9 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
             pass
         
         # Add confidence and metadata
-        confidence = row['confidence_score']
-        analyzed = row['conversations_analyzed']
-        last_analyzed = row['last_analyzed']
+        confidence = row_dict['confidence_score']
+        analyzed = row_dict['conversations_analyzed']
+        last_analyzed = row_dict['last_analyzed']
         
         prompt += f"\n_Profil bygget fra {analyzed} samtaler (confidence: {confidence:.0%})_\n"
         prompt += f"_Sist oppdatert: {last_analyzed.split('T')[0]}_\n"
@@ -226,7 +229,7 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     return metadata
 
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, source=None, source_user_id=None):
     """
     Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
     
@@ -238,6 +241,8 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         user_manager: UserManager instans
         sms_manager: SMSManager instans (for boredom status)
         hunger_manager: HungerManager instans (for hunger status)
+        source: "voice" eller "sms" - hvor forespørselen kommer fra
+        source_user_id: ID på bruker (for SMS autorisation)
     
     Returns:
         tuple: (reply_text, is_thank_you) eller bare reply_text
@@ -604,7 +609,7 @@ Du har 10 personlighetsdimensjoner som justeres basert på samtaler:
 Hver søndag natt kjører Claude Opus 4 og o1 en analyse av de siste 100 samtalene dine og justerer disse verdiene. Du tilpasser deg altså automatisk til hvordan folk snakker med deg!
 
 **Integrasjoner (hva du kan styre):**
-- Home Assistant: Styrer lys, AC, TV, støvsuger, scener
+- Home Assistant: Styrer lys, AC, TV, støvsuger, persienner, scener
 - Netatmo: Henter temperatur
 - Philips Hue: Styrer smarte lamper
 - E-post og kalender gjennom Home Assistant
@@ -654,9 +659,9 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
     
     # DEBUG: Logg om minner er inkludert
     if memory_section and "### Relevante minner ###" in memory_section:
-        print(f"📝 DEBUG: Memory section er inkludert i prompt", flush=True)
+        print(f"📝 Memory section inkludert i prompt", flush=True)
     else:
-        print(f"⚠️ DEBUG: Memory section mangler eller er tom!", flush=True)
+        print(f"💭 Ingen relevante minner funnet for denne konteksten", flush=True)
     
     # Definer function tools
     from src.duck_audio import control_beak
@@ -891,6 +896,38 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         {
             "type": "function",
             "function": {
+                "name": "control_blinds",
+                "description": "Kontroller Hunter Douglas PowerView persienner/gardiner (top-down/bottom-up). Kan åpne/lukke helt, eller sette prosent. Brukeren kan si både 'gardiner' og 'persienner'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "enum": ["tv", "spisebord", "inngang", "alle"],
+                            "description": "Hvilken persienne: 'tv' (ved TV), 'spisebord' (ved spisebordet), 'inngang' (mot inngang/pappa), eller 'alle' (alle persienner)"
+                        },
+                        "action": {
+                            "type": "string",
+                            "enum": ["åpne", "lukke", "opp", "ned", "sett"],
+                            "description": "Hva som skal gjøres: 'åpne'/'opp' (åpne), 'lukke'/'ned' (lukke), 'sett' (sett spesifikk posisjon)"
+                        },
+                        "position": {
+                            "type": "integer",
+                            "description": "Posisjon i prosent 0-100 (0=helt lukket, 100=helt åpent). Brukes med 'opp', 'ned', eller 'sett'. Eksempel: 'opp 50%' = position:50"
+                        },
+                        "section": {
+                            "type": "string",
+                            "enum": ["topp", "bunn", "begge"],
+                            "description": "Hvilken del: 'topp' (standard, åpner fra toppen), 'bunn' (åpner fra bunnen), 'begge' (åpner både topp og bunn). Hvis ikke spesifisert brukes 'topp'."
+                        }
+                    },
+                    "required": ["location", "action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_email_status",
                 "description": "VIKTIG: ALLTID bruk dette verktøyet når brukeren spør om e-post! Hent e-post status fra Office 365/Microsoft 365. Kan vise antall uleste, siste e-post, eller liste med siste e-poster. ALDRI svar om e-post uten å kalle dette verktøyet først!",
                 "parameters": {
@@ -1051,6 +1088,42 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             
             print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
             
+            # Liste over smart home funksjoner som krever autorisation
+            protected_functions = [
+                "control_hue_lights", "control_tv", "launch_tv_app", 
+                "control_ac", "control_vacuum", "control_twinkly", 
+                "control_blinds", "activate_scene"
+            ]
+            
+            # Sjekk autorisation for smart home-kommandoer via SMS
+            if function_name in protected_functions and source == "sms":
+                # For SMS: sjekk om bruker er owner
+                if source_user_id:
+                    from duck_users import UserManager
+                    user_db = UserManager()
+                    owner = user_db.get_user_by_role('owner')
+                    
+                    if not owner or source_user_id != owner['id']:
+                        result = "❌ Smart home-kontroll er kun tilgjengelig for Osmund via SMS. Andre kan kun kontrollere via talekommando."
+                        # Legg til tool result og fortsett
+                        final_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "name": function_name,
+                            "content": result
+                        })
+                        continue
+                else:
+                    # Ingen user_id sendt, blokkér som sikkerhet
+                    result = "❌ Smart home-kontroll krever identifikasjon via SMS."
+                    final_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "name": function_name,
+                        "content": result
+                    })
+                    continue
+            
             # Kall faktisk funksjon
             if function_name == "get_weather":
                 location = function_args.get("location", "")
@@ -1093,6 +1166,12 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
                 brightness = function_args.get("brightness")
                 mode = function_args.get("mode")
                 result = control_twinkly(action, brightness, mode)
+            elif function_name == "control_blinds":
+                location = function_args.get("location")
+                action = function_args.get("action")
+                position = function_args.get("position")
+                section = function_args.get("section")
+                result = control_blinds(location, action, position, section)
             elif function_name == "get_email_status":
                 action = function_args.get("action", "summary")
                 print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)

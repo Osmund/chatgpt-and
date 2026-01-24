@@ -718,7 +718,9 @@ Svar kort og naturlig (maks 155 tegn). Bruk emoji 🦆 hvis passende."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=HungerManager()
+                hunger_manager=HungerManager(),
+                source="sms",
+                source_user_id=contact['id']
             )
             
             # chatgpt_query returnerer tuple (reply_text, is_thank_you)

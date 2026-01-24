@@ -616,7 +616,8 @@ def main():
                     memory_manager=memory_manager, 
                     user_manager=user_manager,
                     sms_manager=sms_manager,
-                    hunger_manager=hunger_manager
+                    hunger_manager=hunger_manager,
+                    source="voice"
                 )
                 off()  # Slå av blinking når svaret er klart
                 

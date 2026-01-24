@@ -32,6 +32,9 @@ def get_adaptive_greeting(db_path: str = "/home/admog/Code/chatgpt-and/duck_memo
             # Fallback til default hilsen
             return f"Hei {user_name}, hva kan jeg hjelpe deg med?"
         
+        # Konverter sqlite3.Row til dict for å kunne bruke dictionary access
+        profile = dict(profile)
+        
         humor = profile['humor_level']
         enthusiasm = profile['enthusiasm_level']
         formality = profile['formality_level']
@@ -134,6 +137,9 @@ def get_adaptive_goodbye(db_path: str = "/home/admog/Code/chatgpt-and/duck_memor
         
         if not profile:
             return "Greit! Ha det bra!"
+        
+        # Konverter sqlite3.Row til dict for å kunne bruke dictionary access
+        profile = dict(profile)
         
         humor = profile['humor_level']
         enthusiasm = profile['enthusiasm_level']

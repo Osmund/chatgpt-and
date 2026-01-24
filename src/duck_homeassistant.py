@@ -615,8 +615,9 @@ def create_movie_scene():
             "media_player.samsung_8_series_65_ue65ru8005uxxc": {
                 "state": "on"
             },
-            # PowerView blinds (når du får gateway)
-            # "cover.luxaflex_tv": {"state": "closed"},
+            # PowerView blinds - lukk topp og bunn ved TV
+            "cover.stue_tv_topp": {"state": "closed"},
+            "cover.stue_tv_bunn": {"state": "closed"}
         }
     }
     
@@ -716,6 +717,106 @@ def get_ha_state(entity_id):
             
     except requests.exceptions.RequestException as e:
         return f"❌ Kunne ikke hente status: {e}"
+
+
+def control_blinds(location: str, action: str, position: int = None, section: str = None):
+    """
+    Kontroller Hunter Douglas PowerView persienner (top-down/bottom-up)
+    
+    Args:
+        location: "tv", "spisebord", "inngang" (eller "alle")
+        action: "åpne", "lukke", "opp", "ned", "sett" (for posisjon)
+        position: 0-100 (valgfri, for prosentvis kontroll)
+        section: "topp", "bunn", eller None (begge)
+    
+    Eksempler:
+        - control_blinds("tv", "åpne")  # Åpner både topp og bunn
+        - control_blinds("spisebord", "opp", 50, "topp")  # Åpner toppen 50%
+        - control_blinds("alle", "lukke")  # Lukker alle
+    """
+    # Mapper location til entity IDs
+    location_map = {
+        "tv": "stue_tv",
+        "spisebord": "stue_spisebord",
+        "inngang": "mot_pappa"
+    }
+    
+    # Velg hvilke entities som skal kontrolleres
+    # Standard: åpne fra toppen hvis ikke spesifisert
+    if section is None:
+        section = "topp"
+    
+    if location == "alle":
+        entities = []
+        for loc in location_map.values():
+            if section == "topp":
+                entities.append(f"cover.{loc}_topp")
+            elif section == "bunn":
+                entities.append(f"cover.{loc}_bunn")
+            elif section == "begge":
+                entities.extend([f"cover.{loc}_topp", f"cover.{loc}_bunn"])
+    else:
+        if location not in location_map:
+            return f"❌ Ukjent lokasjon: {location}. Bruk: tv, spisebord, inngang, eller alle"
+        
+        base = location_map[location]
+        if section == "topp":
+            entities = [f"cover.{base}_topp"]
+        elif section == "bunn":
+            entities = [f"cover.{base}_bunn"]
+        elif section == "begge":
+            entities = [f"cover.{base}_topp", f"cover.{base}_bunn"]
+    
+    # Bestem service og data basert på action
+    if action in ["åpne", "opp"]:
+        if position is not None:
+            service = "cover.set_cover_position"
+            service_data_template = {"position": position}
+        else:
+            service = "cover.open_cover"
+            service_data_template = {}
+    elif action in ["lukke", "ned"]:
+        if position is not None:
+            # "ned 20%" betyr posisjon 20 (20% åpent)
+            service = "cover.set_cover_position"
+            service_data_template = {"position": position}
+        else:
+            service = "cover.close_cover"
+            service_data_template = {}
+    elif action == "sett":
+        if position is None:
+            return "❌ Du må spesifisere posisjon (0-100) når du bruker 'sett'"
+        service = "cover.set_cover_position"
+        service_data_template = {"position": position}
+    else:
+        return f"❌ Ukjent handling: {action}. Bruk: åpne, lukke, opp, ned, sett"
+    
+    # Utfør kommandoen for hver entity
+    results = []
+    domain, service_name = service.split('.')
+    
+    for entity_id in entities:
+        # Bruk call_ha_service med riktig argumenter
+        extra_data = service_data_template.copy() if service_data_template else {}
+        
+        result = call_ha_service(domain, service_name, entity_id, extra_data)
+        
+        # Ekstraher bare entity navn for penere output
+        entity_name = entity_id.replace("cover.", "").replace("_", " ").title()
+        
+        if "✅" in result:
+            if position is not None:
+                results.append(f"✅ {entity_name}: {position}%")
+            else:
+                results.append(f"✅ {entity_name}")
+        else:
+            results.append(f"❌ {entity_name}: Feil")
+    
+    # Formater output
+    location_display = location.title() if location != "alle" else "Alle"
+    section_display = f" ({section})" if section else ""
+    
+    return f"{location_display}{section_display}: {', '.join(results)}"
 
 
 # Test funksjon

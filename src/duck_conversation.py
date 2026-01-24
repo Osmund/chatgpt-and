@@ -37,7 +37,8 @@ def check_ai_queries(api_key, speech_config, beak, memory_manager=None, user_man
                         memory_manager=memory_manager, 
                         user_manager=user_manager,
                         sms_manager=sms_manager,
-                        hunger_manager=hunger_manager
+                        hunger_manager=hunger_manager,
+                        source="voice"
                     )
                     
                     # Håndter tuple response
