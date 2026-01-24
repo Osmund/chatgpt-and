@@ -1211,8 +1211,6 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
                 result = control_tv(action)
             elif function_name == "switch_network":
                 # Bytt nettverk - koble fra WiFi og start hotspot
-                import subprocess
-                import os
                 try:
                     # Skriv trigger-fil for å fortelle Duck å skifte
                     with open('/tmp/duck_switch_network.txt', 'w') as f:

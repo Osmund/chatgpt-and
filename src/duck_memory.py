@@ -191,7 +191,7 @@ class MemoryManager:
     
     def _init_database(self):
         """Opprett tabeller og indexes"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -358,7 +358,7 @@ class MemoryManager:
     
     def _get_connection(self) -> sqlite3.Connection:
         """Hent database connection"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         return conn
     

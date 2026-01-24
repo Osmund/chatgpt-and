@@ -262,7 +262,26 @@ class MemoryWorker:
         self.memory_manager = memory_manager
         self.extractor = extractor
         self.processed_count = 0
+        self.sms_processed_count = 0
         self.start_time = datetime.now()
+        self._ensure_sms_processed_table()
+    
+    def _ensure_sms_processed_table(self):
+        """Opprett tabell for å tracke prosesserte SMS"""
+        try:
+            conn = self.memory_manager._get_connection()
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS sms_processed (
+                    sms_id INTEGER PRIMARY KEY,
+                    processed_at TEXT NOT NULL,
+                    FOREIGN KEY (sms_id) REFERENCES sms_history(id)
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"⚠️ Kunne ikke opprette sms_processed tabell: {e}", flush=True)
         
     def process_pending_messages(self):
         """
@@ -287,6 +306,199 @@ class MemoryWorker:
                 self.memory_manager.mark_message_processed(msg.id)
         
         return len(messages)
+    
+    def process_pending_sms(self):
+        """Prosesser uprosesserte innkommende SMS"""
+        try:
+            conn = self.memory_manager._get_connection()
+            c = conn.cursor()
+            
+            # Hent uprosesserte innkommende SMS med kontaktinfo
+            c.execute("""
+                SELECT sh.id, sh.message, sh.timestamp, sc.name, sc.phone
+                FROM sms_history sh
+                JOIN sms_contacts sc ON sh.contact_id = sc.id
+                LEFT JOIN sms_processed sp ON sh.id = sp.sms_id
+                WHERE sh.direction = 'inbound'
+                  AND sp.sms_id IS NULL
+                ORDER BY sh.timestamp ASC
+                LIMIT ?
+            """, (BATCH_SIZE,))
+            
+            sms_list = [dict(row) for row in c.fetchall()]
+            conn.close()
+            
+            if not sms_list:
+                return 0
+            
+            print(f"📱 Prosesserer {len(sms_list)} SMS...", flush=True)
+            
+            for sms in sms_list:
+                try:
+                    self._process_sms(sms)
+                    
+                    # Marker som prosessert
+                    conn = self.memory_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("""
+                        INSERT OR IGNORE INTO sms_processed (sms_id, processed_at)
+                        VALUES (?, ?)
+                    """, (sms['id'], datetime.now().isoformat()))
+                    conn.commit()
+                    conn.close()
+                    
+                    self.sms_processed_count += 1
+                    
+                except Exception as e:
+                    print(f"❌ Feil ved prosessering av SMS {sms['id']}: {e}", flush=True)
+                    # Marker som prosessert for å unngå blokkering
+                    conn = self.memory_manager._get_connection()
+                    c = conn.cursor()
+                    c.execute("""
+                        INSERT OR IGNORE INTO sms_processed (sms_id, processed_at)
+                        VALUES (?, ?)
+                    """, (sms['id'], datetime.now().isoformat()))
+                    conn.commit()
+                    conn.close()
+            
+            return len(sms_list)
+            
+        except Exception as e:
+            print(f"❌ Feil ved SMS-prosessering: {e}", flush=True)
+            return 0
+    
+    def _process_sms(self, sms: dict):
+        """Prosesser én SMS-melding"""
+        # Ekstraher minner fra SMS med spesifikk kontekst om avsender
+        # VIKTIG: For SMS må vi spesifisere at "brukeren" er SMS-avsenderen
+        extracted = self._extract_from_sms(
+            sender_name=sms['name'],
+            message=sms['message']
+        )
+        
+        # Lagre profile facts
+        for fact_data in extracted.get('profile_facts', []):
+            try:
+                auto_metadata = {
+                    'learned_at': datetime.now().isoformat(),
+                    'source_sms_id': sms['id'],
+                    'extraction_confidence': fact_data.get('confidence', 0.7),
+                    'learned_from': 'sms',
+                    'sender': sms['name']
+                }
+                
+                fact = ProfileFact(
+                    key=fact_data['key'],
+                    value=fact_data['value'],
+                    topic=fact_data.get('topic', 'general'),
+                    confidence=fact_data.get('confidence', 0.7),  # Litt lavere confidence for SMS
+                    source='sms',
+                    metadata=auto_metadata
+                )
+                self.memory_manager.save_profile_fact(fact)
+                self.memory_manager.update_fact_embedding(fact.key)
+                
+                print(f"  ✅ SMS Fact: {fact.key} = {fact.value} (fra {sms['name']})", flush=True)
+            except Exception as e:
+                print(f"  ⚠️ Kunne ikke lagre SMS fact: {e}", flush=True)
+        
+        # Lagre memories
+        for mem_data in extracted.get('memories', []):
+            try:
+                auto_metadata = {
+                    'learned_at': datetime.now().isoformat(),
+                    'source_sms_id': sms['id'],
+                    'importance': mem_data.get('importance', 3),
+                    'learned_from': 'sms',
+                    'sender': sms['name']
+                }
+                
+                memory = Memory(
+                    text=mem_data['text'],
+                    topic=mem_data.get('topic', 'general'),
+                    confidence=mem_data.get('confidence', 0.7),
+                    source='sms',
+                    metadata=auto_metadata
+                )
+                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True, user_name=sms['name'])
+                print(f"  ✅ SMS Memory [{sms['name']}]: {memory.text[:50]}...", flush=True)
+            except Exception as e:
+                print(f"  ⚠️ Kunne ikke lagre SMS memory: {e}", flush=True)
+    
+    def _extract_from_sms(self, sender_name: str, message: str) -> dict:
+        """
+        Ekstraher minner fra SMS med korrekt kontekst om avsender
+        """
+        prompt = f"""
+Analyser følgende SMS-melding fra {sender_name} til AI-assistenten Anda.
+
+**KRITISK: Dette er en SMS FRA {sender_name} (IKKE fra Osmund)**
+
+Identifiser og ekstraher:
+
+1. **Profile Facts**: Fakta om {sender_name}
+   - Kun faktiske fakta som {sender_name} eksplisitt nevner om seg selv
+   - Bruk samme key-struktur som for Osmund, men prefikset med lavercased navn:
+     * {sender_name.lower()}_location, {sender_name.lower()}_partner_name, etc.
+   
+2. **Memories**: Episodiske minner verdt å huske
+   - **VIKTIG**: Skriv minner i tredjeperson om {sender_name}, IKKE "brukeren"
+   - Eksempel RIKTIG: "{sender_name} og Gunn Torill varmer seg ved ovnen"
+   - Eksempel FEIL: "Brukeren og Gunn Torill varmer seg ved ovnen"
+   - Kort og konsist (1-2 setninger)
+
+SMS fra {sender_name}: {message}
+
+Returner JSON:
+{{
+    "profile_facts": [
+        {{"key": "...", "value": "...", "topic": "...", "confidence": 0.7, "source": "sms"}}
+    ],
+    "memories": [
+        {{"text": "...", "topic": "...", "confidence": 0.7, "importance": 1-5}}
+    ],
+    "topics": ["..."],
+    "importance": 1-5
+}}
+"""
+        
+        try:
+            response = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={'Authorization': f'Bearer {self.extractor.api_key}'},
+                json={
+                    'model': 'gpt-4o-mini' if not USE_CHEAP_MODEL else 'gpt-3.5-turbo',
+                    'messages': [
+                        {'role': 'system', 'content': 'Du er en memory extraction assistent. Returner alltid valid JSON.'},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    'temperature': 0.3,
+                    'response_format': {'type': 'json_object'}
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+                self.extractor.extraction_count += 1
+                return json.loads(content)
+            else:
+                print(f"⚠️ SMS extraction API error: {response.status_code}", flush=True)
+                return {
+                    'profile_facts': [],
+                    'memories': [],
+                    'topics': [],
+                    'importance': 1
+                }
+        except Exception as e:
+            print(f"⚠️ SMS extraction error: {e}", flush=True)
+            return {
+                'profile_facts': [],
+                'memories': [],
+                'topics': [],
+                'importance': 1
+            }
     
     def _get_conversation_context(self, current_msg_id: int, context_size: int = 2) -> List[tuple]:
         """
@@ -424,6 +636,7 @@ class MemoryWorker:
         print(f"\n📊 Memory Worker Stats", flush=True)
         print(f"  Uptime: {uptime_str}", flush=True)
         print(f"  Meldinger prosessert: {self.processed_count}", flush=True)
+        print(f"  SMS prosessert: {self.sms_processed_count}", flush=True)
         print(f"  Extractions: {self.extractor.extraction_count}", flush=True)
         print(f"  Ventende meldinger: {stats['unprocessed_messages']}", flush=True)
         print(f"  Total minner: {stats['total_memories']}", flush=True)
@@ -507,6 +720,9 @@ class MemoryWorker:
             try:
                 # Prosesser ventende meldinger
                 processed = self.process_pending_messages()
+                
+                # Prosesser ventende SMS
+                sms_processed = self.process_pending_sms()
                 
                 # Print stats hver 60. iterasjon (5 min ved 5s interval)
                 stats_counter += 1

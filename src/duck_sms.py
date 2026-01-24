@@ -45,7 +45,7 @@ class SMSManager:
     
     def _init_database(self):
         """Opprett SMS-tabeller hvis de ikke finnes"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         # SMS contacts table
@@ -220,7 +220,7 @@ class SMSManager:
     
     def get_boredom_level(self) -> float:
         """Get current boredom level (0-10)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -232,7 +232,7 @@ class SMSManager:
     
     def increase_boredom(self, amount: float = 0.5):
         """Increase boredom level (called by timer)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         c.execute("""
@@ -251,7 +251,7 @@ class SMSManager:
     
     def reduce_boredom(self, amount: float = 3.0):
         """Reduce boredom level (called when interaction happens)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         c.execute("""
@@ -270,7 +270,7 @@ class SMSManager:
     
     def check_boredom_trigger(self) -> bool:
         """Check if boredom threshold is reached"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -297,7 +297,7 @@ class SMSManager:
         3. Prioritize by priority number (lower = higher priority)
         4. Rotate between contacts (don't spam same person)
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -357,7 +357,7 @@ class SMSManager:
             self.reduce_boredom(amount=2.0)
             
             # Update last_trigger
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
             c = conn.cursor()
             c.execute("""
                 UPDATE boredom_state 
@@ -459,7 +459,7 @@ Maks 155 tegn."""
     
     def _get_sms_conversation_history(self, contact_id: int, hours: int = 24) -> list:
         """Get SMS conversation history for context (last 24 hours by default)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -485,7 +485,7 @@ Maks 155 tegn."""
     def _log_sms(self, contact_id: int, direction: str, message: str, 
                   status: str, twilio_sid: str = None):
         """Log SMS in history table"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         boredom_level = self.get_boredom_level()
@@ -501,7 +501,7 @@ Maks 155 tegn."""
     
     def _update_contact_stats(self, contact_id: int, direction: str):
         """Update contact statistics"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         if direction == 'sent':
@@ -524,7 +524,7 @@ Maks 155 tegn."""
     
     def get_contact_by_phone(self, phone: str) -> Optional[Dict]:
         """Get contact by phone number"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -537,7 +537,7 @@ Maks 155 tegn."""
     def add_contact(self, name: str, phone: str, relation: str = 'friend',
                     priority: int = 5, max_daily_messages: int = 3) -> Dict:
         """Add a new SMS contact"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
         try:
@@ -560,7 +560,7 @@ Maks 155 tegn."""
     
     def get_all_contacts(self) -> List[Dict]:
         """Get all SMS contacts"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -622,7 +622,7 @@ Maks 155 tegn."""
             session_id = f"sms_{contact['name']}_{session_date}"
             
             # Save to messages table
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
             c = conn.cursor()
             
             metadata = json.dumps({
@@ -691,7 +691,6 @@ Maks 155 tegn."""
                     conversation_context += f"{sender}: {msg['content']}\n"
             
             # Generate AI response with full context
-            from datetime import datetime
             current_date = datetime.now().strftime('%d. %B %Y')
             prompt = f"""Du er {os.getenv('DUCK_NAME', 'Samantha')}, en snakkende and.
 I dag er det {current_date}.
@@ -704,9 +703,6 @@ VIKTIG: Svar på det som ble spurt om i kontekst av samtalen. Du kan gjerne stil
 IKKE nevn bursdager, arrangementer eller andre ting som ikke er relevante.
 Svar kort og naturlig (maks 155 tegn). Bruk emoji 🦆 hvis passende."""
             
-            # Import HungerManager for status
-            from src.duck_hunger import HungerManager
-            
             # chatgpt_query krever messages-liste, ikke bare prompt
             messages = [{"role": "user", "content": prompt}]
             response = chatgpt_query(
@@ -714,7 +710,7 @@ Svar kort og naturlig (maks 155 tegn). Bruk emoji 🦆 hvis passende."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=HungerManager(),
+                hunger_manager=None,  # Skip hunger manager for SMS (GPIO conflicts)
                 source="sms",
                 source_user_id=contact['id']
             )
@@ -728,7 +724,7 @@ Svar kort og naturlig (maks 155 tegn). Bruk emoji 🦆 hvis passende."""
             return reply_text.strip()
         except Exception as e:
             print(f"⚠️ AI response generation failed: {e}", flush=True)
-            # Fallback response
+            # Fallback til generisk melding
             return f"Kvakk! 🦆 Takk for meldingen, {contact['name']}!"
     
     def _generate_bored_message(self, contact: Dict) -> str:
