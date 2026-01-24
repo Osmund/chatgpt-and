@@ -129,6 +129,19 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
                     
+                    # Sjekk om det finnes hotspot-annonseringer
+                    hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
+                    if os.path.exists(hotspot_announcement_file):
+                        try:
+                            with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
+                                announcement = f.read().strip()
+                            os.remove(hotspot_announcement_file)
+                            if announcement:
+                                print(f"📡 Hotspot announcement: {announcement[:50]}...", flush=True)
+                                return f"__HOTSPOT_ANNOUNCEMENT__{announcement}"
+                        except Exception as e:
+                            print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
+                    
                     # Sjekk om det finnes en sang-forespørsel
                     if os.path.exists(SONG_REQUEST_FILE):
                         try:

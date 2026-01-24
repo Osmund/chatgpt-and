@@ -9,6 +9,7 @@ import subprocess
 import urllib.parse
 import json
 import time
+import os
 
 # Cache for network list (unngå gjentatte scans)
 network_cache = {'data': {}, 'timestamp': 0}
@@ -280,10 +281,12 @@ class WiFiHandler(BaseHTTPRequestHandler):
                     
                     if existing_conn:
                         print(f"Bruker eksisterende connection: {existing_conn}", flush=True)
-                        # Oppdater passord hvis endret
+                        # Oppdater passord og autoconnect-innstillinger
                         subprocess.run([
                             'sudo', 'nmcli', 'connection', 'modify', existing_conn,
-                            'wifi-sec.psk', password
+                            'wifi-sec.psk', password,
+                            'connection.autoconnect', 'yes',
+                            'connection.autoconnect-priority', '10'
                         ], capture_output=True, timeout=5)
                         
                         cmd = ['sudo', 'nmcli', 'connection', 'up', existing_conn]
@@ -291,14 +294,16 @@ class WiFiHandler(BaseHTTPRequestHandler):
                         # Opprett ny connection med SSID som navn (ikke temp-)
                         print(f"Oppretter ny connection: {ssid}", flush=True)
                         
-                        # Opprett ny connection med WPA-PSK
+                        # Opprett ny connection med WPA-PSK og autoconnect
                         add_result = subprocess.run([
                             'sudo', 'nmcli', 'connection', 'add',
                             'type', 'wifi',
                             'con-name', ssid,
                             'ssid', ssid,
                             'wifi-sec.key-mgmt', 'wpa-psk',
-                            'wifi-sec.psk', password
+                            'wifi-sec.psk', password,
+                            'connection.autoconnect', 'yes',
+                            'connection.autoconnect-priority', '10'
                         ], capture_output=True, text=True, timeout=10)
                         
                         if add_result.returncode != 0:
@@ -321,7 +326,27 @@ class WiFiHandler(BaseHTTPRequestHandler):
                 
                 # Prøv å koble til
                 print("Kobler til...", flush=True)
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                
+                # Start LED blinking for å vise at noe skjer (lagre prosess for å stoppe den senere)
+                led_blink_process = subprocess.Popen([
+                    'sudo', '-u', 'admog',
+                    '/home/admog/Code/chatgpt-and/.venv/bin/python3', '-c',
+                    'from rgb_duck import blink_yellow_purple; blink_yellow_purple(); import time; time.sleep(60)'
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
+                # Voice announcement: Prøver å koble til
+                with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
+                    f.write(f"Jeg prøver å koble til {ssid} nå...")
+                
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                finally:
+                    # Stopp LED-blinking prosess
+                    try:
+                        led_blink_process.terminate()
+                        led_blink_process.wait(timeout=1)
+                    except:
+                        pass
                 
                 print(f"Return code: {result.returncode}", flush=True)
                 print(f"Stdout: {result.stdout}", flush=True)
@@ -330,23 +355,80 @@ class WiFiHandler(BaseHTTPRequestHandler):
                 if result.returncode == 0:
                     print("Tilkobling vellykket!", flush=True)
                     
-                    # Start duck-servicen automatisk etter vellykket WiFi-tilkobling
-                    try:
-                        print("Starter ChatGPT Duck...", flush=True)
-                        duck_result = subprocess.run(
-                            ['systemctl', 'start', 'chatgpt-duck.service'],
-                            capture_output=True, text=True, timeout=5
-                        )
-                        if duck_result.returncode == 0:
-                            print("Duck startet!", flush=True)
-                        else:
-                            print(f"Kunne ikke starte Duck: {duck_result.stderr}", flush=True)
-                    except Exception as e:
-                        print(f"Feil ved start av Duck: {e}", flush=True)
+                    # Sett LED til grønn
+                    subprocess.run([
+                        'sudo', '-u', 'admog',
+                        '/home/admog/Code/chatgpt-and/.venv/bin/python3', '-c',
+                        'from rgb_duck import set_green; set_green()'
+                    ], capture_output=True, timeout=2)
                     
-                    response = {'success': True, 'message': 'WiFi tilkoblet! ChatGPT Duck starter...'}
+                    # Voice announcement: Vellykket
+                    with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
+                        f.write(f"Supert! Jeg er nå koblet til {ssid}. Hotspot stoppes og jeg starter opp igjen.")
+                    
+                    # Verifiser at vi har internett (ping test)
+                    time.sleep(2)  # Vent litt for at connection skal stabilisere seg
+                    ping_result = subprocess.run(
+                        ['ping', '-c', '1', '-W', '3', '8.8.8.8'],
+                        capture_output=True, timeout=5
+                    )
+                    
+                    if ping_result.returncode != 0:
+                        print("ADVARSEL: Tilkoblet WiFi men ingen internett-tilgang", flush=True)
+                    
+                    # Stopp monitor først (den vil prøve å stoppe hotspot om den ser WiFi)
+                    if os.path.exists('/tmp/hotspot_monitor.pid'):
+                        try:
+                            with open('/tmp/hotspot_monitor.pid', 'r') as f:
+                                monitor_pid = int(f.read().strip())
+                            subprocess.run(['kill', str(monitor_pid)], capture_output=True, timeout=2)
+                            os.remove('/tmp/hotspot_monitor.pid')
+                            print(f"Stoppet monitor (PID: {monitor_pid})", flush=True)
+                        except Exception as e:
+                            print(f"Kunne ikke stoppe monitor: {e}", flush=True)
+                    
+                    # Stopp hotspot eksplisitt
+                    print("Stopper hotspot...", flush=True)
+                    subprocess.run(
+                        ['sudo', 'nmcli', 'connection', 'down', 'Hotspot'],
+                        capture_output=True, timeout=5
+                    )
+                    
+                    # Start Duck service (monitor er stoppet, så vi må gjøre det)
+                    print("Starter Duck service...", flush=True)
+                    subprocess.run(['sudo', 'systemctl', 'restart', 'chatgpt-duck.service'],
+                                 capture_output=True, timeout=10)
+                    
+                    response = {'success': True, 'message': 'WiFi tilkoblet! Hotspot stoppes og Duck starter...'}
+                    
+                    # Send response først
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode())
+                    
+                    # Vent litt så response kommer frem, så avslutt portal
+                    time.sleep(2)
+                    print("Portal avslutter (WiFi tilkoblet)", flush=True)
+                    os._exit(0)  # Avslutt prosessen
+                    
                 else:
+                    # Blink LED raskt for feil, deretter tilbake til gul
+                    try:
+                        # Kjør et lite Python-script for feil-feedback
+                        subprocess.run([
+                            'sudo', '-u', 'admog',
+                            '/home/admog/Code/chatgpt-and/.venv/bin/python3', '-c',
+                            'from rgb_duck import blink_yellow, set_yellow; import time; blink_yellow(); time.sleep(3); set_yellow()'
+                        ], capture_output=True, timeout=5)
+                    except:
+                        pass  # LED-feil skal ikke stoppe programmet
+                    
+                    # Voice announcement: Feilet
                     error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+                    with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
+                        f.write(f"Ojsann, jeg klarte ikke å koble til {ssid}. Sjekk passordet og prøv igjen.")
+                    
                     response = {'success': False, 'error': error_msg}
                     print(f"Tilkobling feilet: {error_msg}", flush=True)
                 
@@ -396,14 +478,12 @@ if __name__ == '__main__':
     # Rydd opp i gamle temp-connections ved oppstart
     cleanup_temp_connections()
     
+    # Hotspot IP (sett i setup-hotspot.sh)
+    HOTSPOT_IP = "192.168.50.1"
+    
     server = HTTPServer(('0.0.0.0', 80), WiFiHandler)
-    print("WiFi Setup Portal kjører på http://10.42.0.1")
+    print(f"WiFi Setup Portal kjører på http://{HOTSPOT_IP}")
     print("Koble til hotspot 'ChatGPT-Duck' (passord: kvakkkvakk)")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nAvslutter...")
-        server.shutdown()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

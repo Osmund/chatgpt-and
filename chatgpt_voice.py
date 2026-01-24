@@ -269,6 +269,14 @@ def heartbeat_loop():
 
 def main():
     """Hovedloop for stemmeassistenten"""
+    # Rydd opp gamle trigger-filer ved oppstart
+    try:
+        if os.path.exists('/tmp/duck_switch_network.txt'):
+            os.remove('/tmp/duck_switch_network.txt')
+            print("🧹 Ryddet opp gammel switch_network trigger", flush=True)
+    except:
+        pass
+    
     # Prøv å initialisere servo, men fortsett uten hvis den ikke finnes
     beak = None
     try:
@@ -419,6 +427,9 @@ def main():
     if not greeting_success:
         print("Oppstartshilsen kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
+    # Vent litt ekstra for å la nebbet fullføre bevegelsene
+    time.sleep(0.5)
+    
     print("Anda venter på wake word... (si 'quack quack')", flush=True)
     
     # Session tracking: Generer ny session_id ved hver samtale
@@ -511,6 +522,11 @@ def main():
                 announcement = external_message.replace('__HUNGER_ANNOUNCEMENT__', '', 1)
                 speak(announcement, speech_config, beak)
                 continue  # Gå tilbake til wake word
+            elif external_message.startswith('__HOTSPOT_ANNOUNCEMENT__'):
+                # Hotspot announcement
+                announcement = external_message.replace('__HOTSPOT_ANNOUNCEMENT__', '', 1)
+                speak(announcement, speech_config, beak)
+                continue  # Gå tilbake til wake word
             elif external_message.startswith('__PLAY_SONG__'):
                 # Spill av en sang
                 song_path = external_message.replace('__PLAY_SONG__', '', 1)
@@ -561,6 +577,36 @@ def main():
             
             # Reset teller når vi får svar
             no_response_count = 0
+            
+            # Sjekk om bruker vil bytte nettverk (trigger fra AI funksjon)
+            if os.path.exists('/tmp/duck_switch_network.txt'):
+                try:
+                    os.remove('/tmp/duck_switch_network.txt')
+                    print("🔄 Bytter til hotspot-modus...", flush=True)
+                    
+                    # Koble ned alle WiFi-connections først
+                    import subprocess
+                    import time
+                    get_active = subprocess.run(
+                        ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    for line in get_active.stdout.strip().split('\n'):
+                        if ':802-11-wireless' in line and not line.startswith('Hotspot:'):
+                            conn_name = line.split(':')[0]
+                            subprocess.run(['sudo', 'nmcli', 'connection', 'down', conn_name],
+                                         capture_output=True, timeout=5)
+                    
+                    # Vent litt så WiFi er helt nede
+                    time.sleep(2)
+                    
+                    # Kjør auto-hotspot.sh som håndterer alt (LED, announcement, portal, monitor)
+                    subprocess.Popen(['/home/admog/Code/chatgpt-and/scripts/auto-hotspot.sh'])
+                    
+                    print("✅ Auto-hotspot startet!", flush=True)
+                    
+                except Exception as e:
+                    print(f"⚠️ Kunne ikke bytte til hotspot: {e}", flush=True)
             
             # Sjekk om bruker vil avslutte samtalen
             should_end_conversation = is_conversation_ending(prompt)

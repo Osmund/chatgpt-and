@@ -856,6 +856,18 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         {
             "type": "function",
             "function": {
+                "name": "switch_network",
+                "description": "Bytt WiFi-nettverk ved å starte hotspot. Bruk når brukeren vil koble til et annet nettverk eller når nettverket blokkerer kontrollpanelet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "control_ac",
                 "description": "Kontroller Panasonic klimaanlegg (AC) via Home Assistant. Kan skru på/av, endre temperatur, modus, og hente status/temperatur.",
                 "parameters": {
@@ -1197,6 +1209,18 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             elif function_name == "control_tv":
                 action = function_args.get("action")
                 result = control_tv(action)
+            elif function_name == "switch_network":
+                # Bytt nettverk - koble fra WiFi og start hotspot
+                import subprocess
+                import os
+                try:
+                    # Skriv trigger-fil for å fortelle Duck å skifte
+                    with open('/tmp/duck_switch_network.txt', 'w') as f:
+                        f.write('SWITCH')
+                    
+                    result = "OK, jeg starter hotspot nå. Koble til ChatGPT-Duck med passord kvakkkvakk for å velge nytt nettverk."
+                except Exception as e:
+                    result = f"Kunne ikke starte hotspot: {e}"
             elif function_name == "launch_tv_app":
                 app_name = function_args.get("app_name")
                 result = launch_tv_app(app_name)
