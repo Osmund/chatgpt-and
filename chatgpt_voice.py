@@ -132,40 +132,21 @@ def sms_polling_loop():
                             if result.get('status') == 'ok':
                                 contact = result.get('contact')
                                 
-                                # Check if we were fed!
-                                if result.get('fed'):
-                                    contact_name = contact.get('name', from_number) if contact else from_number
-                                    # Announce feeding
-                                    if '🍪' in message_text:
-                                        announcement = f"Mmm! Takk for cookien, {contact_name}! Jeg er mett nå! 😋🍪"
-                                    elif '🍕' in message_text:
-                                        announcement = f"Wow! Pizza! Takk {contact_name}! Så god! 😋🍕"
-                                    else:
-                                        announcement = f"Takk for maten, {contact_name}! 😋"
-                                    
-                                    print(f"🔊 Food announcement: {announcement}", flush=True)
-                                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                                        f.write(announcement)
-                                    
-                                    # Send thank you SMS
-                                    thank_you = f"Takk {contact_name}! 😋🦆"
-                                    sms_manager.send_sms(contact['phone'], thank_you)
+                                # Always announce the incoming message first
+                                if contact:
+                                    contact_name = contact.get('name', from_number)
+                                    announcement = f"Jeg fikk en melding fra {contact_name}, den sier: {message_text}"
                                 else:
-                                    # Normal SMS announcement
-                                    if contact:
-                                        contact_name = contact.get('name', from_number)
-                                        announcement = f"Jeg fikk en melding fra {contact_name}, den sier: {message_text}"
-                                    else:
-                                        announcement = f"Jeg fikk en melding fra {from_number}, den sier: {message_text}"
-                                    
-                                    print(f"🔊 Announcing SMS: {announcement[:50]}...", flush=True)
-                                    
-                                    # Write announcement to file for main loop to speak
-                                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                                        f.write(announcement)
+                                    announcement = f"Jeg fikk en melding fra {from_number}, den sier: {message_text}"
                                 
-                                # Send AI-generated response if appropriate (not if fed)
-                                if result.get('should_respond') and not result.get('fed'):
+                                print(f"🔊 Announcing SMS: {announcement[:50]}...", flush=True)
+                                
+                                # Write announcement to file for main loop to speak
+                                with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                                    f.write(announcement)
+                                
+                                # Send AI-generated response (AI will know if she was fed from context)
+                                if result.get('should_respond'):
                                     response_result = sms_manager.generate_and_send_response(
                                         contact, message_text
                                     )

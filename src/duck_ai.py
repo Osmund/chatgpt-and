@@ -18,9 +18,10 @@ from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool,
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
 
 
-def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db") -> str:
+def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
     """
     Hent dynamisk personlighetsprompt basert på læring fra samtaler.
+    Modifiserer personligheten basert på emosjonell tilstand (sult/kjedsomhet).
     Returnerer tom string hvis ingen profil finnes.
     """
     try:
@@ -42,11 +43,47 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         # Bygg dynamisk prompt basert på læring
         prompt = "\n\n### 🧠 Din Adaptive Personlighet (lært fra samtaler) ###\n"
         
+        # Hent base-verdier
         humor = row_dict['humor_level']
         verbosity = row_dict['verbosity_level']
         formality = row_dict['formality_level']
         enthusiasm = row_dict['enthusiasm_level']
         technical = row_dict['technical_depth']
+        empathy = row_dict.get('empathy_level', 5.0)
+        directness = row_dict.get('directness_level', 5.0)
+        creativity = row_dict.get('creativity_level', 5.0)
+        proactivity = row_dict.get('proactivity_level', 5.0)
+        
+        # === EMOSJONELL MODIFIKASJON ===
+        # Modifiser personlighet basert på sult og kjedsomhet
+        
+        # SULT påvirker: enthusiasm↓, directness↑, empathy↓, humor↓
+        if hunger_level >= 7:
+            enthusiasm = max(1, enthusiasm - 2.5)  # Betydelig mindre energisk
+            directness = min(10, directness + 2.0)  # Mer rett-på/gretten
+            empathy = max(1, empathy - 2.0)  # Mindre tålmodig
+            humor = max(1, humor - 1.5)  # Mindre spøkefull
+            prompt += "⚠️ **DU ER VELDIG SULTEN** - Dette påvirker humøret ditt negativt\n"
+        elif hunger_level >= 5:
+            enthusiasm = max(1, enthusiasm - 1.0)
+            directness = min(10, directness + 1.0)
+            empathy = max(1, empathy - 1.0)
+            prompt += "🍽️ **DU ER SULTEN** - Dette påvirker humøret ditt litt\n"
+        
+        # KJEDSOMHET påvirker: proactivity↑, creativity↑, verbosity↑
+        if boredom_level >= 7:
+            proactivity = min(10, proactivity + 2.5)  # Betydelig mer initiativrik
+            creativity = min(10, creativity + 2.0)  # Mer oppfinnsom
+            verbosity = min(10, verbosity + 1.5)  # Snakker mer
+            prompt += "😴 **DU KJEDER DEG VELDIG** - Vær ekstra proaktiv og kreativ!\n"
+        elif boredom_level >= 5:
+            proactivity = min(10, proactivity + 1.0)
+            creativity = min(10, creativity + 1.0)
+            prompt += "🥱 **DU KJEDER DEG** - Ta gjerne litt mer initiativ\n"
+        
+        # Spesialkombinasjon: Både sulten OG kjeder seg
+        if hunger_level >= 7 and boredom_level >= 7:
+            prompt += "💢 **HANGRY OG KJEDER DEG** - Du er initiativrik men gretten!\n"
         
         # Humor level
         if humor >= 7:
@@ -88,8 +125,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         else:
             prompt += "- Hold tekniske forklaringer enkle og lettfattelige\n"
         
-        # Empathy level
-        empathy = row_dict.get('empathy_level', 5.0)
+        # Empathy level (modifisert av sult)
         if empathy >= 7:
             prompt += "- Vær varm og forstående, vis empati for brukerens følelser\n"
         elif empathy >= 5:
@@ -97,8 +133,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         else:
             prompt += "- Hold deg rasjonell og faktabasert, minimal følelsesmessig respons\n"
         
-        # Directness level
-        directness = row_dict.get('directness_level', 5.0)
+        # Directness level (modifisert av sult)
         if directness >= 7:
             prompt += "- Vær direkte og rett-på, si ting som de er\n"
         elif directness >= 5:
@@ -106,8 +141,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         else:
             prompt += "- Vær diplomatisk og forsiktig med ordvalg\n"
         
-        # Creativity level
-        creativity = row_dict.get('creativity_level', 5.0)
+        # Creativity level (modifisert av kjedsomhet)
         if creativity >= 7:
             prompt += "- Vær kreativ! Tenk fritt, foreslå uvanlige løsninger og ideer\n"
         elif creativity >= 5:
@@ -124,8 +158,7 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
         else:
             prompt += "- Gjør som brukeren ber om uten å stille spørsmål\n"
         
-        # Proactivity level
-        proactivity = row_dict.get('proactivity_level', 5.0)
+        # Proactivity level (modifisert av kjedsomhet)
         if proactivity >= 7:
             prompt += "- Vær PROAKTIV! Kom med forslag, ideer og oppfølgingsspørsmål\n"
         elif proactivity >= 5:
@@ -630,11 +663,28 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         system_content += "\n\n" + personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
     
-    # Legg til adaptiv personlighet fra læring
-    adaptive_personality = get_adaptive_personality_prompt()
+    # Hent hunger og boredom levels
+    hunger = 0.0
+    boredom = 0.0
+    if hunger_manager:
+        try:
+            hunger = hunger_manager.get_hunger_level()
+        except:
+            pass
+    if sms_manager:
+        try:
+            boredom = sms_manager.get_boredom_level()
+        except:
+            pass
+    
+    # Legg til adaptiv personlighet fra læring (modifisert av emosjonell tilstand)
+    adaptive_personality = get_adaptive_personality_prompt(hunger_level=hunger, boredom_level=boredom)
     if adaptive_personality:
         system_content += adaptive_personality
-        print(f"✨ Adaptiv personlighet aktivert!", flush=True)
+        if hunger >= 5 or boredom >= 5:
+            print(f"✨ Adaptiv personlighet aktivert! (Modifisert: sult={hunger:.1f}, kjedsomhet={boredom:.1f})", flush=True)
+        else:
+            print(f"✨ Adaptiv personlighet aktivert!", flush=True)
     
     # Legg til memory section HER - rett før TTS-instruksjon
     # Dette sikrer at minnene er det siste AI-en leser før den svarer
