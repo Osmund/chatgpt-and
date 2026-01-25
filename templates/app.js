@@ -1238,6 +1238,8 @@ window.onload = function() {
     loadBoredomStatus();  // Last kjedsomhetsnivå
     loadHungerStatus();  // Last hunger nivå
     updateSleepModeStatus();  // Last sleep mode status
+    loadSMSHistory();  // Last SMS historikk
+    loadContacts();  // Last SMS kontakter
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1247,6 +1249,8 @@ window.onload = function() {
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
     setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
+    setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
+    setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
 };
 
 // Boredom Status
@@ -1531,6 +1535,247 @@ async function toggleSleepMode() {
             } else {
                 alert('Feil ved aktivering av sleep mode: ' + (data.error || 'Ukjent feil'));
             }
+        }
+    } catch (error) {
+        alert('Nettverksfeil: ' + error.message);
+    }
+}
+// === SMS History Functions ===
+async function loadSMSHistory() {
+    try {
+        const response = await fetch('/sms_history');
+        if (!response.ok) {
+            throw new Error('Kunne ikke laste SMS-historikk');
+        }
+        
+        const smsList = await response.json();
+        const container = document.getElementById('sms-history-container');
+        
+        if (smsList.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Ingen SMS ennå</div>';
+            return;
+        }
+        
+        let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+        
+        smsList.forEach(sms => {
+            const isIncoming = sms.direction === 'inbound';
+            const bgColor = isIncoming ? '#e3f2fd' : '#f1f8e9';
+            const borderColor = isIncoming ? '#42a5f5' : '#66bb6a';
+            const icon = isIncoming ? '📩' : '📤';
+            const directionText = isIncoming ? 'Fra' : 'Til';
+            
+            // Format timestamp
+            const date = new Date(sms.timestamp);
+            const timeStr = date.toLocaleString('nb-NO', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            html += `
+                <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <strong>${icon} ${directionText}: ${sms.contact_name}</strong>
+                        <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
+                    </div>
+                    <div style="color: #333; margin-left: 20px;">
+                        ${sms.message}
+                    </div>
+                    ${sms.phone_number && sms.phone_number !== 'Ukjent' ? 
+                        `<div style="font-size: 0.8em; color: #888; margin-top: 5px; margin-left: 20px;">${sms.phone_number}</div>` 
+                        : ''}
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Feil ved lasting av SMS:', error);
+        document.getElementById('sms-history-container').innerHTML = 
+            '<div style="text-align: center; color: #d32f2f; padding: 20px;">⚠️ Kunne ikke laste SMS-historikk</div>';
+    }
+}
+
+// === SMS Contacts Management ===
+async function loadContacts() {
+    console.log('Loading SMS contacts...');
+    try {
+        const response = await fetch('/sms_contacts');
+        console.log('Contacts response status:', response.status);
+        if (!response.ok) throw new Error('Kunne ikke laste kontakter');
+        
+        const contacts = await response.json();
+        console.log('Loaded contacts:', contacts.length);
+        const container = document.getElementById('contacts-list');
+        
+        if (contacts.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Ingen kontakter ennå</div>';
+            return;
+        }
+        
+        let html = '';
+        contacts.forEach(contact => {
+            const statusIcon = contact.enabled ? '✅' : '❌';
+            html += `
+                <div style="padding: 12px; background: ${contact.enabled ? '#f1f8e9' : '#ffebee'}; border-left: 4px solid ${contact.enabled ? '#66bb6a' : '#ef5350'}; border-radius: 6px;">
+                    <div>
+                        <strong>${statusIcon} ${contact.name}</strong><br>
+                        <span style="font-size: 0.9em; color: #666;">📱 ${contact.phone}</span><br>
+                        <span style="font-size: 0.85em; color: #888;">Relasjon: ${contact.relation} | Prioritet: ${contact.priority}</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                        <button onclick="editContact(${contact.id})" style="padding: 6px 12px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; flex: 1; min-width: 80px;">
+                            ✏️ Rediger
+                        </button>
+                        <button onclick="toggleContactEnabled(${contact.id}, ${!contact.enabled})" style="padding: 6px 12px; background: ${contact.enabled ? '#ff9800' : '#4caf50'}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; flex: 1; min-width: 80px;">
+                            ${contact.enabled ? '🔕 Deaktiver' : '🔔 Aktiver'}
+                        </button>
+                        <button onclick="deleteContact(${contact.id}, '${contact.name}')" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; flex: 1; min-width: 80px;">
+                            🗑️ Slett
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Feil ved lasting av kontakter:', error);
+        document.getElementById('contacts-list').innerHTML = 
+            '<div style="text-align: center; color: #d32f2f; padding: 20px;">⚠️ Kunne ikke laste kontakter</div>';
+    }
+}
+
+function showAddContactForm() {
+    document.getElementById('contact-form-title').textContent = 'Ny kontakt';
+    document.getElementById('edit-contact-id').value = '';
+    document.getElementById('add-contact-form').style.display = 'block';
+    document.getElementById('new-contact-name').value = '';
+    document.getElementById('new-contact-phone').value = '';
+    document.getElementById('new-contact-relation').value = '';
+    document.getElementById('new-contact-priority').value = '5';
+}
+
+function cancelAddContact() {
+    document.getElementById('add-contact-form').style.display = 'none';
+}
+
+async function saveContact() {
+    const editId = document.getElementById('edit-contact-id').value;
+    const name = document.getElementById('new-contact-name').value.trim();
+    const phone = document.getElementById('new-contact-phone').value.trim();
+    const relation = document.getElementById('new-contact-relation').value.trim() || 'venn';
+    const priority = parseInt(document.getElementById('new-contact-priority').value) || 5;
+    
+    if (!name || !phone) {
+        alert('Navn og telefonnummer må fylles ut');
+        return;
+    }
+    
+    try {
+        let response;
+        if (editId) {
+            // Update existing contact
+            response = await fetch(`/sms_contacts/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, phone, relation, enabled: true, priority })
+            });
+        } else {
+            // Create new contact
+            response = await fetch('/sms_contacts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, phone, relation, enabled: true, priority })
+            });
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            cancelAddContact();
+            await loadContacts();
+        } else {
+            alert('Feil: ' + (result.error || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Nettverksfeil: ' + error.message);
+    }
+}
+
+async function deleteContact(id, name) {
+    if (!confirm(`Er du sikker på at du vil slette kontakten "${name}"?`)) return;
+    
+    try {
+        const response = await fetch(`/sms_contacts/${id}`, { method: 'DELETE' });
+        const result = await response.json();
+        
+        if (result.success) {
+            await loadContacts();
+        } else {
+            alert('Feil: ' + (result.error || result.message || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Nettverksfeil: ' + error.message);
+    }
+}
+
+async function editContact(id) {
+    try {
+        const response = await fetch('/sms_contacts');
+        const contacts = await response.json();
+        const contact = contacts.find(c => c.id === id);
+        
+        if (!contact) {
+            alert('Kontakt ikke funnet');
+            return;
+        }
+        
+        // Populate form with contact data
+        document.getElementById('contact-form-title').textContent = 'Rediger kontakt';
+        document.getElementById('edit-contact-id').value = contact.id;
+        document.getElementById('new-contact-name').value = contact.name;
+        document.getElementById('new-contact-phone').value = contact.phone;
+        document.getElementById('new-contact-relation').value = contact.relation;
+        document.getElementById('new-contact-priority').value = contact.priority;
+        document.getElementById('add-contact-form').style.display = 'block';
+        
+        // Scroll to form
+        document.getElementById('add-contact-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (error) {
+        alert('Feil ved lasting av kontakt: ' + error.message);
+    }
+}
+
+async function toggleContactEnabled(id, newEnabledState) {
+    try {
+        // First fetch current contact data
+        const getResponse = await fetch('/sms_contacts');
+        const contacts = await getResponse.json();
+        const contact = contacts.find(c => c.id === id);
+        
+        if (!contact) {
+            alert('Kontakt ikke funnet');
+            return;
+        }
+        
+        // Update with new enabled state
+        contact.enabled = newEnabledState;
+        
+        const response = await fetch(`/sms_contacts/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contact)
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            await loadContacts();
+        } else {
+            alert('Feil: ' + (result.error || result.message || 'Ukjent feil'));
         }
     } catch (error) {
         alert('Nettverksfeil: ' + error.message);

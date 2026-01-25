@@ -1086,6 +1086,27 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "send_sms",
+                "description": "Send en SMS-melding til en kontakt. Bruk dette når brukeren eksplisitt ber deg sende SMS til noen. Meldingen må være kort (maks 155 tegn).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "contact_name": {
+                            "type": "string",
+                            "description": "Navnet på kontakten (f.eks. 'Rigmor', 'Arvid', 'Kolbjørn')"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "SMS-meldingen som skal sendes (maks 155 tegn)"
+                        }
+                    },
+                    "required": ["contact_name", "message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "send_teams_message",
                 "description": "Send en melding via Microsoft Teams til en person eller gruppe",
                 "parameters": {
@@ -1170,6 +1191,24 @@ def _get_function_tools():
                         }
                     },
                     "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "set_led_color",
+                "description": "Endre fargen på Andas RGB LED-lys. Bruk denne funksjonen når Anda vil endre LED-farge basert på humør, følelser eller situasjon. Eksempler: 'jeg føler meg energisk' → rød, 'jeg er rolig' → grønn, 'jeg er kreativ' → lilla, 'jeg er glad' → gul. Anda kan velge farge selv basert på hvordan hun føler seg.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "color": {
+                            "type": "string",
+                            "enum": ["rød", "grønn", "blå", "gul", "lilla", "oransje", "rosa", "hvit", "cyan"],
+                            "description": "Fargen å sette LED til"
+                        }
+                    },
+                    "required": ["color"]
                 }
             }
         }
@@ -1279,6 +1318,37 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             result = get_teams_status()
         elif function_name == "get_teams_chat":
             result = get_teams_chat()
+        elif function_name == "send_sms":
+            contact_name = function_args.get("contact_name", "")
+            message = function_args.get("message", "")
+            
+            if not sms_manager:
+                result = "SMS-funksjonalitet er ikke tilgjengelig"
+            elif not contact_name or not message:
+                result = "Må oppgi både kontaktnavn og melding"
+            else:
+                # Finn kontakt
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
+                    conn.row_factory = sqlite3.Row
+                    c = conn.cursor()
+                    c.execute("SELECT * FROM sms_contacts WHERE name = ? AND enabled = 1", (contact_name,))
+                    contact = c.fetchone()
+                    conn.close()
+                    
+                    if contact:
+                        contact_dict = dict(contact)
+                        send_result = sms_manager.send_sms(contact_dict['phone'], message)
+                        
+                        if send_result['status'] == 'sent':
+                            result = f"✅ SMS sendt til {contact_name}: {message}"
+                        else:
+                            result = f"❌ Kunne ikke sende SMS til {contact_name}: {send_result.get('error', 'Ukjent feil')}"
+                    else:
+                        result = f"Fant ingen kontakt med navn '{contact_name}'"
+                except Exception as e:
+                    result = f"Feil ved sending av SMS: {e}"
         elif function_name == "activate_scene":
             scene_name = function_args.get("scene_name", "")
             result = activate_scene(scene_name)
@@ -1306,6 +1376,27 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             query = function_args.get("query", "")
             count = function_args.get("count", 5)
             result = web_search(query, count)
+        elif function_name == "set_led_color":
+            color = function_args.get("color", "")
+            color_map = {
+                "rød": (1, 0, 0),
+                "grønn": (0, 1, 0),
+                "blå": (0, 0, 1),
+                "gul": (1, 1, 0),
+                "lilla": (1, 0, 1),
+                "oransje": (1, 0.5, 0),
+                "rosa": (1, 0.2, 0.6),
+                "hvit": (1, 1, 1),
+                "cyan": (0, 1, 1)
+            }
+            
+            if color in color_map:
+                from rgb_duck import set_color
+                r, g, b = color_map[color]
+                set_color(r, g, b)
+                result = f"LED satt til {color} 💡🦆"
+            else:
+                result = f"Ukjent farge: {color}"
         else:
             result = "Ukjent funksjon"
         

@@ -84,3 +84,8 @@ def set_intensity(intensity):
     # Bruk rød med varierende intensitet
     led.color = (intensity, 0, 0)
     _blink_thread = None
+
+def set_color(r, g, b):
+    """Setter LED til spesifikk RGB-farge (0.0-1.0 for hver kanal)"""
+    stop_blink()
+    led.color = (r, g, b)

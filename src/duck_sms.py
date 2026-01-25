@@ -719,6 +719,13 @@ Ny melding fra {contact['name']}: {message}
 VIKTIG: Svar på det som ble spurt om i kontekst av samtalen. Du kan gjerne stille et oppfølgingsspørsmål tilbake.
 IKKE nevn bursdager, arrangementer eller andre ting som ikke er relevante.
 Bruk GJERNE emojis! 🦆✨ Unge ender bruker mye relevante emojis for å uttrykke følelser og gjøre meldinger mer levende.
+
+SMS-BEGRENSNINGER:
+- Hold svaret KORT (maks 155 tegn) - SMS har karaktergrense
+- Hvis oppskrifter, lange forklaringer eller mye info trengs: send en lenke i stedet (f.eks. link til nettside)
+- Du KAN sende lenker i SMS - bruk det for lange ting!
+- Eksempel: "Her er oppskriften: https://matprat.no/oppskrifter/curry-kylling" i stedet for lang tekst
+
 Svar kort og naturlig (maks 155 tegn)."""
             
             # chatgpt_query krever messages-liste, ikke bare prompt

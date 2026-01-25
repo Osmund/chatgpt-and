@@ -450,16 +450,62 @@ def main():
                 sleep_led_active = True
                 print("💤 Sleep mode aktiv - ignorerer wake words (blå pulsering)", flush=True)
             
-            # Vent 0.5 sekunder før vi sjekker igjen (for rask respons på kontrollpanel)
+            # Sjekk SMS/hunger/hotspot SELV I SØVNMODUS (skal alltid leses opp!)
+            # Sjekk SMS-annonseringer
+            sms_announcement_file = '/tmp/duck_sms_announcement.txt'
+            if os.path.exists(sms_announcement_file):
+                try:
+                    with open(sms_announcement_file, 'r', encoding='utf-8') as f:
+                        announcement = f.read().strip()
+                    os.remove(sms_announcement_file)
+                    if announcement:
+                        print(f"📬 [SLEEP MODE] SMS announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                        
+                        # Sjekk om det er en respons-annonsering
+                        sms_response_file = '/tmp/duck_sms_response.txt'
+                        time.sleep(1)
+                        if os.path.exists(sms_response_file):
+                            try:
+                                with open(sms_response_file, 'r', encoding='utf-8') as f:
+                                    response_announcement = f.read().strip()
+                                if response_announcement:
+                                    time.sleep(0.5)
+                                    speak(response_announcement, speech_config, beak)
+                                os.remove(sms_response_file)
+                            except Exception as e:
+                                print(f"⚠️ Error reading SMS response: {e}", flush=True)
+                except Exception as e:
+                    print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+            
+            # Sjekk hunger-annonseringer
+            hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
+            if os.path.exists(hunger_announcement_file):
+                try:
+                    with open(hunger_announcement_file, 'r', encoding='utf-8') as f:
+                        announcement = f.read().strip()
+                    os.remove(hunger_announcement_file)
+                    if announcement:
+                        print(f"😋 [SLEEP MODE] Hunger announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                except Exception as e:
+                    print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
+            
+            # Sjekk hotspot-annonseringer
+            hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
+            if os.path.exists(hotspot_announcement_file):
+                try:
+                    with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
+                        announcement = f.read().strip()
+                    os.remove(hotspot_announcement_file)
+                    if announcement:
+                        print(f"📡 [SLEEP MODE] Hotspot announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                except Exception as e:
+                    print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
+            
+            # Vent 0.5 sekunder før vi sjekker igjen (for rask respons)
             time.sleep(0.5)
-            
-            # Sjekk om sleep mode har utløpt eller blitt deaktivert
-            if not is_sleeping():
-                print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
-                stop_blink()
-                set_blue()  # Tilbake til blå LED (klar for wake word)
-                sleep_led_active = False
-            
             continue
         else:
             # Reset flag når ikke i sleep mode
@@ -467,6 +513,7 @@ def main():
                 stop_blink()
                 set_blue()  # Tilbake til blå LED (klar for wake word)
                 sleep_led_active = False
+                print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
         
         # Normal wake word detection
         external_message = wait_for_wake_word()

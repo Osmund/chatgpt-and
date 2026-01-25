@@ -559,6 +559,104 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 error_msg = {'enabled': False, 'error': str(e)}
                 self.wfile.write(json.dumps(error_msg).encode())
         
+        elif self.path == '/sms_history':
+            # Hent SMS-historikk
+            try:
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("""
+                    SELECT 
+                        h.id,
+                        h.direction,
+                        h.message,
+                        h.timestamp,
+                        h.status,
+                        c.name,
+                        c.phone
+                    FROM sms_history h
+                    LEFT JOIN sms_contacts c ON h.contact_id = c.id
+                    ORDER BY h.timestamp DESC
+                    LIMIT 100
+                """)
+                
+                rows = c.fetchall()
+                conn.close()
+                
+                sms_list = []
+                for row in rows:
+                    sms_list.append({
+                        'id': row[0],
+                        'direction': row[1],  # 'incoming' eller 'outgoing'
+                        'message': row[2],
+                        'timestamp': row[3],
+                        'status': row[4],
+                        'contact_name': row[5] if row[5] else 'Ukjent',
+                        'phone_number': row[6] if row[6] else 'Ukjent'
+                    })
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(sms_list).encode())
+            except Exception as e:
+                print(f"⚠️ Error fetching SMS history: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                error_msg = {'error': str(e)}
+                self.wfile.write(json.dumps(error_msg).encode())
+        
+        elif self.path == '/sms_contacts':
+            # Hent alle SMS-kontakter
+            try:
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("""
+                    SELECT id, name, phone, relation, priority, enabled, 
+                           max_daily_messages, preferred_hours_start, preferred_hours_end
+                    FROM sms_contacts 
+                    ORDER BY name ASC
+                """)
+                
+                rows = c.fetchall()
+                conn.close()
+                
+                contacts = []
+                for row in rows:
+                    contacts.append({
+                        'id': row[0],
+                        'name': row[1],
+                        'phone': row[2],
+                        'relation': row[3],
+                        'priority': row[4],
+                        'enabled': bool(row[5]),
+                        'max_daily_messages': row[6],
+                        'preferred_hours_start': row[7],
+                        'preferred_hours_end': row[8]
+                    })
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(contacts).encode())
+            except Exception as e:
+                print(f"⚠️ Error fetching contacts: {e}", flush=True)
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                error_msg = {'error': str(e)}
+                self.wfile.write(json.dumps(error_msg).encode())
+        
         elif self.path == '/wifi-networks':
             # Hent tilgjengelige WiFi-nettverk
             try:
@@ -1023,6 +1121,61 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
     
+    def do_PUT(self):
+        """Handle PUT requests for updating resources"""
+        
+        # Update SMS contact
+        if self.path.startswith('/sms_contacts/'):
+            try:
+                contact_id = int(self.path.split('/sms_contacts/')[1])
+                
+                content_length = int(self.headers['Content-Length'])
+                put_data = self.rfile.read(content_length)
+                data = json.loads(put_data.decode())
+                
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                c.execute("""
+                    UPDATE sms_contacts 
+                    SET name=?, phone=?, relation=?, priority=?, enabled=?, 
+                        max_daily_messages=?, preferred_hours_start=?, preferred_hours_end=?
+                    WHERE id=?
+                """, (
+                    data.get('name', ''),
+                    data.get('phone', ''),
+                    data.get('relation', 'venn'),
+                    data.get('priority', 5),
+                    1 if data.get('enabled', True) else 0,
+                    data.get('max_daily_messages', 3),
+                    data.get('preferred_hours_start', 8),
+                    data.get('preferred_hours_end', 22),
+                    contact_id
+                ))
+                conn.commit()
+                updated = c.rowcount > 0
+                conn.close()
+                
+                if updated:
+                    response = {'success': True, 'message': f'Kontakt #{contact_id} oppdatert'}
+                else:
+                    response = {'success': False, 'message': f'Kontakt #{contact_id} ikke funnet'}
+                    
+            except Exception as e:
+                print(f"⚠️ Error updating contact: {e}", flush=True)
+                response = {'success': False, 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
     def do_DELETE(self):
         """Handle DELETE requests for memory management"""
         
@@ -1072,6 +1225,35 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     
             except Exception as e:
                 response = {'status': 'error', 'message': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
+        # Delete SMS contact
+        elif self.path.startswith('/sms_contacts/'):
+            try:
+                contact_id = int(self.path.split('/sms_contacts/')[1])
+                
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                c.execute("DELETE FROM sms_contacts WHERE id=?", (contact_id,))
+                conn.commit()
+                deleted = c.rowcount > 0
+                conn.close()
+                
+                if deleted:
+                    response = {'success': True, 'message': f'Kontakt #{contact_id} slettet'}
+                else:
+                    response = {'success': False, 'message': f'Kontakt #{contact_id} ikke funnet'}
+                    
+            except Exception as e:
+                print(f"⚠️ Error deleting contact: {e}", flush=True)
+                response = {'success': False, 'error': str(e)}
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -1762,6 +1944,47 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps(response).encode())
             except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/sms_contacts':
+            # Legg til ny SMS-kontakt
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                c.execute("""
+                    INSERT INTO sms_contacts 
+                    (name, phone, relation, priority, enabled, max_daily_messages, preferred_hours_start, preferred_hours_end)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data.get('name', ''),
+                    data.get('phone', ''),
+                    data.get('relation', 'venn'),
+                    data.get('priority', 5),
+                    1 if data.get('enabled', True) else 0,
+                    data.get('max_daily_messages', 3),
+                    data.get('preferred_hours_start', 8),
+                    data.get('preferred_hours_end', 22)
+                ))
+                conn.commit()
+                new_id = c.lastrowid
+                conn.close()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'id': new_id}).encode())
+            except Exception as e:
+                print(f"⚠️ Error adding contact: {e}", flush=True)
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()

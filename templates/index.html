@@ -87,6 +87,59 @@
             <span id="ha-status-text" style="font-weight: bold;">...</span>
         </div>
         
+        <!-- SMS History Section -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>📱 SMS Historikk</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="sms-history-container" style="padding: 0;">
+                        <div style="text-align: center; color: #666; padding: 20px;">
+                            Laster SMS...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SMS Contacts Section -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>📇 SMS Kontakter</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div style="margin-bottom: 15px;">
+                        <button onclick="showAddContactForm()" style="padding: 8px 15px; background: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                            ➕ Legg til ny kontakt
+                        </button>
+                    </div>
+                    
+                    <!-- Add Contact Form (hidden by default) -->
+                    <div id="add-contact-form" style="display: none; padding: 15px; background: #f5f5f5; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 id="contact-form-title" style="margin-top: 0;">Ny kontakt</h4>
+                        <input type="hidden" id="edit-contact-id" value="">
+                        <input type="text" id="new-contact-name" placeholder="Navn" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="tel" id="new-contact-phone" placeholder="Telefonnummer (+47...)" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="text" id="new-contact-relation" placeholder="Relasjon (f.eks. venn, familie)" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="number" id="new-contact-priority" placeholder="Prioritet (1-10, lavere = viktigere)" min="1" max="10" value="5" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="saveContact()" style="padding: 8px 15px; background: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer;">Lagre</button>
+                            <button onclick="cancelAddContact()" style="padding: 8px 15px; background: #999; color: white; border: none; border-radius: 5px; cursor: pointer;">Avbryt</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Contact List -->
+                    <div id="contacts-list" style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="text-align: center; color: #666; padding: 20px;">Laster kontakter...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Control Panel Section -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
