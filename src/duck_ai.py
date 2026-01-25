@@ -5,6 +5,7 @@ Handles ChatGPT queries, function calling, and tool integrations.
 
 import os
 import json
+import sqlite3
 import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -1159,13 +1160,17 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             
             # Sjekk autorisation for smart home-kommandoer via SMS
             if function_name in protected_functions and source == "sms":
-                # For SMS: sjekk om bruker er owner
-                if source_user_id:
-                    from duck_users import UserManager
-                    user_db = UserManager()
-                    owner = user_db.get_user_by_role('owner')
+                # For SMS: sjekk om kontakt har 'owner' relation
+                if source_user_id and sms_manager:
+                    # source_user_id er contact_id fra sms_contacts
+                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
+                    conn.row_factory = sqlite3.Row
+                    c = conn.cursor()
+                    c.execute("SELECT relation FROM sms_contacts WHERE id = ?", (source_user_id,))
+                    row = c.fetchone()
+                    conn.close()
                     
-                    if not owner or source_user_id != owner['id']:
+                    if not row or row['relation'] != 'owner':
                         result = "❌ Smart home-kontroll er kun tilgjengelig for Osmund via SMS. Andre kan kun kontrollere via talekommando."
                         # Legg til tool result og fortsett
                         final_messages.append({
