@@ -580,20 +580,21 @@ Maks 155 tegn."""
         
         return contacts
     
-    def generate_and_send_response(self, contact: Dict, incoming_message: str) -> Dict:
+    def generate_and_send_response(self, contact: Dict, incoming_message: str, fed: bool = False) -> Dict:
         """
         Generate AI response and send SMS, then save to memory
         
         Args:
             contact: Contact dict
             incoming_message: The message we received
+            fed: Whether the duck was fed (food emoji detected)
             
         Returns:
             {'status': 'sent'|'error', 'message': '...'}
         """
         try:
             # Generate AI response
-            response_text = self._generate_ai_response(contact, incoming_message)
+            response_text = self._generate_ai_response(contact, incoming_message, fed=fed)
             
             # Keep it short (max 160 chars for single SMS)
             if len(response_text) > 155:
@@ -656,28 +657,28 @@ Maks 155 tegn."""
         except Exception as e:
             print(f"⚠️ Could not save SMS to memory: {e}", flush=True)
     
-    def _generate_ai_response(self, contact: Dict, message: str) -> str:
+    def _generate_ai_response(self, contact: Dict, message: str, fed: bool = False) -> str:
         """
         Generate AI response using memory/facts or ChatGPT WITH CONTEXT
         
         Args:
             contact: Contact dict
             message: Incoming message
+            fed: Whether the duck was fed (food emoji detected)
             
         Returns:
             Response text (short, SMS-sized)
         """
         try:
             from src.duck_memory import MemoryManager
-            from src.duck_ai import chatgpt_query
-            from src.duck_hunger import HungerManager
+            from src.duck_ai import chatgpt_query, get_adaptive_personality_prompt
             import os
             from datetime import datetime
             
             # Get conversation history from last 24 hours
             conversation_history = self._get_sms_conversation_history(contact['id'], hours=24)
             
-            # Try to find relevant facts from memory
+            # Get memory context
             memory_manager = MemoryManager()
             memories = memory_manager.search_memories(message, limit=3)
             
@@ -695,18 +696,30 @@ Maks 155 tegn."""
                     sender = "Deg" if msg['role'] == 'assistant' else contact['name']
                     conversation_context += f"{sender}: {msg['content']}\n"
             
-            # Generate AI response with full context
+            # Get adaptive personality (learned from conversations)
+            adaptive_personality = get_adaptive_personality_prompt()
+            print(f"✨ Bruker adaptiv personlighet for SMS (lengde: {len(adaptive_personality)} tegn)", flush=True)
+            
+            # Generate AI response with simple prompt + adaptive personality
             current_date = datetime.now().strftime('%d. %B %Y')
+            
+            # Add fed context if food was detected
+            fed_context = ""
+            if fed:
+                fed_context = f"\n\n🍕 VIKTIG MAT-KONTEKST:\n{contact['name']} ga deg akkurat MAT (mat-emoji)! Dette er MAT TIL DEG som and, IKKE deres frokost/lunsj.\nDu ble matet og er glad!\nRiktig svar: 'Takk for maten! Nam nam! 🦆' eller lignende\nFEIL svar: 'Din frokost/lunsj ser god ut' eller 'Du har spist godt'\nTakk dem for maten!"
+            
             prompt = f"""Du er {os.getenv('DUCK_NAME', 'Samantha')}, en snakkende and.
 I dag er det {current_date}.
 Kontakt: {contact['name']} ({contact.get('relation', 'venn')})
 {conversation_context}
 Ny melding fra {contact['name']}: {message}
-{context}
+{context}{fed_context}
+{adaptive_personality}
 
 VIKTIG: Svar på det som ble spurt om i kontekst av samtalen. Du kan gjerne stille et oppfølgingsspørsmål tilbake.
 IKKE nevn bursdager, arrangementer eller andre ting som ikke er relevante.
-Svar kort og naturlig (maks 155 tegn). Bruk emoji 🦆 hvis passende."""
+Bruk GJERNE emojis! 🦆✨ Unge ender bruker mye relevante emojis for å uttrykke følelser og gjøre meldinger mer levende.
+Svar kort og naturlig (maks 155 tegn)."""
             
             # chatgpt_query krever messages-liste, ikke bare prompt
             messages = [{"role": "user", "content": prompt}]

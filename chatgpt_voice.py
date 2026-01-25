@@ -148,7 +148,7 @@ def sms_polling_loop():
                                 # Send AI-generated response (AI will know if she was fed from context)
                                 if result.get('should_respond'):
                                     response_result = sms_manager.generate_and_send_response(
-                                        contact, message_text
+                                        contact, message_text, fed=result.get('fed', False)
                                     )
                                     if response_result.get('status') == 'sent':
                                         response_text = response_result.get('message', '')
@@ -567,6 +567,8 @@ def main():
         
         while True:
             prompt = recognize_speech_from_mic()
+            blink_yellow_purple()  # Start blinking umiddelbart etter STT (Anda tenker!)
+            
             if not prompt:
                 no_response_count += 1
                 if no_response_count >= 2:
@@ -635,7 +637,7 @@ def main():
             
             messages.append({"role": "user", "content": prompt})
             try:
-                blink_yellow_purple()  # Start blinkende gul LED under tenkepause
+                # Blinking startet allerede rett etter STT - fortsetter under AI-prosessering
                 result = chatgpt_query(
                     messages, 
                     api_key, 
@@ -645,7 +647,7 @@ def main():
                     hunger_manager=hunger_manager,
                     source="voice"
                 )
-                off()  # Slå av blinking når svaret er klart
+                # LED fortsetter å blinke til speak() tar over (rød LED når lyd starter)
                 
                 # Håndter tuple-retur (svar, is_thank_you)
                 if isinstance(result, tuple):

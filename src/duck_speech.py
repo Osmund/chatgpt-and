@@ -220,7 +220,7 @@ def recognize_speech_from_mic(device_name=None):
             t1 = time.time()
             elapsed = t1 - t0
             print(f"Azure STT tid: {elapsed:.2f} sekunder", flush=True)
-            off()  # Slå av LED etter bruker har snakket
+            # IKKE slå av LED her - la hovedløkken håndtere LED-overgangen
             if result.reason == speechsdk.ResultReason.RecognizedSpeech:
                 print(f"Du sa: {result.text}", flush=True)
                 return result.text
@@ -238,5 +238,5 @@ def recognize_speech_from_mic(device_name=None):
                 continue
             else:
                 print("Alle devices feilet", flush=True)
-                off()
+                # IKKE slå av LED her - la hovedløkken håndtere det
                 return None

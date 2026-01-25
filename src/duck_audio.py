@@ -112,8 +112,8 @@ def speak(text, speech_config, beak):
     Konverter tekst til tale ved hjelp av Azure TTS.
     Kontrollerer nebbet eller LED basert på lydamplitude.
     """
-    stop_blink()  # Stopp eventuell blinking
-    set_red()  # LED rød FØR anda begynner å snakke
+    # La gul/lilla blinking fortsette under TTS-prosessering
+    # set_red() vil stoppe blinking når lyden starter
     
     # Fjern Markdown-formatering før TTS
     text = clean_markdown_for_tts(text)
@@ -314,6 +314,7 @@ def speak(text, speech_config, beak):
                                 off()  # Slå av LED
                     
                     # Start nebb/LED-thread
+                    set_red()  # LED rød NÅR anda begynner å snakke (synkronisert med lyd)
                     control_thread = threading.Thread(target=update_beak_or_led, daemon=True)
                     control_thread.start()
                     

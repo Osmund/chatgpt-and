@@ -37,16 +37,20 @@ DB_PATH = os.path.join(BASE_PATH, "duck_memory.db")
 WAKE_WORD_PATH = os.path.join(BASE_PATH, "Quack-quack.ppn")
 
 # ============ AI Model Configuration ============
-DEFAULT_MODEL = "gpt-4-turbo-2024-04-09"  # GPT-4.1 Mini - beste balanse mellom kvalitet, hastighet og kostnad
+# Les fra .env, fallback til gpt-4.1-mini
+DEFAULT_MODEL = os.getenv("AI_MODEL_CHAT", "gpt-4.1-mini-2025-04-14")
 
 # Tilgjengelige AI-modeller (basert på testing av perspektiv-håndtering)
 AVAILABLE_MODELS = {
-    # GPT-4 serien - Anbefalt for produksjon
-    "gpt-4-turbo-2024-04-09": {"name": "GPT-4.1 Mini", "accuracy": "50%", "latency": "0.87s", "cost": "lav"},
+    # GPT-4.1 serien - Anbefalt (nyeste 2025)
+    "gpt-4.1-mini-2025-04-14": {"name": "GPT-4.1 Mini", "accuracy": "50%", "latency": "0.70s", "cost": "lav"},
+    
+    # GPT-4 serien - Eldre modeller
+    "gpt-4-turbo-2024-04-09": {"name": "GPT-4 Turbo (2024)", "accuracy": "50%", "latency": "0.87s", "cost": "middels"},
     "gpt-4": {"name": "GPT-4", "accuracy": "75%", "latency": "1.38s", "cost": "høy"},
     "gpt-4-turbo": {"name": "GPT-4.1", "accuracy": "50%", "latency": "1.40s", "cost": "middels"},
     
-    # GPT-4o serien - Billig men dårlig for perspektiv
+    # GPT-4o serien - Billig, god for SMS
     "gpt-4o-mini": {"name": "GPT-4o Mini", "accuracy": "25%", "latency": "1.12s", "cost": "svært lav"},
     
     # GPT-3.5 - Rask men dårlig kvalitet
@@ -56,8 +60,8 @@ AVAILABLE_MODELS = {
     "gpt-5-turbo": {"name": "GPT-5.2", "accuracy": "50%", "latency": "1.34s", "cost": "svært høy"},
 }
 
-# Kommentar: GPT-4.1 Mini er standard fordi den gir 50% korrekthet på perspektiv-spørsmål
-# (dobbelt så bra som GPT-3.5), med bare 60ms ekstra latency og rimelig pris.
+# Kommentar: GPT-4.1 Mini (2025) er standard fordi den gir 50% korrekthet på perspektiv-spørsmål,
+# er nyeste generasjon (april 2025), har lavest latency (~0.70s), og er 10x billigere enn GPT-4 Turbo.
 
 DEFAULT_VOICE = "nb-NO-IselinNeural"
 

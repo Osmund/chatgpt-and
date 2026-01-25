@@ -27,11 +27,11 @@ sys.stdout.reconfigure(line_buffering=True)
 # Load environment
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MEMORY_MODEL = os.getenv("AI_MODEL_MEMORY", "gpt-4.1-mini-2025-04-14")
 
 # Worker config
 CHECK_INTERVAL = 5  # Sjekk hver 5. sekund
 BATCH_SIZE = 5      # Prosesser opptil 5 meldinger per batch
-USE_CHEAP_MODEL = False  # Satt til False for å bruke GPT-4.1 Mini (beste balanse)
 
 
 class MemoryExtractor:
@@ -216,10 +216,8 @@ AI: "{ai_response}"
                 "Content-Type": "application/json"
             }
             
-            model = "gpt-3.5-turbo" if USE_CHEAP_MODEL else "gpt-4-turbo-2024-04-09"
-            
             data = {
-                "model": model,
+                "model": MEMORY_MODEL,
                 "messages": [
                     {
                         "role": "system",
@@ -467,7 +465,7 @@ Returner JSON:
                 'https://api.openai.com/v1/chat/completions',
                 headers={'Authorization': f'Bearer {self.extractor.api_key}'},
                 json={
-                    'model': 'gpt-4o-mini' if not USE_CHEAP_MODEL else 'gpt-3.5-turbo',
+                    'model': os.getenv("AI_MODEL_SMS", "gpt-4o-mini"),
                     'messages': [
                         {'role': 'system', 'content': 'Du er en memory extraction assistent. Returner alltid valid JSON.'},
                         {'role': 'user', 'content': prompt}
@@ -706,7 +704,7 @@ Returner JSON:
         print("🚀 Memory Worker startet", flush=True)
         print(f"  Check interval: {CHECK_INTERVAL}s", flush=True)
         print(f"  Batch size: {BATCH_SIZE}", flush=True)
-        print(f"  Model: {'gpt-3.5-turbo' if USE_CHEAP_MODEL else 'gpt-4-turbo-2024-04-09 (GPT-4.1 Mini)'}", flush=True)
+        print(f"  Model: {MEMORY_MODEL}", flush=True)
         print(f"  API key: {'✅' if OPENAI_API_KEY else '❌'}\n", flush=True)
         
         if not OPENAI_API_KEY:

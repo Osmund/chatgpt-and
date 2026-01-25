@@ -263,51 +263,82 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     return metadata
 
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, source=None, source_user_id=None):
+def _check_sms_authorization(function_name: str, source: str, source_user_id: int, sms_manager, tool_call: dict, final_messages: list) -> bool:
     """
-    Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
+    Sjekk om SMS-bruker har tilgang til smart home-funksjoner.
     
     Args:
-        messages: Liste med chat-meldinger
-        api_key: OpenAI API key
-        model: Modell-navn (default fra config)
-        memory_manager: MemoryManager instans
-        user_manager: UserManager instans
-        sms_manager: SMSManager instans (for boredom status)
-        hunger_manager: HungerManager instans (for hunger status)
-        source: "voice" eller "sms" - hvor forespørselen kommer fra
-        source_user_id: ID på bruker (for SMS autorisation)
+        function_name: Navn på funksjonen som skal kalles
+        source: "voice" eller "sms"
+        source_user_id: Contact ID fra sms_contacts
+        sms_manager: SMSManager instans
+        tool_call: Tool call dict fra OpenAI
+        final_messages: Messages-liste å legge til error i
     
     Returns:
-        tuple: (reply_text, is_thank_you) eller bare reply_text
+        True hvis autorisert (eller ikke SMS), False hvis blokkert
     """
-    if model is None:
-        # Prøv å lese modell fra konfigurasjonsfil
-        try:
-            if os.path.exists(MODEL_CONFIG_FILE):
-                with open(MODEL_CONFIG_FILE, 'r') as f:
-                    model = f.read().strip()
-                    if not model:
-                        model = DEFAULT_MODEL
-            else:
-                model = DEFAULT_MODEL
-        except Exception as e:
-            print(f"Feil ved lesing av modellkonfigurasjon: {e}, bruker default", flush=True)
-            model = DEFAULT_MODEL
+    # Liste over smart home funksjoner som krever autorisation
+    protected_functions = [
+        "control_hue_lights", "control_tv", "launch_tv_app", 
+        "control_ac", "control_vacuum", "control_twinkly", 
+        "control_blinds", "activate_scene"
+    ]
     
-    print(f"Bruker AI-modell: {model}", flush=True)
+    # Kun sjekk for SMS-kall til beskyttede funksjoner
+    if function_name not in protected_functions or source != "sms":
+        return True
     
-    # Hent nåværende bruker og primary user
-    current_user = None
-    primary_user = None
-    if user_manager:
-        try:
-            current_user = user_manager.get_current_user()
-            primary_user = user_manager.get_primary_user()
-            print(f"👤 Nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
-        except Exception as e:
-            print(f"⚠️ Kunne ikke hente current_user: {e}", flush=True)
+    # For SMS: sjekk om kontakt har 'owner' relation
+    if source_user_id and sms_manager:
+        # source_user_id er contact_id fra sms_contacts
+        conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT relation FROM sms_contacts WHERE id = ?", (source_user_id,))
+        row = c.fetchone()
+        conn.close()
+        
+        if not row or row['relation'] != 'owner':
+            result = "❌ Smart home-kontroll er kun tilgjengelig for eier via SMS. Andre kan kun kontrollere via talekommando."
+            final_messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": result
+            })
+            return False
+    else:
+        # Ingen user_id sendt, blokkér som sikkerhet
+        result = "❌ Smart home-kontroll krever identifikasjon via SMS."
+        final_messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call["id"],
+            "name": function_name,
+            "content": result
+        })
+        return False
     
+    return True
+
+
+def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manager, model, messages, current_user, primary_user):
+    """
+    Bygger system prompt med dato, tamagotchi-status, brukerinfo, minner, identitet og personlighet.
+    
+    Args:
+        user_manager: UserManager instans
+        memory_manager: MemoryManager instans
+        hunger_manager: HungerManager instans
+        sms_manager: SMSManager instans
+        model: AI-modell som brukes
+        messages: Liste med chat-meldinger
+        current_user: Nåværende bruker dict
+        primary_user: Primary user dict
+    
+    Returns:
+        str: Komplett system prompt
+    """
     # Les personlighet fra konfigurasjonsfil
     personality_prompt = None
     try:
@@ -333,12 +364,6 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
                 messages_config_local = json.load(f)
     except Exception as e:
         print(f"Feil ved lesing av messages.json: {e}", flush=True)
-    
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
     
     # Hent nåværende dato og tid fra system
     now = datetime.now()
@@ -475,11 +500,10 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
             
             perspective_context += f"\nHvis du er usikker på perspektiv: Si 'Jeg har ikke nok informasjon om det' i stedet for å gjette.\n"
     
-    # Legg til dato/tid + personlighet i system-prompt
-    final_messages = messages.copy()
+    # Start system content
     system_content = date_time_info + tamagotchi_status + user_info + perspective_context
     
-    # Samle memory context først (men legg til senere)
+    # Samle memory context
     memory_section = ""
     if memory_manager:
         try:
@@ -488,7 +512,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
             # Send med current_user for å filtrere minner og meldinger
             context = memory_manager.build_context_for_ai(user_query, recent_messages=3, user_name=current_user['username'])
             
-            # Bygg memory section (legges til senere)
+            # Bygg memory section
             memory_section = "\n\n### Ditt Minne ###\n"
             
             # Profile facts
@@ -519,8 +543,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
                 memory_section += "\nViktig: Når du refererer til familiemedlemmer, ALLTID bruk deres navn i stedet for 'søster 1/2/3' eller 'din andre søster'. Dette gjør samtalen mer personlig og naturlig.\n"
                 memory_section += "\nOBS: Datoer i formatet 'DD-MM' er dag-måned (f.eks. '21-11' = 21. november). Når du svarer om fødselsdager, inkluder både dag og måned.\n"
                 
-                # Bygg eksplisitt oversikt over søstrene direkte fra databasen (ikke kontekst) 
-                # for å sikre at ALLE søstre inkluderes
+                # Bygg eksplisitt oversikt over søstrene direkte fra databasen
                 sisters = {}
                 conn = memory_manager._get_connection()
                 c = conn.cursor()
@@ -706,18 +729,19 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
     
     system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
-    final_messages.insert(0, {"role": "system", "content": system_content})
+    return system_content
+
+
+def _get_function_tools():
+    """
+    Returnerer liste over alle tilgjengelige function tools for ChatGPT.
     
-    # DEBUG: Logg om minner er inkludert
-    if memory_section and "### Relevante minner ###" in memory_section:
-        print(f"📝 Memory section inkludert i prompt", flush=True)
-    else:
-        print(f"💭 Ingen relevante minner funnet for denne konteksten", flush=True)
-    
-    # Definer function tools
+    Returns:
+        list: Liste med tool definitions
+    """
     from src.duck_audio import control_beak
     
-    tools = [
+    return [
         {
             "type": "function",
             "function": {
@@ -822,13 +846,13 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "control_tv",
-                "description": "Kontroller Samsung Smart TV via Home Assistant. Kan skru på/av, play, pause, stop, next, previous, mute, unmute.",
+                "description": "Kontroller TV-en med Home Assistant (skru på/av, endre kanal, volum, etc.)",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["turn_on", "turn_off", "play", "pause", "stop", "next", "previous", "mute", "unmute"],
+                            "enum": ["on", "off", "channel_up", "channel_down", "volume_up", "volume_down", "mute"],
                             "description": "Hva som skal gjøres med TV-en"
                         }
                     },
@@ -840,13 +864,13 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "launch_tv_app",
-                "description": "Start en app på Samsung TV. Støttede apper: Netflix, YouTube, Disney+, Prime Video, HBO Max, Spotify, Viaplay, NRK TV, Plex, Twitch, SkyShowtime, Apple TV.",
+                "description": "Start en app på TV-en (Netflix, YouTube, etc.)",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "app_name": {
                             "type": "string",
-                            "enum": ["netflix", "youtube", "disney", "prime", "hbo", "spotify", "viaplay", "nrk", "plex", "twitch", "skyshowtime", "appletv"],
+                            "enum": ["netflix", "youtube", "viaplay", "tv2play", "nrk"],
                             "description": "Navnet på appen som skal startes"
                         }
                     },
@@ -857,36 +881,24 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         {
             "type": "function",
             "function": {
-                "name": "switch_network",
-                "description": "Bytt WiFi-nettverk ved å starte hotspot. Bruk når brukeren vil koble til et annet nettverk eller når nettverket blokkerer kontrollpanelet.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "control_ac",
-                "description": "Kontroller Panasonic klimaanlegg (AC) via Home Assistant. Kan skru på/av, endre temperatur, modus, og hente status/temperatur.",
+                "description": "Kontroller klimaanlegget (AC) via Home Assistant. Kan skru på/av, endre temperatur og modus.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["turn_on", "turn_off", "set_temperature", "set_mode", "get_status"],
-                            "description": "Hva som skal gjøres: turn_on/off, set_temperature, set_mode, eller get_status for å sjekke nåværende innstillinger"
+                            "enum": ["on", "off", "set_temperature", "set_mode"],
+                            "description": "Hva som skal gjøres med AC"
                         },
                         "temperature": {
-                            "type": "integer",
-                            "description": "Ønsket temperatur i grader Celsius (kun for set_temperature)"
+                            "type": "number",
+                            "description": "Ønsket temperatur i grader Celsius (f.eks. 22.5)"
                         },
                         "mode": {
                             "type": "string",
-                            "enum": ["heat", "cool", "auto", "dry", "fan_only"],
-                            "description": "Driftsmodus (kun for set_mode): heat=varme, cool=kjøle, auto=automatisk"
+                            "enum": ["cool", "heat", "dry", "fan_only", "auto"],
+                            "description": "AC-modus"
                         }
                     },
                     "required": ["action"]
@@ -896,33 +908,15 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         {
             "type": "function",
             "function": {
-                "name": "get_ac_temperature",
-                "description": "Hent temperatur fra AC-sensorene (inne og/eller ute). Bruk denne når brukeren spør om temperaturen som AC måler, eller utetemperaturen fra AC.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "temp_type": {
-                            "type": "string",
-                            "enum": ["inside", "outside", "both"],
-                            "description": "Hvilken temperatur som skal hentes: inside=inne, outside=ute, both=begge (default)"
-                        }
-                    },
-                    "required": []
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "control_vacuum",
-                "description": "Kontroller Saros Z70 robotstøvsuger via Home Assistant. Kan starte støvsuging, pause, stoppe, returnere til base, eller locate (spill lyd).",
+                "description": "Kontroller robotstøvsugeren via Home Assistant (start, stopp, returner til lader, etc.)",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["start", "pause", "stop", "return_to_base", "locate"],
-                            "description": "Hva som skal gjøres: start=start støvsuging, pause=pause, stop=stopp, return_to_base=hjem til base, locate=finn støvsugeren (spill lyd)"
+                            "enum": ["start", "stop", "return_to_base", "pause"],
+                            "description": "Hva som skal gjøres med støvsugeren"
                         }
                     },
                     "required": ["action"]
@@ -933,23 +927,22 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "control_twinkly",
-                "description": "Kontroller Twinkly LED-vegg via Home Assistant. Kan skru på/av, endre lysstyrke, og velge effekt-modus.",
+                "description": "Kontroller Twinkly julelys via Home Assistant (skru på/av, endre effekt, lysstyrke)",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["turn_on", "turn_off", "set_brightness", "set_mode"],
-                            "description": "Hva som skal gjøres: turn_on/off, set_brightness (med brightness parameter), set_mode (med mode parameter)"
+                            "enum": ["on", "off", "set_effect", "set_brightness"],
+                            "description": "Hva som skal gjøres med julelysene"
+                        },
+                        "effect": {
+                            "type": "string",
+                            "description": "Navn på effekten (valgfritt, kun hvis action='set_effect')"
                         },
                         "brightness": {
                             "type": "integer",
-                            "description": "Lysstyrke i prosent (0-100), kun for set_brightness"
-                        },
-                        "mode": {
-                            "type": "string",
-                            "enum": ["color", "demo", "effect", "movie", "off", "playlist", "rt"],
-                            "description": "Effekt-modus: color=fast farge, demo=demo-modus, effect=effekter, movie=film, playlist=spilleliste, rt=real-time"
+                            "description": "Lysstyrke 0-100 (valgfritt, kun hvis action='set_brightness')"
                         }
                     },
                     "required": ["action"]
@@ -992,14 +985,18 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "get_email_status",
-                "description": "VIKTIG: ALLTID bruk dette verktøyet når brukeren spør om e-post! Hent e-post status fra Office 365/Microsoft 365. Kan vise antall uleste, siste e-post, eller liste med siste e-poster. ALDRI svar om e-post uten å kalle dette verktøyet først!",
+                "description": "Sjekk e-post status via Home Assistant. Kan hente uleste e-poster, søke etter avsendere, eller lese siste e-post.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["summary", "latest", "list", "read"],
-                            "description": "Hva som skal hentes: summary=antall uleste, latest=siste e-post (emne+avsender), list=siste 3 e-poster, read=les HELE innholdet i siste e-post (bruk når brukeren vil 'lese' eller 'høre' e-posten)"
+                            "enum": ["count", "read", "search"],
+                            "description": "'count' = antall uleste, 'read' = les siste e-post, 'search' = søk etter avsender"
+                        },
+                        "sender": {
+                            "type": "string",
+                            "description": "Avsender å søke etter (kun hvis action='search')"
                         }
                     },
                     "required": ["action"]
@@ -1010,72 +1007,17 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "get_calendar_events",
-                "description": "Hent kalenderavtaler fra Office 365 Calendar. Kan vise pågående, neste eller dagens avtaler.",
+                "description": "Hent kommende kalenderhendelser via Home Assistant. Kan hente dagens, ukens eller neste hendelse.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {
+                        "timeframe": {
                             "type": "string",
-                            "enum": ["current", "next", "today"],
-                            "description": "Hvilken type avtaler: current=pågående nå, next=neste avtale, today=alle i dag"
+                            "enum": ["today", "tomorrow", "week", "next"],
+                            "description": "'today' = i dag, 'tomorrow' = i morgen, 'week' = denne uken, 'next' = neste hendelse"
                         }
                     },
-                    "required": []
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "create_calendar_event",
-                "description": "Opprett ny kalenderavtale i Office 365 Calendar. Krever tittel og tidspunkt i format YYYY-MM-DD HH:MM:SS.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "summary": {
-                            "type": "string",
-                            "description": "Tittel/emne på avtalen"
-                        },
-                        "start_datetime": {
-                            "type": "string",
-                            "description": "Starttid i format YYYY-MM-DD HH:MM:SS (f.eks. 2026-01-17 10:00:00)"
-                        },
-                        "end_datetime": {
-                            "type": "string",
-                            "description": "Sluttid i format YYYY-MM-DD HH:MM:SS (f.eks. 2026-01-17 11:00:00)"
-                        },
-                        "description": {
-                            "type": "string",
-                            "description": "Beskrivelse/notater (valgfri)"
-                        },
-                        "location": {
-                            "type": "string",
-                            "description": "Sted/lokasjon (valgfri)"
-                        }
-                    },
-                    "required": ["summary", "start_datetime", "end_datetime"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "manage_todo",
-                "description": "Administrer handleliste/To Do-liste i Office 365. Kan vise, legge til, fjerne, fullføre items eller slette alle fullførte.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["list", "add", "remove", "complete", "clear"],
-                            "description": "Handling: list=vis items, add=legg til, remove=fjern, complete=marker ferdig, clear=slett alle fullførte"
-                        },
-                        "item": {
-                            "type": "string",
-                            "description": "Navn på item som skal legges til, fjernes eller markeres ferdig"
-                        }
-                    },
-                    "required": ["action"]
+                    "required": ["timeframe"]
                 }
             }
         },
@@ -1083,7 +1025,7 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "get_teams_status",
-                "description": "Hent din Microsoft Teams-status (Tilgjengelig, Opptatt, Borte, etc.)",
+                "description": "Hent Microsoft Teams status via Home Assistant (tilgjengelig, opptatt, i møte, etc.)",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1094,12 +1036,21 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         {
             "type": "function",
             "function": {
-                "name": "get_teams_chat",
-                "description": "Hent siste Teams-melding med avsender og innhold",
+                "name": "send_teams_message",
+                "description": "Send en melding via Microsoft Teams til en person eller gruppe",
                 "parameters": {
                     "type": "object",
-                    "properties": {},
-                    "required": []
+                    "properties": {
+                        "recipient": {
+                            "type": "string",
+                            "description": "Mottaker av meldingen (navn eller e-post)"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Meldingen som skal sendes"
+                        }
+                    },
+                    "required": ["recipient", "message"]
                 }
             }
         },
@@ -1107,7 +1058,7 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             "type": "function",
             "function": {
                 "name": "activate_scene",
-                "description": "Aktiver en forhåndsdefinert smart home scene. Tilgjengelige scener: filmkveld (dimmer lys, TV på, Netflix), god_natt (alt av, blinds ned), god_morgen (lys på, blinds opp), hjemmekontor (jobb-lys, AC 22°C)",
+                "description": "Aktiver en smart home-scene via Home Assistant. En scene setter flere enheter til forhåndsdefinerte tilstander.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1122,6 +1073,197 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
             }
         }
     ]
+
+
+def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager):
+    """
+    Håndterer alle tool calls fra ChatGPT ved å kalle riktig funksjon og legge til resultatet i messages.
+    
+    Args:
+        tool_calls: Liste med tool call objects fra ChatGPT
+        final_messages: Messages-liste å legge til resultater i
+        source: "voice" eller "sms"
+        source_user_id: ID på bruker (for SMS autorisation)
+        sms_manager: SMSManager instans
+    """
+    for tool_call in tool_calls:
+        function_name = tool_call["function"]["name"]
+        function_args = json.loads(tool_call["function"]["arguments"])
+        
+        print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
+        
+        # Sjekk autorisation for smart home-kommandoer via SMS
+        if not _check_sms_authorization(function_name, source, source_user_id, sms_manager, tool_call, final_messages):
+            continue
+        
+        # Kall faktisk funksjon
+        if function_name == "get_weather":
+            location = function_args.get("location", "")
+            timeframe = function_args.get("timeframe", "now")
+            result = get_weather(location, timeframe)
+        elif function_name == "control_hue_lights":
+            action = function_args.get("action")
+            room = function_args.get("room")
+            brightness = function_args.get("brightness")
+            color = function_args.get("color")
+            result = control_hue_lights(action, room, brightness, color)
+        elif function_name == "control_beak":
+            from src.duck_audio import control_beak
+            enabled = function_args.get("enabled")
+            beak_result = control_beak(enabled)
+            result = beak_result.get("status", "error") if isinstance(beak_result, dict) else str(beak_result)
+        elif function_name == "get_ip_address":
+            result = get_ip_address_tool()
+        elif function_name == "get_netatmo_temperature":
+            room_name = function_args.get("room_name")
+            result = get_netatmo_temperature(room_name)
+        elif function_name == "control_tv":
+            action = function_args.get("action")
+            result = control_tv(action)
+        elif function_name == "switch_network":
+            # Bytt nettverk - koble fra WiFi og start hotspot
+            try:
+                # Skriv trigger-fil for å fortelle Duck å skifte
+                with open('/tmp/duck_switch_network.txt', 'w') as f:
+                    f.write('SWITCH')
+                
+                result = "OK, jeg starter hotspot nå. Koble til ChatGPT-Duck med passord kvakkkvakk for å velge nytt nettverk."
+            except Exception as e:
+                result = f"Kunne ikke starte hotspot: {e}"
+        elif function_name == "launch_tv_app":
+            app_name = function_args.get("app_name")
+            result = launch_tv_app(app_name)
+        elif function_name == "control_ac":
+            action = function_args.get("action")
+            temperature = function_args.get("temperature")
+            mode = function_args.get("mode")
+            result = control_ac(action, temperature, mode)
+        elif function_name == "get_ac_temperature":
+            temp_type = function_args.get("temp_type", "both")
+            result = get_ac_temperature(temp_type)
+        elif function_name == "control_vacuum":
+            action = function_args.get("action")
+            result = control_vacuum(action)
+        elif function_name == "control_twinkly":
+            action = function_args.get("action")
+            brightness = function_args.get("brightness")
+            mode = function_args.get("mode")
+            result = control_twinkly(action, brightness, mode)
+        elif function_name == "control_blinds":
+            location = function_args.get("location")
+            action = function_args.get("action")
+            position = function_args.get("position")
+            section = function_args.get("section")
+            result = control_blinds(location, action, position, section)
+        elif function_name == "get_email_status":
+            action = function_args.get("action", "summary")
+            print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)
+            result = get_email_status(action)
+            print(f"🔧 TOOL RESULT: {result[:200] if len(result) > 200 else result}", flush=True)
+        elif function_name == "get_calendar_events":
+            action = function_args.get("action", "next")
+            result = get_calendar_events(action)
+        elif function_name == "create_calendar_event":
+            summary = function_args.get("summary")
+            start_datetime = function_args.get("start_datetime")
+            end_datetime = function_args.get("end_datetime")
+            description = function_args.get("description")
+            location = function_args.get("location")
+            result = create_calendar_event(summary, start_datetime, end_datetime, description, location)
+        elif function_name == "manage_todo":
+            action = function_args.get("action", "list")
+            item = function_args.get("item")
+            result = manage_todo(action, item)
+        elif function_name == "get_teams_status":
+            result = get_teams_status()
+        elif function_name == "get_teams_chat":
+            result = get_teams_chat()
+        elif function_name == "activate_scene":
+            scene_name = function_args.get("scene_name", "")
+            result = activate_scene(scene_name)
+        else:
+            result = "Ukjent funksjon"
+        
+        # Legg til tool result for denne funksjonen
+        final_messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call["id"],
+            "name": function_name,
+            "content": result
+        })
+
+
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, source=None, source_user_id=None):
+    """
+    Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
+    
+    Args:
+        messages: Liste med chat-meldinger
+        api_key: OpenAI API key
+        model: Modell-navn (default fra config)
+        memory_manager: MemoryManager instans
+        user_manager: UserManager instans
+        sms_manager: SMSManager instans (for boredom status)
+        hunger_manager: HungerManager instans (for hunger status)
+        source: "voice" eller "sms" - hvor forespørselen kommer fra
+        source_user_id: ID på bruker (for SMS autorisation)
+    
+    Returns:
+        tuple: (reply_text, is_thank_you) eller bare reply_text
+    """
+    if model is None:
+        # Prøv å lese modell fra konfigurasjonsfil
+        try:
+            if os.path.exists(MODEL_CONFIG_FILE):
+                with open(MODEL_CONFIG_FILE, 'r') as f:
+                    model = f.read().strip()
+                    if not model:
+                        model = DEFAULT_MODEL
+            else:
+                model = DEFAULT_MODEL
+        except Exception as e:
+            print(f"Feil ved lesing av modellkonfigurasjon: {e}, bruker default", flush=True)
+            model = DEFAULT_MODEL
+    
+    print(f"Bruker AI-modell: {model}", flush=True)
+    
+    # Hent nåværende bruker og primary user
+    current_user = None
+    primary_user = None
+    if user_manager:
+        try:
+            current_user = user_manager.get_current_user()
+            primary_user = user_manager.get_primary_user()
+            print(f"👤 Nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
+        except Exception as e:
+            print(f"⚠️ Kunne ikke hente current_user: {e}", flush=True)
+    
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # Bygg system prompt med _build_system_prompt()
+    system_content = _build_system_prompt(
+        user_manager=user_manager,
+        memory_manager=memory_manager,
+        hunger_manager=hunger_manager,
+        sms_manager=sms_manager,
+        model=model,
+        messages=messages,
+        current_user=current_user,
+        primary_user=primary_user
+    )
+    
+    if source == "sms":
+        print(f"📋 System prompt bygget for SMS (inkluderer personlighet, lengde: {len(system_content)} tegn)", flush=True)
+    
+    final_messages = messages.copy()
+    final_messages.insert(0, {"role": "system", "content": system_content})
+    
+    # Hent function tools
+    tools = _get_function_tools()
     
     data = {
         "model": model,
@@ -1144,147 +1286,8 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         # Legg til assistant message først
         final_messages.append(message)
         
-        # Prosesser alle tool calls
-        for tool_call in tool_calls:
-            function_name = tool_call["function"]["name"]
-            function_args = json.loads(tool_call["function"]["arguments"])
-            
-            print(f"ChatGPT kaller funksjon: {function_name} med args: {function_args}", flush=True)
-            
-            # Liste over smart home funksjoner som krever autorisation
-            protected_functions = [
-                "control_hue_lights", "control_tv", "launch_tv_app", 
-                "control_ac", "control_vacuum", "control_twinkly", 
-                "control_blinds", "activate_scene"
-            ]
-            
-            # Sjekk autorisation for smart home-kommandoer via SMS
-            if function_name in protected_functions and source == "sms":
-                # For SMS: sjekk om kontakt har 'owner' relation
-                if source_user_id and sms_manager:
-                    # source_user_id er contact_id fra sms_contacts
-                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
-                    conn.row_factory = sqlite3.Row
-                    c = conn.cursor()
-                    c.execute("SELECT relation FROM sms_contacts WHERE id = ?", (source_user_id,))
-                    row = c.fetchone()
-                    conn.close()
-                    
-                    if not row or row['relation'] != 'owner':
-                        result = "❌ Smart home-kontroll er kun tilgjengelig for Osmund via SMS. Andre kan kun kontrollere via talekommando."
-                        # Legg til tool result og fortsett
-                        final_messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call["id"],
-                            "name": function_name,
-                            "content": result
-                        })
-                        continue
-                else:
-                    # Ingen user_id sendt, blokkér som sikkerhet
-                    result = "❌ Smart home-kontroll krever identifikasjon via SMS."
-                    final_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "name": function_name,
-                        "content": result
-                    })
-                    continue
-            
-            # Kall faktisk funksjon
-            if function_name == "get_weather":
-                location = function_args.get("location", "")
-                timeframe = function_args.get("timeframe", "now")
-                result = get_weather(location, timeframe)
-            elif function_name == "control_hue_lights":
-                action = function_args.get("action")
-                room = function_args.get("room")
-                brightness = function_args.get("brightness")
-                color = function_args.get("color")
-                result = control_hue_lights(action, room, brightness, color)
-            elif function_name == "control_beak":
-                enabled = function_args.get("enabled")
-                beak_result = control_beak(enabled)
-                result = beak_result.get("status", "error") if isinstance(beak_result, dict) else str(beak_result)
-            elif function_name == "get_ip_address":
-                result = get_ip_address_tool()
-            elif function_name == "get_netatmo_temperature":
-                room_name = function_args.get("room_name")
-                result = get_netatmo_temperature(room_name)
-            elif function_name == "control_tv":
-                action = function_args.get("action")
-                result = control_tv(action)
-            elif function_name == "switch_network":
-                # Bytt nettverk - koble fra WiFi og start hotspot
-                try:
-                    # Skriv trigger-fil for å fortelle Duck å skifte
-                    with open('/tmp/duck_switch_network.txt', 'w') as f:
-                        f.write('SWITCH')
-                    
-                    result = "OK, jeg starter hotspot nå. Koble til ChatGPT-Duck med passord kvakkkvakk for å velge nytt nettverk."
-                except Exception as e:
-                    result = f"Kunne ikke starte hotspot: {e}"
-            elif function_name == "launch_tv_app":
-                app_name = function_args.get("app_name")
-                result = launch_tv_app(app_name)
-            elif function_name == "control_ac":
-                action = function_args.get("action")
-                temperature = function_args.get("temperature")
-                mode = function_args.get("mode")
-                result = control_ac(action, temperature, mode)
-            elif function_name == "get_ac_temperature":
-                temp_type = function_args.get("temp_type", "both")
-                result = get_ac_temperature(temp_type)
-            elif function_name == "control_vacuum":
-                action = function_args.get("action")
-                result = control_vacuum(action)
-            elif function_name == "control_twinkly":
-                action = function_args.get("action")
-                brightness = function_args.get("brightness")
-                mode = function_args.get("mode")
-                result = control_twinkly(action, brightness, mode)
-            elif function_name == "control_blinds":
-                location = function_args.get("location")
-                action = function_args.get("action")
-                position = function_args.get("position")
-                section = function_args.get("section")
-                result = control_blinds(location, action, position, section)
-            elif function_name == "get_email_status":
-                action = function_args.get("action", "summary")
-                print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)
-                result = get_email_status(action)
-                print(f"🔧 TOOL RESULT: {result[:200] if len(result) > 200 else result}", flush=True)
-            elif function_name == "get_calendar_events":
-                action = function_args.get("action", "next")
-                result = get_calendar_events(action)
-            elif function_name == "create_calendar_event":
-                summary = function_args.get("summary")
-                start_datetime = function_args.get("start_datetime")
-                end_datetime = function_args.get("end_datetime")
-                description = function_args.get("description")
-                location = function_args.get("location")
-                result = create_calendar_event(summary, start_datetime, end_datetime, description, location)
-            elif function_name == "manage_todo":
-                action = function_args.get("action", "list")
-                item = function_args.get("item")
-                result = manage_todo(action, item)
-            elif function_name == "get_teams_status":
-                result = get_teams_status()
-            elif function_name == "get_teams_chat":
-                result = get_teams_chat()
-            elif function_name == "activate_scene":
-                scene_name = args.get("scene_name", "")
-                result = activate_scene(scene_name)
-            else:
-                result = "Ukjent funksjon"
-            
-            # Legg til tool result for denne funksjonen
-            final_messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call["id"],
-                "name": function_name,
-                "content": result
-            })
+        # Håndter alle tool calls
+        _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager)
         
         # Kall API igjen med all tool data
         data["messages"] = final_messages

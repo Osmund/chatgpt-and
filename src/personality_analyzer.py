@@ -252,19 +252,22 @@ Svar med JSON:
 }}"""
 
         # Prøv først o1 (reasoning model, best for analyse)
+        personality_model = os.getenv("AI_MODEL_PERSONALITY", "o1")
+        fallback_model = os.getenv("AI_MODEL_PERSONALITY_FALLBACK", "gpt-4o")
+        
         try:
             response = self.openai_client.chat.completions.create(
-                model="o1",
+                model=personality_model,
                 messages=[
                     {"role": "user", "content": f"Du er ekspert på personlighetsanalyse. Svar kun med valid JSON.\n\n{analysis_prompt}"}
                 ]
             )
-            print("✅ Bruker o1 (reasoning model)")
+            print(f"✅ Bruker {personality_model} (reasoning model)")
         except Exception as e:
             # Fallback til gpt-4o hvis o1 ikke tilgjengelig
-            print(f"⚠️ o1 ikke tilgjengelig ({e}), bruker gpt-4o")
+            print(f"⚠️ {personality_model} ikke tilgjengelig ({e}), bruker {fallback_model}")
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=fallback_model,
                 messages=[
                     {"role": "system", "content": "Du er ekspert på personlighetsanalyse. Svar kun med valid JSON."},
                     {"role": "user", "content": analysis_prompt}
