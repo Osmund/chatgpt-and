@@ -17,6 +17,7 @@ from src.duck_config import (
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
+from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
 
 
 def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
@@ -263,6 +264,41 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
     return metadata
 
 
+def _parse_duration(duration_str: str) -> int:
+    """
+    Parser norske varigheter til minutter.
+    
+    Eksempler:
+        "30 minutter" -> 30
+        "1 time" -> 60
+        "2 timer" -> 120
+        "3 timer og 30 minutter" -> 210
+        "90 minutter" -> 90
+        "1.5 timer" -> 90
+    
+    Returns:
+        Antall minutter, eller 0 hvis parsing feiler
+    """
+    import re
+    
+    duration_str = duration_str.lower().strip()
+    total_minutes = 0
+    
+    # Match timer (1 time, 2 timer, 1.5 timer, etc.)
+    hours_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:time|timer)', duration_str)
+    if hours_match:
+        hours = float(hours_match.group(1))
+        total_minutes += int(hours * 60)
+    
+    # Match minutter (30 minutter, etc.)
+    minutes_match = re.search(r'(\d+)\s*(?:minutt|minutter)', duration_str)
+    if minutes_match:
+        minutes = int(minutes_match.group(1))
+        total_minutes += minutes
+    
+    return total_minutes
+
+
 def _check_sms_authorization(function_name: str, source: str, source_user_id: int, sms_manager, tool_call: dict, final_messages: list) -> bool:
     """
     Sjekk om SMS-bruker har tilgang til smart home-funksjoner.
@@ -502,6 +538,19 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
     
     # Start system content
     system_content = date_time_info + tamagotchi_status + user_info + perspective_context
+    
+    # Legg til sleep mode status hvis aktiv
+    from src.duck_sleep import is_sleeping, get_sleep_status
+    if is_sleeping():
+        sleep_status = get_sleep_status()
+        end_time = sleep_status.get('end_time_formatted', 'ukjent tid')
+        remaining = sleep_status.get('remaining_minutes', 0)
+        system_content += f"\n\n### VIKTIG: Sleep Mode Aktiv ###\n"
+        system_content += f"- Du er for øyeblikket i SLEEP MODE (aktiv til {end_time}, {remaining} minutter gjenstår)\n"
+        system_content += f"- Hvis brukeren spør om du sover: Svar JA og forklar at du er i sleep mode til kl {end_time}\n"
+        system_content += f"- Hvis brukeren ber deg våkne opp ('våkn opp', 'kan du våkne', 'ikke sov mer', etc.), MÅ du UMIDDELBART kalle disable_sleep_mode verktøyet\n"
+        system_content += f"- IKKE bare si at du er våken - du MÅ faktisk kalle disable_sleep_mode for å deaktivere sleep mode\n"
+        system_content += f"- Etter at du har kalt disable_sleep_mode, kan du si at du nå er våken og klar\n"
     
     # Samle memory context
     memory_section = ""
@@ -1071,6 +1120,35 @@ def _get_function_tools():
                     "required": ["scene_name"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "enable_sleep_mode",
+                "description": "Aktiverer sleep mode for å forhindre falske wake words (f.eks. under filmer). Anda vil ignorere wake words og vise blå pulserende LED. SMS fungerer fortsatt normalt. Kan sette varighet i minutter eller timer.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "duration": {
+                            "type": "string",
+                            "description": "Varighet på sleep mode. Eksempler: '30 minutter', '1 time', '2 timer', '3 timer og 30 minutter', '90 minutter'"
+                        }
+                    },
+                    "required": ["duration"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "disable_sleep_mode",
+                "description": "Deaktiverer sleep mode og våkner opp Anda. MUST be called when user asks to wake up, e.g. 'våkn opp', 'kan du våkne', 'våkne opp', 'vekk meg', 'ikke sov mer' - ANY variation of wake up requests. Brukes via SMS eller kontrollpanel.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
         }
     ]
 
@@ -1181,6 +1259,26 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         elif function_name == "activate_scene":
             scene_name = function_args.get("scene_name", "")
             result = activate_scene(scene_name)
+        elif function_name == "enable_sleep_mode":
+            duration_str = function_args.get("duration", "")
+            # Parser norske varigheter til minutter
+            duration_minutes = _parse_duration(duration_str)
+            if duration_minutes > 0:
+                sleep_result = enable_sleep(duration_minutes)
+                if sleep_result.get('success'):
+                    end_time = sleep_result.get('end_time_formatted', '')
+                    # Legg til [AVSLUTT] for å umiddelbart avslutte samtalen og gå i sleep mode
+                    result = f"OK, jeg går i dvale i {duration_minutes} minutter (til {end_time}). Du kan våkne meg via SMS eller kontrollpanelet. God film! 🎬🦆 [AVSLUTT]"
+                else:
+                    result = f"Kunne ikke aktivere sleep mode: {sleep_result.get('error', 'Ukjent feil')}"
+            else:
+                result = f"Kunne ikke forstå varigheten '{duration_str}'. Prøv f.eks. '30 minutter', '1 time', '2 timer'."
+        elif function_name == "disable_sleep_mode":
+            sleep_result = disable_sleep()
+            if sleep_result.get('was_sleeping'):
+                result = "Jeg er våken igjen! 😊🦆 Hva kan jeg hjelpe deg med?"
+            else:
+                result = "Jeg sov ikke, men jeg er her! 🦆"
         else:
             result = "Ukjent funksjon"
         

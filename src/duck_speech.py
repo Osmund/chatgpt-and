@@ -12,13 +12,14 @@ import os
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
-from rgb_duck import set_blue, set_green, off
+from rgb_duck import set_blue, set_green, off, pulse_blue, stop_blink
 from src.duck_config import (
     MESSAGE_FILE, SONG_REQUEST_FILE,
     PORCUPINE_ACCESS_KEY_ENV, WAKE_WORD_PATH,
     AZURE_SPEECH_KEY_ENV, AZURE_SPEECH_REGION_ENV
 )
 from src.duck_audio import find_usb_microphone, find_usb_mic_alsa_card
+from src.duck_sleep import is_sleeping
 
 
 def wait_for_wake_word():
@@ -87,7 +88,30 @@ def wait_for_wake_word():
                 )
                 audio_stream.start()
                 
+                # Sleep mode tracking for LED
+                sleep_led_started = False
+                
                 while True:
+                    # Sjekk sleep mode FØRST - blokkerer ikke andre meldinger (SMS, hunger, etc.)
+                    if is_sleeping():
+                        # Start blå pulsering hvis ikke allerede startet
+                        if not sleep_led_started:
+                            pulse_blue()
+                            sleep_led_started = True
+                            print("💤 [wait_for_wake_word] Sleep mode detektert - starter blå pulsering", flush=True)
+                        
+                        # I sleep mode - ignorer wake word detection
+                        # Men tillat eksterne meldinger (SMS, hunger, etc.)
+                        time.sleep(0.5)  # Kort pause for å ikke slå CPU
+                        # Sjekk eksterne meldinger nedenfor fortsetter normalt
+                    else:
+                        # Stopp LED hvis sleep mode deaktiveres
+                        if sleep_led_started:
+                            stop_blink()
+                            set_blue()  # Tilbake til blå LED (klar for wake word)
+                            sleep_led_started = False
+                            print("⏰ [wait_for_wake_word] Sleep mode deaktivert - blå LED", flush=True)
+                    
                     # Sjekk om det finnes en ekstern melding
                     if os.path.exists(MESSAGE_FILE):
                         try:
@@ -157,6 +181,10 @@ def wait_for_wake_word():
                     # Les audio fra mikrofon (større buffer)
                     pcm_48k, overflowed = audio_stream.read(mic_buffer_size)
                     # Ignorer overflow warnings - forventet ved resampling
+                    
+                    # Skip wake word detection hvis vi er i sleep mode
+                    if is_sleeping():
+                        continue  # Hopp over wake word prosessering
                     
                     # Konverter til numpy array
                     pcm_48k_array = np.frombuffer(pcm_48k, dtype=np.int16)

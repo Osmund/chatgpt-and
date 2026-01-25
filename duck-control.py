@@ -543,6 +543,22 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/sleep_status':
+            # Hent sleep mode status
+            try:
+                from src.duck_sleep import get_sleep_status
+                status = get_sleep_status()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(status).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                error_msg = {'enabled': False, 'error': str(e)}
+                self.wfile.write(json.dumps(error_msg).encode())
+        
         elif self.path == '/wifi-networks':
             # Hent tilgjengelige WiFi-nettverk
             try:
@@ -1682,6 +1698,64 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 with open(song_stop_file, 'w', encoding='utf-8') as f:
                     f.write('stop')
                 
+                response = {'success': True}
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/sleep/enable':
+            # Aktiver sleep mode
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode())
+            
+            duration_minutes = data.get('duration_minutes', 60)
+            print(f"Sleep mode enable: {duration_minutes} minutter", flush=True)
+            
+            try:
+                from src.duck_sleep import enable_sleep
+                result = enable_sleep(duration_minutes)
+                
+                if result.get('success'):
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(result).encode())
+                else:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(result).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/sleep/disable':
+            # Deaktiver sleep mode
+            print("Sleep mode disable", flush=True)
+            
+            try:
+                from src.duck_sleep import disable_sleep
+                result = disable_sleep()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
                 response = {'success': True}
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')

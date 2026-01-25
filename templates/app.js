@@ -1237,6 +1237,7 @@ window.onload = function() {
     loadMemorySettings();  // Last alle memory settings
     loadBoredomStatus();  // Last kjedsomhetsnivå
     loadHungerStatus();  // Last hunger nivå
+    updateSleepModeStatus();  // Last sleep mode status
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1245,6 +1246,7 @@ window.onload = function() {
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
+    setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
 };
 
 // Boredom Status
@@ -1456,5 +1458,81 @@ async function changeMemoryThreshold() {
         }
     } catch (error) {
         statusElement.textContent = ' ✗ ' + error.message;
+    }
+}
+
+// Sleep Mode Functions
+async function updateSleepModeStatus() {
+    try {
+        const response = await fetch('/sleep_status');
+        const data = await response.json();
+        
+        const statusDiv = document.getElementById('sleep-mode-status');
+        const toggleBtn = document.getElementById('sleep-toggle-btn');
+        const countdownDiv = document.getElementById('sleep-countdown');
+        const endTimeSpan = document.getElementById('sleep-end-time');
+        const remainingSpan = document.getElementById('sleep-remaining');
+        
+        if (data.is_sleeping) {
+            statusDiv.textContent = '💤 Anda sover';
+            statusDiv.style.color = '#1565c0';
+            toggleBtn.textContent = '⏰ Våkn opp';
+            toggleBtn.style.background = '#ff9800';
+            countdownDiv.style.display = 'block';
+            endTimeSpan.textContent = data.end_time_formatted || '';
+            remainingSpan.textContent = data.remaining_minutes || 0;
+        } else {
+            statusDiv.textContent = '✅ Anda er våken';
+            statusDiv.style.color = '#4caf50';
+            toggleBtn.textContent = '💤 Aktiver søvn';
+            toggleBtn.style.background = '#42a5f5';
+            countdownDiv.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Feil ved henting av sleep mode status:', error);
+    }
+}
+
+async function toggleSleepMode() {
+    const statusDiv = document.getElementById('sleep-mode-status');
+    
+    try {
+        // Sjekk nåværende status
+        const statusResponse = await fetch('/sleep_status');
+        const statusData = await statusResponse.json();
+        
+        if (statusData.is_sleeping) {
+            // Deaktiver sleep mode
+            const response = await fetch('/sleep/disable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                await updateSleepModeStatus();
+            } else {
+                alert('Feil ved deaktivering av sleep mode: ' + (data.error || 'Ukjent feil'));
+            }
+        } else {
+            // Aktiver sleep mode
+            const durationSelect = document.getElementById('sleep-duration');
+            const durationMinutes = parseInt(durationSelect.value);
+            
+            const response = await fetch('/sleep/enable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ duration_minutes: durationMinutes })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                await updateSleepModeStatus();
+            } else {
+                alert('Feil ved aktivering av sleep mode: ' + (data.error || 'Ukjent feil'));
+            }
+        }
+    } catch (error) {
+        alert('Nettverksfeil: ' + error.message);
     }
 }

@@ -19,7 +19,7 @@ import azure.cognitiveservices.speech as speechsdk
 
 # Duck moduler
 from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
-from rgb_duck import set_blue, off, blink_yellow_purple
+from rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink
 from src.duck_config import MESSAGES_FILE
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
@@ -29,6 +29,7 @@ from src.duck_music import play_song
 from src.duck_conversation import check_ai_queries, ask_for_user_switch, is_conversation_ending
 from src.duck_ai import chatgpt_query, generate_message_metadata
 from src.adaptive_greetings import get_adaptive_greeting, get_adaptive_goodbye
+from src.duck_sleep import is_sleeping, get_sleep_status
 
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
@@ -437,7 +438,37 @@ def main():
     session_start_time = None
     SESSION_TIMEOUT_MINUTES = 30
     
+    # Sleep mode tracking
+    sleep_led_active = False
+    
     while True:
+        # Sjekk sleep mode først
+        if is_sleeping():
+            # Start blå pulsering bare én gang
+            if not sleep_led_active:
+                pulse_blue()
+                sleep_led_active = True
+                print("💤 Sleep mode aktiv - ignorerer wake words (blå pulsering)", flush=True)
+            
+            # Vent 0.5 sekunder før vi sjekker igjen (for rask respons på kontrollpanel)
+            time.sleep(0.5)
+            
+            # Sjekk om sleep mode har utløpt eller blitt deaktivert
+            if not is_sleeping():
+                print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
+                stop_blink()
+                set_blue()  # Tilbake til blå LED (klar for wake word)
+                sleep_led_active = False
+            
+            continue
+        else:
+            # Reset flag når ikke i sleep mode
+            if sleep_led_active:
+                stop_blink()
+                set_blue()  # Tilbake til blå LED (klar for wake word)
+                sleep_led_active = False
+        
+        # Normal wake word detection
         external_message = wait_for_wake_word()
         
         # Generer ny session_id for ny samtale

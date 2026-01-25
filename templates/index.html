@@ -52,6 +52,31 @@
             </div>
         </div>
         
+        <!-- Sleep Mode -->
+        <div id="sleep-mode-panel" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border: 2px solid #42a5f5;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">💤 Søvnmodus (Sleep Mode)</div>
+            <div id="sleep-mode-status" style="font-weight: bold; margin-bottom: 10px; color: #1976d2;">
+                Aktiv
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                <select id="sleep-duration" style="padding: 8px; border-radius: 5px; border: 1px solid #42a5f5; font-size: 1em;">
+                    <option value="30">30 minutter</option>
+                    <option value="60" selected>1 time</option>
+                    <option value="90">1.5 timer</option>
+                    <option value="120">2 timer</option>
+                    <option value="180">3 timer</option>
+                    <option value="240">4 timer</option>
+                </select>
+                <button id="sleep-toggle-btn" onclick="toggleSleepMode()" style="padding: 10px 20px; background: #42a5f5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1em;">
+                    💤 Aktiver
+                </button>
+            </div>
+            <div id="sleep-countdown" style="margin-top: 10px; font-size: 0.9em; color: #1565c0; display: none;">
+                Sovner til: <span id="sleep-end-time" style="font-weight: bold;"></span>
+                (<span id="sleep-remaining" style="font-weight: bold;"></span> minutter igjen)
+            </div>
+        </div>
+        
         <div id="status" class="status-box status-unknown">
             Henter status...
         </div>
