@@ -18,6 +18,7 @@ from src.duck_config import (
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
 from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
+from src.duck_web_search import web_search
 
 
 def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
@@ -1149,6 +1150,28 @@ def _get_function_tools():
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Search the web for current information, news, facts, events. Use when user asks about current events, latest news, sports results, weather forecasts, or any information you don't have. Examples: 'hva skjer i verden?', 'siste nyheter om X', 'hvem vant kampen?', 'været i morgen', 'når er neste konsert med X'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Søkeord eller spørsmål. Bruk norsk hvis brukeren snakker norsk."
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall resultater å hente (default 5, max 10)",
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
         }
     ]
 
@@ -1279,6 +1302,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 result = "Jeg er våken igjen! 😊🦆 Hva kan jeg hjelpe deg med?"
             else:
                 result = "Jeg sov ikke, men jeg er her! 🦆"
+        elif function_name == "web_search":
+            query = function_args.get("query", "")
+            count = function_args.get("count", 5)
+            result = web_search(query, count)
         else:
             result = "Ukjent funksjon"
         

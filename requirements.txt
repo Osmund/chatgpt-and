@@ -21,3 +21,4 @@ adafruit-circuitpython-servokit>=1.3.0 # PCA9685 servo control
 # Utilities
 python-dotenv>=1.0.0                   # Environment variable management
 requests>=2.31.0                       # HTTP requests for web featuresaudioop-lts>=0.2.2                      # Python 3.13+ audioop replacement
+beautifulsoup4>=4.12.0                 # HTML parsing for web scraping

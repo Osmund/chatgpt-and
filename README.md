@@ -19,21 +19,43 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 
 ## Hovedfunksjoner
 
+### 🎙️ Stemme & Dialog
 - 🎤 **Wake Word Detection**: Porcupine wake word - si "Samantha"
 - 💬 **ChatGPT Samtaler**: Naturlig dialog med AI-personligheter
 - 🗣️ **Azure TTS**: Høykvalitets norsk talesyntese med flere stemmer
 - 👄 **Synkron Nebb-bevegelse**: Servostyrt nebb som beveger seg til lyden
 - 🎵 **Sang-avspilling**: Anda kan synge med synkronisert nebb og LED-pulsing
-- 🌤️ **Værmelding**: Live værdata fra yr.no for hele Norge
-- ⏰ **Dato og tid**: Anda vet alltid hva klokka er og hvilken dato det er
+
+### 🌐 Smart Home & Web
 - 💡 **Philips Hue**: Styr smarte lys med stemmen (på/av, dimming, 8 farger)
+- 🌤️ **Værmelding**: Live værdata fra yr.no for hele Norge
+- 🔍 **Web Search**: Søk på internett og les artikler via Brave API
+- ⏰ **Dato og tid**: Anda vet alltid hva klokka er og hvilken dato det er
+
+### 🧠 Intelligens & Minne
+- 🧠 **Memory System**: Husker fakta, samtaler og preferanser per bruker
+- 👥 **Multi-User**: Støtte for flere brukere med egne profiler
+- 🎭 **Adaptive Personlighet**: Lærer fra samtaler og tilpasser seg
+- 🎯 **Adaptive Greetings**: Dynamiske hilsener basert på kontekst
+
+### 📱 Kommunikasjon
+- 💬 **SMS System**: Send og motta SMS via Twilio relay
+- 📧 **Email Integration**: Les og søk i e-post via Microsoft Graph
+- 📅 **Calendar**: Administrer kalenderavtaler
+- ✅ **Todo**: Håndter oppgavelister
+
+### 🦆 Tamagotchi Features
+- 🍪 **Hunger System**: Anda blir sulten og trenger mat
+- 😴 **Boredom System**: Anda blir kjed seg og trenger oppmerksomhet
+- 💤 **Sleep Mode**: Sett anda i dvale under filmer (blå pulsering)
+
+### 🌈 Kontroll & Status
 - 🔴 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander
 - 🌐 **Web Kontrollpanel**: Komplett fjernstyring via nettleser
 - 📊 **Sanntids Logger**: Live systemlogger og statusovervåking
 - 🔧 **Justerbar Talehastighet**: Fra treg til lynrask tale
 - 🔊 **Volumkontroll**: Juster lydnivå i sanntid
 - 🌀 **Automatisk Viftekontroll**: Temperaturbasert kjøling med manuell overstyring
-- 🎭 **Flere Personligheter**: Velg mellom ulike AI-personligheter
 - 📱 **WiFi Portal**: Innebygd WiFi-oppsett for enkel konfigurasjon
 
 ## ⚡ Quick Start

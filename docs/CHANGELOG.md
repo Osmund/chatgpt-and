@@ -4,6 +4,105 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.2.0] - 2026-01-25
+
+### Ny funksjonalitet
+
+#### 💤 Sleep Mode - Forhindre falske wake words
+
+**Beskrivelse**: Anda kan nå settes i "sleep mode" for å forhindre falske aktivering under filmer eller når du trenger ro.
+
+**Funksjoner**:
+- **Blå LED-pulsering**: Sinusformet pulsing (0.1-1.0 intensity, 2s syklus) indikerer sleep mode
+- **Wake word blokkering**: Anda reagerer ikke på "Samantha" mens den sover
+- **Tre aktiveringsmåter**:
+  1. **Stemme**: Si "sov i 30 minutter", "sov i 2 timer", "sov i 90 minutter"
+  2. **SMS**: Send "våkn opp" eller "wake up" for å deaktivere
+  3. **Kontrollpanel**: Web UI med countdown timer og toggle-knapp
+- **Norsk varighetsparser**: Forstår "timer", "minutter", "1.5 timer", etc.
+- **Auto-deaktivering**: Våkner automatisk når tiden er ute
+- **Cross-process sync**: JSON-basert state (sleep_mode.json) synkroniseres mellom alle prosesser
+- **AI-awareness**: ChatGPT vet når den sover og svarer ærlig ("Ja, jeg sover til kl 15:30")
+- **Umiddelbar aktivering**: [AVSLUTT] marker tvinger samtale-terminering
+
+**Teknisk implementering**:
+- **SleepModeManager** (`src/duck_sleep.py`): Singleton med JSON persistence
+  - `enable_sleep(duration_minutes)`: Aktiverer med timestamp
+  - `disable_sleep()`: Deaktiverer og sletter state
+  - `is_sleeping()`: Re-loader JSON hver gang (cross-process sync)
+  - `get_sleep_status()`: Returnerer detaljert status med countdown
+- **LED kontroll** (`rgb_duck.py`):
+  - `pulse_blue()`: Daemon thread med math.sin() for smooth wave
+  - Respekterer `_blink_stop` event for clean shutdown
+- **Wake word blokkering** (`duck_speech.py`):
+  - Sleep check INNE i `wait_for_wake_word()` loop
+  - Starter LED pulsing ved sleep, stopper ved wake
+  - time.sleep(0.5) for responsiv oppvåkning
+- **Main loop** (`chatgpt_voice.py`):
+  - 0.5s polling interval for rask respons
+  - `sleep_led_active` flag forhindrer multiple LED threads
+  - `set_blue()` når våknet (ikke off())
+- **AI tools** (`duck_ai.py`):
+  - `enable_sleep_mode` og `disable_sleep_mode` function calling tools
+  - System prompt inkluderer sleep status når aktiv
+  - [AVSLUTT] marker i tool response for umiddelbar terminering
+- **Web UI**: 
+  - Dropdown med presets (30min, 1t, 2t, 3t, 4t)
+  - Live countdown display
+  - 1s polling (updateSleepModeStatus())
+
+**API Endpoints**:
+```http
+GET  /sleep_status        # Hent sleep mode status
+POST /sleep/enable        # Aktiver sleep mode (duration_minutes)
+POST /sleep/disable       # Deaktiver sleep mode
+```
+
+**Resultat**: Perfekt for filmkvelder eller når du trenger stillhet! 🎬💤
+
+#### 🔍 Web Search - Ferske nyheter og fakta
+
+**Beskrivelse**: Anda kan nå søke på internett og lese faktisk innhold fra artikler, ikke bare lenker.
+
+**Funksjoner**:
+- **Brave Search API**: 2000 gratis søk per måned
+- **Automatisk aktivering**: ChatGPT bestemmer når den trenger oppdatert info
+- **Artikkel-skraping**: Leser faktisk innhold fra topp 2 resultater
+- **BeautifulSoup parsing**: Ekstraherer main content fra HTML
+- **Smart cleaning**: Fjerner scripts, styles, nav, footer, ads
+- **Oppsummering**: Kombinerer søkeresultater med artikkelinnhold
+- **Multiple sources**: Web results, news, FAQ sections
+
+**Teknisk implementering**:
+- **Brave Search API** (`src/duck_web_search.py`):
+  - `web_search(query, count=5)`: Henter søkeresultater
+  - `_fetch_article_content(url, max_length=1500)`: Skraper HTML med BeautifulSoup
+  - Ekstraherer fra `<article>`, `<main>`, eller content divs
+  - Regex-basert whitespace cleaning
+  - Leser topp 2 artikler fullt, resten kun descriptions
+- **AI Function Calling** (`duck_ai.py`):
+  - `web_search` tool i function calling array
+  - ChatGPT bestemmer selv når den trenger web search
+  - Integrert i samtaleflyt uten eksplisitt kommando
+- **Dependencies**: 
+  - `requests` for HTTP calls
+  - `beautifulsoup4>=4.12.0` for HTML parsing
+
+**API Key Setup**:
+1. Registrer på https://api.search.brave.com/register
+2. Legg til i `.env`:
+   ```
+   BRAVE_SEARCH_API_KEY=your-api-key-here
+   ```
+
+**Eksempler**:
+- "Hva er de siste nyhetene om AI?"
+- "Finn informasjon om været i morgen"
+- "Søk etter oppskrifter på brownies"
+- "Hva skjer i verden akkurat nå?"
+
+**Resultat**: Anda har nå tilgang til fersk informasjon fra hele nettet! 🌐📰
+
 ## [2.1.3] - 2026-01-15
 
 ### Ny funksjonalitet
