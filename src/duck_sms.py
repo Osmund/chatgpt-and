@@ -437,6 +437,11 @@ Maks 155 tegn."""
     
     def _should_respond(self, message: str, contact: Dict) -> bool:
         """Check if Anda should auto-respond to this message"""
+        # Always respond if message contains food emoji (they're feeding us!)
+        from duck_hunger import FOOD_VALUES
+        if any(food_emoji in message for food_emoji in FOOD_VALUES.keys()):
+            return True
+        
         # Always respond to questions
         if '?' in message:
             return True
