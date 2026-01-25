@@ -323,8 +323,19 @@ def speak(text, speech_config, beak):
                                               stdout=subprocess.PIPE, 
                                               stderr=subprocess.PIPE)
                     
-                    # Vent på at aplay er ferdig
-                    process.wait()
+                    # Vent på at aplay er ferdig (med timeout)
+                    # Beregn forventet varighet basert på lydlengde + 5 sekunder buffer
+                    expected_duration = len(samples) / framerate
+                    timeout = expected_duration + 5.0
+                    
+                    try:
+                        process.wait(timeout=timeout)
+                        stream_started = True
+                    except subprocess.TimeoutExpired:
+                        print(f"⚠️ aplay timeout etter {timeout:.1f}s - dreper prosess", flush=True)
+                        process.kill()
+                        process.wait()  # Vent på at den faktisk dør
+                        stream_started = False
                     
                     # Stopp nebb/LED-thread
                     control_stop.set()
@@ -334,9 +345,13 @@ def speak(text, speech_config, beak):
                     
                     if process.returncode == 0:
                         stream_started = True
-                    else:
-                        stderr = process.stderr.read().decode()
-                        print(f"aplay error: {stderr}")
+                    elif process.returncode != -9:  # -9 = SIGKILL (vår timeout)
+                        try:
+                            stderr = process.stderr.read().decode()
+                            if stderr:
+                                print(f"aplay error: {stderr}", flush=True)
+                        except:
+                            pass
                     
             except Exception as e:
                 print(f"dmixer playback error: {e}")
