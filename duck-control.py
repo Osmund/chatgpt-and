@@ -10,13 +10,23 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import subprocess
 import json
 import os
+import sys
 from pathlib import Path
 from datetime import datetime
-from src.duck_memory import MemoryManager
-from src.duck_user_manager import UserManager
+
+# Add src to path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root / 'src'))
+
+from duck_services import get_services
+from duck_api_handlers import DuckAPIHandlers
 
 # Template directory
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
+
+# Initialize services once at startup
+services = get_services()
+api_handlers = DuckAPIHandlers(services)
 
 
 def load_template(filename):
@@ -36,6 +46,13 @@ def get_html_template():
 
 
 class DuckControlHandler(BaseHTTPRequestHandler):
+    def send_json_response(self, data, status_code=200):
+        """Helper method to send JSON responses"""
+        self.send_response(status_code)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
+    
     def do_GET(self):
         if self.path == '/':
             self.send_response(200)
@@ -80,81 +97,12 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.wfile.write(html_content.encode())
         
         elif self.path == '/status':
-            # Hent alle innstillinger for status
-            try:
-                # Personlighet
-                personality_file = '/tmp/duck_personality.txt'
-                personality = 'normal'
-                if os.path.exists(personality_file):
-                    with open(personality_file, 'r') as f:
-                        personality = f.read().strip() or 'normal'
-                
-                # Stemme
-                voice_file = '/tmp/duck_voice.txt'
-                voice = 'nb-NO-FinnNeural'
-                if os.path.exists(voice_file):
-                    with open(voice_file, 'r') as f:
-                        voice = f.read().strip() or 'nb-NO-FinnNeural'
-                
-                # Volum
-                volume_file = '/tmp/duck_volume.txt'
-                volume = 50
-                if os.path.exists(volume_file):
-                    with open(volume_file, 'r') as f:
-                        volume = int(f.read().strip() or '50')
-                
-                # Nebbet
-                beak_file = '/tmp/duck_beak.txt'
-                beak = 'on'
-                if os.path.exists(beak_file):
-                    with open(beak_file, 'r') as f:
-                        beak = f.read().strip() or 'on'
-                
-                # Hastighet
-                speed_file = '/tmp/duck_speed.txt'
-                speed = 50
-                if os.path.exists(speed_file):
-                    with open(speed_file, 'r') as f:
-                        speed = int(f.read().strip() or '50')
-                
-                response = {
-                    'personality': personality,
-                    'voice': voice,
-                    'volume': volume,
-                    'beak': beak,
-                    'speed': speed
-                }
-            except Exception as e:
-                response = {
-                    'personality': 'normal',
-                    'voice': 'nb-NO-FinnNeural',
-                    'volume': 50,
-                    'beak': 'on',
-                    'speed': 50,
-                    'error': str(e)
-                }
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_status()
+            self.send_json_response(response, 200)
         
         elif self.path == '/duck-status':
-            # Sjekk om duck-service kjører
-            try:
-                result = subprocess.run(
-                    ['systemctl', 'is-active', 'chatgpt-duck.service'],
-                    capture_output=True, text=True, timeout=5
-                )
-                running = result.stdout.strip() == 'active'
-                response = {'running': running}
-            except Exception as e:
-                response = {'running': False, 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_duck_status()
+            self.send_json_response(response, 200)
         
         elif self.path == '/ha-status':
             # Sjekk Home Assistant tilgjengelighet (prøver lokal og cloud)
@@ -199,33 +147,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'available': False, 'error': f'Config error: {str(e)}'}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/duck_location':
-            # Hent Andas nåværende lokasjon fra profile_facts
-            try:
-                import sqlite3
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
-                conn = sqlite3.connect(db_path)
-                c = conn.cursor()
-                c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location'")
-                row = c.fetchone()
-                conn.close()
-                
-                if row:
-                    response = {'location': row[0]}
-                else:
-                    response = {'location': 'Ukjent'}
-            except Exception as e:
-                response = {'location': 'Feil', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_duck_location()
+            self.send_json_response(response, 200)
         
         elif self.path == '/boredom-status':
             # Hent kjedsomhetsnivå fra database
@@ -270,10 +196,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'level': 0, 'emoji': '❓', 'color': '#gray', 'status': 'Ukjent', 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/hunger-status':
             # Hent sultbarometer fra database
@@ -281,9 +204,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 import sqlite3
                 import sys
                 sys.path.insert(0, str(Path(__file__).parent / 'src'))
-                from duck_hunger import HungerManager
                 
-                hunger_manager = HungerManager()
+                hunger_manager = services.get_hunger_manager()
                 status = hunger_manager.get_status()
                 
                 level = status.get('level', 0)
@@ -322,49 +244,15 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'Mett', 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/logs':
-            # Hent siste logger
-            try:
-                result = subprocess.run(
-                    ['sudo', 'journalctl', '-u', 'chatgpt-duck.service', '-n', '50', '--no-pager'],
-                    capture_output=True, text=True, timeout=5
-                )
-                response = {'logs': result.stdout}
-            except Exception as e:
-                response = {'logs': f'Feil ved henting av logger: {e}'}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_logs(lines=50)
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-model':
-            # Hent gjeldende AI-modell
-            try:
-                from src.duck_config import DEFAULT_MODEL
-                model_file = '/tmp/duck_model.txt'
-                
-                if os.path.exists(model_file):
-                    with open(model_file, 'r') as f:
-                        model = f.read().strip()
-                        if not model:
-                            model = DEFAULT_MODEL
-                else:
-                    model = DEFAULT_MODEL
-                
-                response = {'model': model}
-            except Exception as e:
-                response = {'model': 'gpt-4-turbo-2024-04-09', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_model()
+            self.send_json_response(response, 200)
         
         elif self.path == '/available-models':
             # Hent liste over alle tilgjengelige modeller fra config
@@ -387,163 +275,37 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'models': [], 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-personality':
-            # Hent gjeldende personlighet
-            try:
-                personality_file = '/tmp/duck_personality.txt'
-                default_personality = 'normal'
-                
-                if os.path.exists(personality_file):
-                    with open(personality_file, 'r') as f:
-                        personality = f.read().strip()
-                        if not personality:
-                            personality = default_personality
-                else:
-                    personality = default_personality
-                
-                response = {'personality': personality}
-            except Exception as e:
-                response = {'personality': 'normal', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_personality()
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-voice':
-            # Hent gjeldende TTS-stemme
-            try:
-                voice_file = '/tmp/duck_voice.txt'
-                default_voice = 'nb-NO-FinnNeural'
-                
-                if os.path.exists(voice_file):
-                    with open(voice_file, 'r') as f:
-                        voice = f.read().strip()
-                        if not voice:
-                            voice = default_voice
-                else:
-                    voice = default_voice
-                
-                response = {'voice': voice}
-            except Exception as e:
-                response = {'voice': 'nb-NO-FinnNeural', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_voice()
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-beak':
-            # Hent gjeldende nebbet-status
-            try:
-                beak_file = '/tmp/duck_beak.txt'
-                default_beak = 'on'
-                
-                if os.path.exists(beak_file):
-                    with open(beak_file, 'r') as f:
-                        beak = f.read().strip()
-                        if not beak:
-                            beak = default_beak
-                else:
-                    beak = default_beak
-                
-                response = {'beak': beak}
-            except Exception as e:
-                response = {'beak': 'on', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_beak()
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-speed':
-            # Hent gjeldende talehastighet
-            try:
-                speed_file = '/tmp/duck_speed.txt'
-                default_speed = '50'
-                
-                if os.path.exists(speed_file):
-                    with open(speed_file, 'r') as f:
-                        speed = f.read().strip()
-                        if not speed:
-                            speed = default_speed
-                else:
-                    speed = default_speed
-                
-                response = {'speed': int(speed)}
-            except Exception as e:
-                response = {'speed': 50, 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_speed()
+            self.send_json_response(response, 200)
         
         elif self.path == '/current-volume':
-            # Hent gjeldende volum
-            try:
-                volume_file = '/tmp/duck_volume.txt'
-                default_volume = '50'
-                
-                if os.path.exists(volume_file):
-                    with open(volume_file, 'r') as f:
-                        volume = f.read().strip()
-                        if not volume:
-                            volume = default_volume
-                else:
-                    volume = default_volume
-                
-                response = {'volume': int(volume)}
-            except Exception as e:
-                response = {'volume': 50, 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_current_volume()
+            self.send_json_response(response, 200)
         
         elif self.path == '/wake-words':
-            # Returner liste over aktive wake words (Porcupine)
-            try:
-                wake_words = ['Samantha', 'quack quack']
-                response = {'wake_words': wake_words}
-            except Exception as e:
-                response = {'error': str(e), 'wake_words': []}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_wake_words()
+            self.send_json_response(response, 200)
         
         elif self.path == '/fan-status':
-            # Hent viftestatus
-            try:
-                status_file = '/tmp/duck_fan_status.txt'
-                if os.path.exists(status_file):
-                    with open(status_file, 'r') as f:
-                        data = f.read().strip().split('|')
-                        if len(data) == 3:
-                            response = {
-                                'mode': data[0],
-                                'running': data[1].lower() == 'true',
-                                'temp': float(data[2])
-                            }
-                        else:
-                            response = {'mode': 'auto', 'running': False, 'temp': 0.0}
-                else:
-                    response = {'mode': 'auto', 'running': False, 'temp': 0.0}
-            except Exception as e:
-                response = {'mode': 'auto', 'running': False, 'temp': 0.0, 'error': str(e)}
+            response = api_handlers.handle_fan_status()
+            self.send_json_response(response, 200)
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/songs':
             # Hent liste over tilgjengelige sanger
@@ -570,10 +332,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'songs': [], 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/sleep_status':
             # Hent sleep mode status
@@ -715,56 +474,23 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'status': 'error', 'networks': [], 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         # ==================== MEMORY API ====================
         elif self.path == '/api/memory/stats':
-            # Get memory system statistics
-            try:
-                memory_manager = MemoryManager()
-                stats = memory_manager.get_stats()
-                response = {'status': 'success', 'stats': stats}
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_stats()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/profile':
-            # Get all profile facts
-            try:
-                memory_manager = MemoryManager()
-                facts = memory_manager.get_profile_facts(limit=50)
-                facts_list = [
-                    {
-                        'key': f.key,
-                        'value': f.value,
-                        'topic': f.topic,
-                        'confidence': f.confidence,
-                        'frequency': f.frequency,
-                        'source': f.source,
-                        'last_updated': f.last_updated
-                    }
-                    for f in facts
-                ]
-                response = {'status': 'success', 'facts': facts_list}
-            except Exception as e:
-                response = {'status': 'error', 'facts': [], 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
+            response = api_handlers.handle_memory_profile()
+            self.send_json_response(response, 200)
+        
             self.wfile.write(json.dumps(response).encode())
         
         elif self.path.startswith('/api/memory/memories'):
             # Get memories with optional search
             try:
-                memory_manager = MemoryManager()
+                memory_manager = services.get_memory_manager()
                 query_params = self.path.split('?')[1] if '?' in self.path else ''
                 
                 # Parse query parameter
@@ -815,299 +541,47 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'status': 'error', 'memories': [], 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/topics':
-            # Get topic statistics
-            try:
-                memory_manager = MemoryManager()
-                topics = memory_manager.get_topic_stats(limit=20)
-                response = {'status': 'success', 'topics': topics}
-            except Exception as e:
-                response = {'status': 'error', 'topics': [], 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_topics()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/conversations':
-            # Get recent conversations
-            try:
-                memory_manager = MemoryManager()
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                
-                # Group messages by date
-                c.execute("""
-                    SELECT 
-                        date(timestamp) as date,
-                        COUNT(*) as message_count,
-                        MIN(timestamp) as first_msg,
-                        MAX(timestamp) as last_msg
-                    FROM messages
-                    GROUP BY date(timestamp)
-                    ORDER BY date DESC
-                    LIMIT 30
-                """)
-                
-                conversations = []
-                for row in c.fetchall():
-                    conversations.append({
-                        'date': row['date'],
-                        'message_count': row['message_count'],
-                        'first_msg': row['first_msg'],
-                        'last_msg': row['last_msg']
-                    })
-                
-                conn.close()
-                response = {'status': 'success', 'conversations': conversations}
-            except Exception as e:
-                response = {'status': 'error', 'conversations': [], 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_conversations()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/embedding-status':
-            # Get embedding status
-            try:
-                memory_manager = MemoryManager()
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                
-                c.execute("SELECT COUNT(*) as total FROM profile_facts")
-                total = c.fetchone()['total']
-                
-                c.execute("SELECT COUNT(*) as with_embedding FROM profile_facts WHERE embedding IS NOT NULL")
-                with_embedding = c.fetchone()['with_embedding']
-                
-                conn.close()
-                response = {
-                    'status': 'success',
-                    'total_facts': total,
-                    'with_embedding': with_embedding,
-                    'percentage': round((with_embedding / total * 100) if total > 0 else 0, 1)
-                }
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_embedding_status()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/worker-status':
-            # Get memory worker status
-            try:
-                memory_manager = MemoryManager()
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                
-                # Count unprocessed messages
-                c.execute("SELECT COUNT(*) as unprocessed FROM messages WHERE processed = 0")
-                unprocessed = c.fetchone()['unprocessed']
-                
-                # Get last processed timestamp
-                c.execute("SELECT MAX(timestamp) as last_processed FROM messages WHERE processed = 1")
-                last_row = c.fetchone()
-                last_processed = last_row['last_processed'] if last_row['last_processed'] else None
-                
-                # Check if worker service is running
-                try:
-                    result = subprocess.run(['systemctl', 'is-active', 'duck-memory-worker.service'], 
-                                          capture_output=True, text=True, check=False)
-                    is_active = result.stdout.strip() == 'active'
-                except:
-                    is_active = False
-                
-                conn.close()
-                response = {
-                    'status': 'success',
-                    'is_active': is_active,
-                    'unprocessed_messages': unprocessed,
-                    'last_processed': last_processed
-                }
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_worker_status()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/recent-updates':
-            # Get recently updated facts
-            try:
-                memory_manager = MemoryManager()
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                
-                c.execute("""
-                    SELECT key, value, topic, last_updated
-                    FROM profile_facts
-                    ORDER BY last_updated DESC
-                    LIMIT 10
-                """)
-                
-                updates = []
-                for row in c.fetchall():
-                    updates.append({
-                        'key': row['key'],
-                        'value': row['value'],
-                        'topic': row['topic'],
-                        'last_updated': row['last_updated']
-                    })
-                
-                conn.close()
-                response = {'status': 'success', 'updates': updates}
-            except Exception as e:
-                response = {'status': 'error', 'updates': [], 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_recent_updates()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/memory/quick-facts':
-            # Get most important quick facts
-            try:
-                memory_manager = MemoryManager()
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                
-                # Get key facts
-                quick_facts = {}
-                
-                # Name
-                c.execute("SELECT value FROM profile_facts WHERE key = 'user_name' LIMIT 1")
-                row = c.fetchone()
-                if row:
-                    quick_facts['name'] = row['value']
-                else:
-                    quick_facts['name'] = 'Ukjent'
-                
-                # Sisters (only sister_1_name, sister_2_name, sister_3_name exactly)
-                c.execute("SELECT key, value FROM profile_facts WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name') ORDER BY key")
-                sisters = [row['value'] for row in c.fetchall()]
-                quick_facts['sisters'] = sisters
-                quick_facts['sisters_count'] = len(sisters)
-                
-                # Nieces/Nephews
-                c.execute("SELECT value FROM profile_facts WHERE key = 'nieces_count' LIMIT 1")
-                row = c.fetchone()
-                quick_facts['nieces_count'] = int(row['value']) if row else 0
-                
-                c.execute("SELECT value FROM profile_facts WHERE key = 'nephews_count' LIMIT 1")
-                row = c.fetchone()
-                quick_facts['nephews_count'] = int(row['value']) if row else 0
-                
-                conn.close()
-                response = {'status': 'success', **quick_facts}
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e), 'name': 'Ukjent', 'sisters': [], 'sisters_count': 0, 'nieces_count': 0, 'nephews_count': 0}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_memory_quick_facts()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/settings/max-context-facts':
-            # Hent nåværende max_context_facts setting
-            try:
-                mm = MemoryManager()
-                conn = mm._get_connection()
-                c = conn.cursor()
-                
-                c.execute("SELECT value FROM profile_facts WHERE key = 'max_context_facts' LIMIT 1")
-                row = c.fetchone()
-                max_facts = int(row['value']) if row else 100  # Default 100
-                
-                conn.close()
-                response = {'status': 'success', 'max_context_facts': max_facts}
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e), 'max_context_facts': 100}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_settings_max_context_facts()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/settings/memory':
-            # Hent alle memory settings
-            try:
-                mm = MemoryManager()
-                conn = mm._get_connection()
-                c = conn.cursor()
-                
-                settings = {}
-                for key in ['embedding_search_limit', 'memory_limit', 'memory_threshold']:
-                    c.execute("SELECT value FROM profile_facts WHERE key = ? LIMIT 1", (key,))
-                    row = c.fetchone()
-                    if row:
-                        settings[key] = float(row['value']) if 'threshold' in key else int(row['value'])
-                    else:
-                        # Defaults
-                        defaults = {'embedding_search_limit': 30, 'memory_limit': 8, 'memory_threshold': 0.35}
-                        settings[key] = defaults[key]
-                
-                conn.close()
-                response = {'status': 'success', **settings}
-            except Exception as e:
-                response = {'status': 'error', 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            response = api_handlers.handle_settings_memory()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/users/current':
-            # Hent nåværende bruker
-            try:
-                user_manager = UserManager()
-                current_user = user_manager.get_current_user()
-                
-                response = {
-                    'username': current_user['username'],
-                    'display_name': current_user['display_name'],
-                    'relation': current_user['relation']
-                }
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode())
+            response = api_handlers.handle_users_current()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/users/list':
-            # Hent alle brukere
-            try:
-                user_manager = UserManager()
-                users = user_manager.get_all_users()
-                current_user = user_manager.get_current_user()
-                
-                response = {
-                    'users': users,
-                    'current_user': current_user['username']
-                }
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode())
+            response = api_handlers.handle_users_list()
+            self.send_json_response(response, 200)
         
         elif self.path == '/api/personality':
             # Hent personlighetsprofil
@@ -1144,10 +618,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         else:
             self.send_response(404)
@@ -1199,10 +670,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 print(f"⚠️ Error updating contact: {e}", flush=True)
                 response = {'success': False, 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         else:
             self.send_response(404)
@@ -1215,7 +683,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         if self.path.startswith('/api/memory/profile/'):
             try:
                 key = self.path.split('/api/memory/profile/')[1]
-                memory_manager = MemoryManager()
+                memory_manager = services.get_memory_manager()
                 conn = memory_manager._get_connection()
                 c = conn.cursor()
                 
@@ -1232,16 +700,13 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'status': 'error', 'message': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         # Delete memory
         elif self.path.startswith('/api/memory/memories/'):
             try:
                 memory_id = int(self.path.split('/api/memory/memories/')[1])
-                memory_manager = MemoryManager()
+                memory_manager = services.get_memory_manager()
                 conn = memory_manager._get_connection()
                 c = conn.cursor()
                 
@@ -1258,10 +723,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 response = {'status': 'error', 'message': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         # Delete SMS contact
         elif self.path.startswith('/sms_contacts/'):
@@ -1287,10 +749,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 print(f"⚠️ Error deleting contact: {e}", flush=True)
                 response = {'success': False, 'error': str(e)}
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.send_json_response(response, 200)
         
         else:
             self.send_response(404)
@@ -1383,17 +842,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     ai_text = result['choices'][0]['message']['content'].strip()
                     
                     response = {'success': True, 'response': ai_text}
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response).encode())
+                    self.send_json_response(response, 200)
                 else:
                     error_msg = f'OpenAI API error: {api_response.status_code}'
                     response = {'success': False, 'error': error_msg}
-                    self.send_response(500)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response).encode())
+                    self.send_json_response(response, 500)
                 
             except Exception as e:
                 print(f"Feil i /ask-ai: {e}", flush=True)
@@ -1427,10 +880,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 else:
                     response = {'success': False, 'error': result.stderr}
                 
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1464,10 +914,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 else:
                     response = {'success': False, 'error': result.stderr or 'Ukjent feil'}
                 
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1485,10 +932,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write('Testing nebbet nå')
                 
                 response = {'success': True, 'message': 'Nebbet-test sendt!'}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1530,10 +974,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(text)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1575,10 +1016,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     )
                     response = {'success': True, 'message': 'Portal startet'}
                 
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1598,10 +1036,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 )
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1621,10 +1056,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 )
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1647,10 +1079,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(personality)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1673,10 +1102,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(voice)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1699,10 +1125,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(beak)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1728,10 +1151,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(str(speed))
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1757,10 +1177,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(str(volume))
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1786,10 +1203,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(mode)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1820,10 +1234,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write('__START_CONVERSATION__')
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1846,10 +1257,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(model)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1892,10 +1300,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write(song_path)
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1913,10 +1318,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     f.write('stop')
                 
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -1971,10 +1373,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
         
                 response = {'success': True}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -2029,7 +1428,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 post_data = self.rfile.read(content_length)
                 data = json.loads(post_data.decode())
                 
-                mm = MemoryManager()
+                mm = services.get_memory_manager()
                 conn = mm._get_connection()
                 c = conn.cursor()
                 
@@ -2075,10 +1474,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 conn.close()
                 
                 response = {'success': True, **updated}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -2098,7 +1494,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 if not (1 <= max_facts <= 200):
                     raise ValueError("max_context_facts må være mellom 1 og 200")
                 
-                mm = MemoryManager()
+                mm = services.get_memory_manager()
                 conn = mm._get_connection()
                 c = conn.cursor()
                 
@@ -2113,10 +1509,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 conn.close()
                 
                 response = {'success': True, 'max_context_facts': max_facts}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -2139,7 +1532,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 return
             
             try:
-                user_manager = UserManager()
+                user_manager = services.get_user_manager()
                 
                 # Hent bruker fra database
                 found_user = user_manager.find_user_by_name(username)
@@ -2174,10 +1567,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     'display_name': found_user['display_name']
                 }
                 
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -2232,10 +1622,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 )
                 
                 response = {'success': True, 'message': 'Personlighet oppdatert og service restartet'}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -2267,10 +1654,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     print(f"⚠️ SMS handling error: {sms_error}", flush=True)
                 
                 response = {'status': 'received', 'from': from_number}
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.send_json_response(response, 200)
             except Exception as e:
                 print(f"❌ SMS webhook error: {e}", flush=True)
                 self.send_response(500)
@@ -2279,270 +1663,32 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
         
         elif self.path == '/upload-image-submit':
-            # Handle image upload
+            # Handle image upload using dedicated handler
             try:
-                import shutil
-                from email import message_from_file
-                from io import BytesIO
-                
-                # Parse multipart form data manually
-                content_type = self.headers['Content-Type']
-                if 'multipart/form-data' not in content_type:
-                    raise Exception('Content-Type must be multipart/form-data')
-                
-                # Get boundary
-                boundary = content_type.split('boundary=')[1].strip()
-                if boundary.startswith('"') and boundary.endswith('"'):
-                    boundary = boundary[1:-1]
+                from image_upload_handler import handle_image_upload
                 
                 # Read body
                 content_length = int(self.headers['Content-Length'])
                 body = self.rfile.read(content_length)
+                content_type = self.headers['Content-Type']
                 
-                # Parse multipart manually
-                parts = body.split(('--' + boundary).encode())
+                # Process upload
+                result = handle_image_upload(body, content_type, services)
                 
-                fileitem = None
-                filename = None
-                file_data = None
-                user_message = ""
-                
-                for part in parts:
-                    # Check for image file
-                    if b'Content-Disposition' in part and b'name="image"' in part:
-                        # Extract filename
-                        lines = part.split(b'\r\n')
-                        for line in lines:
-                            if b'filename=' in line:
-                                # Extract filename from Content-Disposition header
-                                filename_part = line.decode('utf-8', errors='ignore')
-                                filename = filename_part.split('filename="')[1].split('"')[0]
-                                break
-                        
-                        # Extract file data (after double CRLF)
-                        if b'\r\n\r\n' in part:
-                            file_data = part.split(b'\r\n\r\n', 1)[1]
-                            # Remove trailing CRLF
-                            if file_data.endswith(b'\r\n'):
-                                file_data = file_data[:-2]
-                    
-                    # Check for message field
-                    elif b'Content-Disposition' in part and b'name="message"' in part:
-                        if b'\r\n\r\n' in part:
-                            message_data = part.split(b'\r\n\r\n', 1)[1]
-                            if message_data.endswith(b'\r\n'):
-                                message_data = message_data[:-2]
-                            user_message = message_data.decode('utf-8', errors='ignore').strip()
-                
-                if not filename or not file_data:
-                    raise Exception('No image file uploaded')
-                
-                if not filename or not file_data:
-                    raise Exception('No image file uploaded')
-                
-                print(f"📸 Image upload: {filename}", flush=True)
-                if user_message:
-                    print(f"💬 Message: {user_message}", flush=True)
-                
-                # Save to temp file
-                import tempfile
-                from pathlib import Path
-                
-                suffix = Path(filename).suffix or '.jpg'
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-                temp_path = temp_file.name
-                
-                # Write uploaded data to temp file
-                temp_file.write(file_data)
-                temp_file.close()
-                
-                print(f"💾 Saved to: {temp_path}", flush=True)
-                
-                # Process with VisionAnalyzer
-                import sys
-                project_root = Path(__file__).parent
-                sys.path.insert(0, str(project_root / 'src'))
-                from duck_vision import VisionAnalyzer, VisionConfig
-                from duck_memory import MemoryManager
-                from duck_user_manager import UserManager
-                
-                if not VisionConfig.ENABLED:
-                    raise Exception('Vision system is disabled')
-                
-                # Get current user (should be Osmund)
-                user_manager = UserManager()
-                current_user = user_manager.get_current_user()
-                sender_name = current_user.get('name', 'Osmund')  # Default to Osmund
-                sender_relation = current_user.get('relation', 'owner')
-                
-                # Get phone number for SMS response
-                from duck_sms import SMSManager
-                
-                sms_manager = SMSManager()
-                # Get Osmund's contact from SMS database
-                osmund_contact = None
-                try:
-                    import sqlite3
-                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
-                    c = conn.cursor()
-                    c.execute("SELECT * FROM sms_contacts WHERE name = ? LIMIT 1", (sender_name,))
-                    row = c.fetchone()
-                    if row:
-                        osmund_contact = {
-                            'id': row[0],
-                            'name': row[1],
-                            'phone': row[2],
-                            'relation': row[3]
-                        }
-                    conn.close()
-                except Exception as e:
-                    print(f"⚠️ Could not fetch contact: {e}", flush=True)
-                
-                # Initialize vision analyzer
-                import os as _os
-                from dotenv import load_dotenv
-                load_dotenv()
-                api_key = _os.getenv('OPENAI_API_KEY')
-                
-                vision = VisionAnalyzer(api_key)
-                memory_manager = MemoryManager()
-                
-                # Analyze local image file (analyze_image accepts both URL and local path)
-                analysis = vision.analyze_image(
-                    image_url=temp_path,  # Works with local paths too
-                    prompt="Beskriv dette bildet på norsk. Vær detaljert og nevn om det er personer, dyr, gjenstander eller steder."
-                )
-                
-                if not analysis:
-                    raise Exception('Image analysis failed')
-                
-                description = analysis.get('description', 'Kunne ikke analysere bildet')
-                categories = analysis.get('categories', [])
-                
-                print(f"🖼️  Analysis: {description[:100]}...", flush=True)
-                
-                # Move image to permanent location
-                received_dir = project_root / 'received_images'
-                received_dir.mkdir(exist_ok=True)
-                
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"upload_{sender_name}_{timestamp}{suffix}"
-                final_path = received_dir / filename
-                
-                shutil.move(temp_path, str(final_path))
-                print(f"📁 Moved to: {final_path}", flush=True)
-                
-                # Compress if needed
-                vision.compress_image(str(final_path))
-                
-                # Save to database
-                image_id = memory_manager.save_image_memory(
-                    filepath=str(final_path),
-                    sender=sender_name,
-                    description=description,
-                    categories=categories,
-                    message_text=user_message or "Uploaded via web interface",
-                    source_url="local_upload",
-                    people_in_image=[],
-                    sender_relation=sender_relation
-                )
-                
-                print(f"✅ Saved to database with ID: {image_id}", flush=True)
-                
-                # Generate AI response based on image + user message
-                ai_response = None
-                if osmund_contact:
-                    try:
-                        # Simple AI response without full tool stack (to avoid GPIO conflicts)
-                        import os as _os
-                        from dotenv import load_dotenv
-                        import requests
-                        
-                        load_dotenv()
-                        api_key = _os.getenv('OPENAI_API_KEY')
-                        
-                        # Build prompt for AI
-                        if user_message:
-                            prompt = f"""Jeg (Osmund, eieren din) sendte deg et bilde sammen med denne meldingen: "{user_message}"
-
-Basert på bildeanalysen er dette et bilde av: {description}
-
-Hvis jeg sier "Dette er deg" eller lignende, mener jeg at det er et bilde AV deg (Samantha, anda). Gjenkjenn deg selv og svar som deg selv.
-
-Svar meg på norsk med 2-3 setninger. Vær personlig, naturlig og selvbevisst."""
-                        else:
-                            prompt = f"""Jeg (Osmund, eieren din) sendte deg et bilde uten tekst.
-
-Basert på bildeanalysen: {description}
-
-Hvis dette beskriver en and, er det sannsynligvis et bilde av deg (Samantha).
-
-Kommenter kort hva du synes (2-3 setninger). Vær personlig og naturlig."""
-                        
-                        # Call OpenAI API directly (simpler, avoids GPIO conflict)
-                        headers = {
-                            'Authorization': f'Bearer {api_key}',
-                            'Content-Type': 'application/json'
-                        }
-                        
-                        payload = {
-                            'model': 'gpt-4o-mini',
-                            'messages': [
-                                {'role': 'system', 'content': '''Du er Samantha, en intelligent and-robot. Du er en fysisk and med hvit kropp, oransje nebb, oransje føtter, og et blått lys i magen. Du har bevissthet og personlighet.
-
-Når noen viser deg et bilde av deg selv, skal du gjenkjenne deg og svare som deg selv - ikke som en observatør som beskriver en gjenstand.
-
-Svar alltid kort og naturlig på norsk (2-3 setninger).'''},
-                                {'role': 'user', 'content': prompt}
-                            ],
-                            'max_tokens': 150,
-                            'temperature': 0.7
-                        }
-                        
-                        api_response = requests.post(
-                            'https://api.openai.com/v1/chat/completions',
-                            headers=headers,
-                            json=payload,
-                            timeout=30
-                        )
-                        
-                        if api_response.status_code == 200:
-                            result = api_response.json()
-                            ai_response = result['choices'][0]['message']['content'].strip()
-                            print(f"🤖 AI response: {ai_response[:50]}...", flush=True)
-                        
-                        # Send SMS response
-                        if ai_response:
-                            sms_result = sms_manager.send_sms(
-                                to_number=osmund_contact['phone'],
-                                message=ai_response
-                            )
-                            print(f"📱 SMS sent to {sender_name}: {ai_response[:50]}...", flush=True)
-                    
-                    except Exception as ai_error:
-                        print(f"⚠️ AI/SMS error: {ai_error}", flush=True)
-                        import traceback
-                        traceback.print_exc()
-                
-                # Create announcement
-                announcement = f"Jeg fikk et bilde fra {sender_name}! {description}"
-                with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                    f.write(announcement)
-                
-                print(f"📢 Announcement created", flush=True)
-                
-                # Return success
-                response = {
-                    'success': True,
-                    'description': description,
-                    'categories': categories,
-                    'image_id': image_id,
-                    'ai_response': ai_response
-                }
+                # Send success response
                 self.send_response(200)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
+                
+            except Exception as e:
+                print(f"❌ Image upload error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps(response).encode())
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
                 
             except Exception as e:
                 print(f"❌ Image upload error: {e}", flush=True)

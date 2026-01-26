@@ -174,8 +174,10 @@ class SMSManager:
         print(f"📱 Incoming SMS from {from_number}: {message}", flush=True)
         
         # Check for food emojis first!
-        from duck_hunger import HungerManager, FOOD_VALUES
-        hunger_manager = HungerManager()
+        from src.duck_services import get_services
+        services = get_services()
+        hunger_manager = services.get_hunger_manager()
+        from duck_hunger import FOOD_VALUES
         
         fed = False
         for food_item in FOOD_VALUES.keys():
@@ -379,11 +381,11 @@ class SMSManager:
         """
         try:
             from duck_ai import chatgpt_query
-            from duck_memory import MemoryManager
+            from src.duck_services import get_services
+            services = get_services()
             from datetime import datetime
             
-            # Get some context about the contact
-            memory_manager = MemoryManager()
+            memory_manager = services.get_memory_manager()
             memories = memory_manager.search_memories(f"{contact['name']}", limit=2)
             
             context = ""
@@ -413,7 +415,7 @@ Hold det kort (under 160 tegn er best)."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=HungerManager()
+                hunger_manager=services.get_hunger_manager()
             )
             
             # Handle tuple response
@@ -666,7 +668,7 @@ Hold det kort (under 160 tegn er best)."""
             Response text (short, SMS-sized)
         """
         try:
-            from src.duck_memory import MemoryManager
+            from src.duck_services import get_services
             from src.duck_ai import chatgpt_query, get_adaptive_personality_prompt
             import os
             from datetime import datetime
@@ -675,7 +677,8 @@ Hold det kort (under 160 tegn er best)."""
             conversation_history = self._get_sms_conversation_history(contact['id'], hours=24)
             
             # Get memory context
-            memory_manager = MemoryManager()
+            services = get_services()
+            memory_manager = services.get_memory_manager()
             memories = memory_manager.search_memories(message, limit=3)
             
             # Build context string
@@ -732,7 +735,7 @@ Svar naturlig og tilpasset spørsmålet."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=None,  # Skip hunger manager for SMS (GPIO conflicts)
+                hunger_manager=services.get_hunger_manager(),
                 source="sms",
                 source_user_id=contact['id']
             )
@@ -755,11 +758,11 @@ Svar naturlig og tilpasset spørsmålet."""
         """
         try:
             from duck_ai import chatgpt_query
-            from duck_memory import MemoryManager
+            from src.duck_services import get_services
+            services = get_services()
             from datetime import datetime
             
-            # Get some context about the contact
-            memory_manager = MemoryManager()
+            memory_manager = services.get_memory_manager()
             memories = memory_manager.search_memories(f"{contact['name']}", limit=2)
             
             context = ""
@@ -789,7 +792,7 @@ Hold det kort (under 160 tegn er best)."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=HungerManager()
+                hunger_manager=services.get_hunger_manager()
             )
             
             # Handle tuple response

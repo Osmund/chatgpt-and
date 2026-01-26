@@ -31,6 +31,9 @@ from src.duck_ai import chatgpt_query, generate_message_metadata
 from src.adaptive_greetings import get_adaptive_greeting, get_adaptive_goodbye
 from src.duck_sleep import is_sleeping, get_sleep_status
 
+# ServiceManager for delt state mellom tjenester
+from src.duck_services import get_services
+
 # Flush stdout umiddelbart slik at print vises i journalctl
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -133,8 +136,9 @@ def sms_polling_loop():
                                 if VisionConfig.ENABLED:
                                     try:
                                         # Get contact info
-                                        from duck_sms import SMSManager
-                                        sms_manager = SMSManager()
+                                        from src.duck_services import get_services
+                                        services = get_services()
+                                        sms_manager = services.get_sms_manager()
                                         contact_result = sms_manager.get_contact_by_phone(from_number)
                                         
                                         sender_name = from_number
@@ -147,7 +151,7 @@ def sms_polling_loop():
                                         # Analyze image
                                         api_key = os.getenv('OPENAI_API_KEY')
                                         vision = VisionAnalyzer(api_key)
-                                        memory_manager = MemoryManager()
+                                        memory_manager = services.get_memory_manager()
                                         
                                         analysis = vision.process_mms(
                                             image_url=media_url,
@@ -202,10 +206,11 @@ def sms_polling_loop():
                             # Forward to SMS handler (for text processing)
                             import sys
                             sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-                            from duck_sms import SMSManager
+                            from src.duck_services import get_services
                             from duck_audio import speak
                             
-                            sms_manager = SMSManager()
+                            services = get_services()
+                            sms_manager = services.get_sms_manager()
                             result = sms_manager.handle_incoming_sms(from_number, message_text)
                             
                             # Announce SMS with voice (only if not already announced as MMS)
@@ -314,11 +319,11 @@ def hunger_timer_loop():
     """Manage hunger system - Tamagotchi style!"""
     import sys
     sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_hunger import HungerManager
-    from duck_sms import SMSManager
+    from duck_services import get_services
     
-    hunger_manager = HungerManager()
-    sms_manager = SMSManager()
+    services = get_services()
+    hunger_manager = services.get_hunger_manager()
+    sms_manager = services.get_sms_manager()
     
     # Reset at morning (6 AM)
     last_reset_day = None
@@ -398,39 +403,22 @@ def main():
         print(f"Advarsel: Kunne ikke initialisere servo (fortsetter uten): {e}", flush=True)
         beak = None
     
-    # Initialiser memory manager
+    # Initialiser ServiceManager (delt state med kontrollpanel)
     try:
-        memory_manager = MemoryManager()
-        print("✅ Memory system initialisert", flush=True)
-    except Exception as e:
-        print(f"⚠️ Memory system feilet (fortsetter uten): {e}", flush=True)
-        memory_manager = None
-    
-    # Initialiser user manager
-    try:
-        user_manager = UserManager()
+        services = get_services()
+        memory_manager = services.get_memory_manager()
+        user_manager = services.get_user_manager()
+        sms_manager = services.get_sms_manager()
+        hunger_manager = services.get_hunger_manager()
+        
         current_user = user_manager.get_current_user()
-        print(f"✅ User system initialisert - nåværende bruker: {current_user['display_name']} ({current_user['relation']})", flush=True)
+        print(f"✅ ServiceManager initialisert - bruker: {current_user['display_name']}", flush=True)
+        print(f"   Boredom: {sms_manager.get_boredom_level():.1f}/10, Hunger: {hunger_manager.get_hunger_level():.1f}/10", flush=True)
     except Exception as e:
-        print(f"⚠️ User system feilet (fortsetter uten): {e}", flush=True)
+        print(f"⚠️ ServiceManager feilet: {e}", flush=True)
+        memory_manager = None
         user_manager = None
-    
-    # Initialiser SMS manager (for boredom status)
-    try:
-        from src.duck_sms import SMSManager
-        sms_manager = SMSManager()
-        print(f"✅ SMS Manager initialisert (boredom level: {sms_manager.get_boredom_level():.1f}/10)", flush=True)
-    except Exception as e:
-        print(f"⚠️ SMS Manager feilet (fortsetter uten): {e}", flush=True)
         sms_manager = None
-    
-    # Initialiser Hunger manager (for Tamagotchi hunger status)
-    try:
-        from src.duck_hunger import HungerManager
-        hunger_manager = HungerManager()
-        print(f"✅ Hunger Manager initialisert (hunger level: {hunger_manager.get_hunger_level():.1f}/10)", flush=True)
-    except Exception as e:
-        print(f"⚠️ Hunger Manager feilet (fortsetter uten): {e}", flush=True)
         hunger_manager = None
     
     # Register with SMS relay server
@@ -586,6 +574,8 @@ def main():
                                 os.remove(sms_response_file)
                             except Exception as e:
                                 print(f"⚠️ Error reading SMS response: {e}", flush=True)
+                        # Sett RGB tilbake til sleep mode etter SMS
+                        pulse_blue()
                 except Exception as e:
                     print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
             
@@ -599,6 +589,8 @@ def main():
                     if announcement:
                         print(f"🎵 [SLEEP MODE] Song announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
+                        # Sett RGB tilbake til sleep mode etter speaking
+                        pulse_blue()
                 except Exception as e:
                     print(f"⚠️ Error reading song announcement: {e}", flush=True)
             
@@ -612,6 +604,8 @@ def main():
                     if announcement:
                         print(f"😋 [SLEEP MODE] Hunger announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
+                        # Sett RGB tilbake til sleep mode etter speaking
+                        pulse_blue()
                 except Exception as e:
                     print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
             
@@ -625,6 +619,8 @@ def main():
                     if announcement:
                         print(f"📡 [SLEEP MODE] Hotspot announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
+                        # Sett RGB tilbake til sleep mode etter speaking
+                        pulse_blue()
                 except Exception as e:
                     print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
             
