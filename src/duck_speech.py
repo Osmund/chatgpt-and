@@ -58,7 +58,7 @@ def wait_for_wake_word():
         porcupine = pvporcupine.create(
             access_key=access_key,
             keyword_paths=[keyword_path],
-            sensitivities=[0.5]  # 0.0 til 1.0, høyere = mer sensitiv (flere false positives)
+            sensitivities=[0.8]  # 0.0 til 1.0, høyere = mer sensitiv (flere false positives)
         )
         
         print(f"Porcupine startet! Sample rate: {porcupine.sample_rate} Hz, Frame length: {porcupine.frame_length}", flush=True)
@@ -70,9 +70,9 @@ def wait_for_wake_word():
         ratio = mic_sample_rate / porcupine_sample_rate  # 3.0
         mic_frame_length = int(porcupine.frame_length * ratio)  # 512 * 3 = 1536
         
-        # Øk buffer størrelse for å unngå overflows under resampling
-        # Bruk 4x større buffer for å gi nok tid til prosessering
-        mic_buffer_size = mic_frame_length * 4  # 1536 * 4 = 6144
+        # Bruk nøyaktig én frame per buffer for bedre deteksjon
+        # Dette unngår at wake word blir delt over chunk-grenser
+        mic_buffer_size = mic_frame_length  # 1536 samples
         
         print(f"Resampling: {mic_sample_rate} Hz -> {porcupine_sample_rate} Hz (ratio: {ratio}), buffer: {mic_buffer_size}", flush=True)
         
@@ -178,9 +178,8 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"Feil ved lesing av sang-forespørsel: {e}", flush=True)
                     
-                    # Les audio fra mikrofon (større buffer)
+                    # Les audio fra mikrofon
                     pcm_48k, overflowed = audio_stream.read(mic_buffer_size)
-                    # Ignorer overflow warnings - forventet ved resampling
                     
                     # Skip wake word detection hvis vi er i sleep mode
                     if is_sleeping():
@@ -189,22 +188,15 @@ def wait_for_wake_word():
                     # Konverter til numpy array
                     pcm_48k_array = np.frombuffer(pcm_48k, dtype=np.int16)
                     
-                    # Prosesser flere frames (buffer inneholder flere porcupine frames)
-                    # Split bufferen i chunks på mic_frame_length
-                    for i in range(0, len(pcm_48k_array), mic_frame_length):
-                        chunk = pcm_48k_array[i:i+mic_frame_length]
-                        if len(chunk) < mic_frame_length:
-                            break  # Siste chunk er for liten, skip
-                        
-                        # Resample til 16000 Hz
-                        pcm_16k_array = resample(chunk, porcupine.frame_length)
-                        pcm_16k = pcm_16k_array.astype(np.int16)
-                        
-                        # Sjekk for wake word
-                        keyword_index = porcupine.process(pcm_16k)
-                        if keyword_index >= 0:
-                            print("Wake word 'Samantha' oppdaget!", flush=True)
-                            return None  # Wake word oppdaget
+                    # Resample til 16000 Hz (én frame per buffer nå)
+                    pcm_16k_array = resample(pcm_48k_array, porcupine.frame_length)
+                    pcm_16k = pcm_16k_array.astype(np.int16)
+                    
+                    # Sjekk for wake word
+                    keyword_index = porcupine.process(pcm_16k)
+                    if keyword_index >= 0:
+                        print("Wake word 'Samantha' oppdaget!", flush=True)
+                        return None  # Wake word oppdaget
                         
             except Exception as e:
                 print(f"Input-enhet ikke klar ennå (prøver igjen om 2s): {e}", flush=True)
