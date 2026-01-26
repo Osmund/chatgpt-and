@@ -39,10 +39,19 @@ def twilio_webhook(twilio_number):
         to_number = request.form.get('To')
         message_sid = request.form.get('MessageSid')
         
-        print(f"📨 Incoming SMS: {message_sid}")
+        # MMS support - check for media
+        num_media = int(request.form.get('NumMedia', 0))
+        media_url = None
+        if num_media > 0:
+            media_url = request.form.get('MediaUrl0')  # First media item
+        
+        msg_type = "MMS" if media_url else "SMS"
+        print(f"📨 Incoming {msg_type}: {message_sid}")
         print(f"   From: {from_number}")
         print(f"   To: {to_number}")
-        print(f"   Body: {message_body[:50]}...")
+        print(f"   Body: {message_body[:50] if message_body else '(no text)'}...")
+        if media_url:
+            print(f"   Media: {media_url}")
         
         # Look up Duck instance by Twilio number
         if to_number not in DUCK_REGISTRY:
@@ -62,6 +71,7 @@ def twilio_webhook(twilio_number):
             'from': from_number,
             'to': to_number,
             'message': message_body,
+            'media_url': media_url,  # NEW: MMS support
             'sid': message_sid,
             'timestamp': datetime.now().isoformat(),
             'id': message_sid  # Unique ID for tracking

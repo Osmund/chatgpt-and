@@ -117,10 +117,89 @@ def sms_polling_loop():
                         try:
                             from_number = msg.get('from')
                             message_text = msg.get('message')
+                            media_url = msg.get('media_url')  # MMS image URL
                             
                             print(f"📱 SMS from {from_number}: {message_text[:50]}...", flush=True)
                             
-                            # Forward to SMS handler
+                            # Check if it's an MMS with image
+                            if media_url:
+                                print(f"📸 MMS contains image: {media_url}", flush=True)
+                                
+                                # Process MMS image
+                                from src.duck_vision import VisionAnalyzer, VisionConfig
+                                from src.duck_memory import MemoryManager
+                                
+                                # Check if vision is enabled
+                                if VisionConfig.ENABLED:
+                                    try:
+                                        # Get contact info
+                                        from duck_sms import SMSManager
+                                        sms_manager = SMSManager()
+                                        contact_result = sms_manager.get_contact_by_phone(from_number)
+                                        
+                                        sender_name = from_number
+                                        sender_relation = ""
+                                        if contact_result.get('status') == 'ok':
+                                            contact = contact_result.get('contact')
+                                            sender_name = contact.get('name', from_number)
+                                            sender_relation = contact.get('relation', '')
+                                        
+                                        # Analyze image
+                                        api_key = os.getenv('OPENAI_API_KEY')
+                                        vision = VisionAnalyzer(api_key)
+                                        memory_manager = MemoryManager()
+                                        
+                                        analysis = vision.process_mms(
+                                            image_url=media_url,
+                                            sender_name=sender_name,
+                                            message_text=message_text,
+                                            memory_manager=memory_manager,
+                                            sender_relation=sender_relation
+                                        )
+                                        
+                                        if analysis:
+                                            # Announce the image
+                                            description = analysis['description']
+                                            announcement = f"Jeg fikk et bilde fra {sender_name}! {description}"
+                                            
+                                            if message_text:
+                                                announcement += f" De skrev: {message_text}"
+                                            
+                                            print(f"🖼️  Image description: {description}", flush=True)
+                                            
+                                            # Write announcement to file
+                                            with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                                                f.write(announcement)
+                                            
+                                            # Check if there are people in the image
+                                            people_count = 0
+                                            desc_lower = description.lower()
+                                            if 'person' in desc_lower or 'menneske' in desc_lower or 'mann' in desc_lower or 'kvinne' in desc_lower:
+                                                # Extract number of people if mentioned
+                                                import re
+                                                numbers = re.findall(r'\b(\d+|en|to|tre|fire|fem|seks|sju|åtte|ni|ti)\b', desc_lower)
+                                                if numbers:
+                                                    number_map = {'en': 1, 'to': 2, 'tre': 3, 'fire': 4, 'fem': 5, 
+                                                                'seks': 6, 'sju': 7, 'åtte': 8, 'ni': 9, 'ti': 10}
+                                                    people_count = number_map.get(numbers[0], 0)
+                                                    if people_count == 0 and numbers[0].isdigit():
+                                                        people_count = int(numbers[0])
+                                            
+                                            # If people detected, prepare follow-up question
+                                            if people_count > 0:
+                                                followup = f" Hvem er de {people_count} personene på bildet?"
+                                                # Store for later use in conversation
+                                                with open('/tmp/duck_image_followup.txt', 'w', encoding='utf-8') as f:
+                                                    f.write(f"{analysis['image_id']}|{followup}")
+                                        
+                                    except Exception as e:
+                                        print(f"⚠️ MMS processing failed: {e}", flush=True)
+                                        import traceback
+                                        traceback.print_exc()
+                                else:
+                                    print("⚠️ Vision features disabled - skipping image analysis", flush=True)
+                            
+                            # Forward to SMS handler (for text processing)
                             import sys
                             sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
                             from duck_sms import SMSManager
@@ -129,8 +208,8 @@ def sms_polling_loop():
                             sms_manager = SMSManager()
                             result = sms_manager.handle_incoming_sms(from_number, message_text)
                             
-                            # Announce SMS with voice
-                            if result.get('status') == 'ok':
+                            # Announce SMS with voice (only if not already announced as MMS)
+                            if not media_url and result.get('status') == 'ok':
                                 contact = result.get('contact')
                                 
                                 # Always announce the incoming message first

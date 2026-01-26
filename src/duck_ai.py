@@ -635,7 +635,15 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
                 topics = [t['topic'] for t in context['recent_topics'][:3]]
                 memory_section += f"\nSiste emner vi har snakket om: {', '.join(topics)}\n"
             
-            print(f"✅ Memory context bygget ({len(context['profile_facts'])} facts, {len(context['relevant_memories'])} minner)", flush=True)
+            # Recent images
+            if context.get('recent_images'):
+                memory_section += "\n### Bilder jeg har mottatt ###\n"
+                for img_text in context['recent_images']:
+                    memory_section += f"- {img_text}\n"
+                memory_section += "\nJeg kan referere til disse bildene i samtaler! Hvis brukeren spør om et bilde, kan jeg beskrive hva jeg så.\n"
+                memory_section += "Hvis det er personer på bildene og jeg ikke vet hvem de er, kan jeg spørre: 'Hvem er personene på bildet?'\n"
+            
+            print(f"✅ Memory context bygget ({len(context['profile_facts'])} facts, {len(context['relevant_memories'])} minner, {len(context.get('recent_images', []))} bilder)", flush=True)
         except Exception as e:
             print(f"⚠️ Kunne ikke bygge memory context: {e}", flush=True)
     
