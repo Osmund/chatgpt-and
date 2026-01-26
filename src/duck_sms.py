@@ -402,7 +402,7 @@ Du vil sende en melding til {contact['name']} ({contact.get('relation', 'venn')}
 
 Skriv en kort, hyggelig melding der du sier hei og spør hva de holder på med eller hvordan de har det.
 Vær naturlig og personlig. Bruk emoji 🦆 hvis passende.
-Maks 155 tegn."""
+Hold det kort (under 160 tegn er best)."""
             
             # Import HungerManager for status
             from duck_hunger import HungerManager
@@ -596,11 +596,7 @@ Maks 155 tegn."""
             # Generate AI response
             response_text = self._generate_ai_response(contact, incoming_message, fed=fed)
             
-            # Keep it short (max 160 chars for single SMS)
-            if len(response_text) > 155:
-                response_text = response_text[:152] + "..."
-            
-            # Send SMS
+            # Send SMS (multipart hvis nødvendig - Twilio håndterer dette automatisk)
             result = self.send_sms(contact['phone'], response_text)
             
             if result['status'] == 'sent':
@@ -720,13 +716,14 @@ VIKTIG: Svar på det som ble spurt om i kontekst av samtalen. Du kan gjerne stil
 IKKE nevn bursdager, arrangementer eller andre ting som ikke er relevante.
 Bruk GJERNE emojis! 🦆✨ Unge ender bruker mye relevante emojis for å uttrykke følelser og gjøre meldinger mer levende.
 
-SMS-BEGRENSNINGER:
-- Hold svaret KORT (maks 155 tegn) - SMS har karaktergrense
-- Hvis oppskrifter, lange forklaringer eller mye info trengs: send en lenke i stedet (f.eks. link til nettside)
-- Du KAN sende lenker i SMS - bruk det for lange ting!
-- Eksempel: "Her er oppskriften: https://matprat.no/oppskrifter/curry-kylling" i stedet for lang tekst
+SMS-VEILEDNING:
+- KORT er best (under 160 tegn = én SMS, billigere og raskere)
+- Hvis svaret blir langt (over 200 tegn): Vurder å sende en lenke i stedet
+- Du KAN sende lenker i SMS - bruk det for oppskrifter, artikler, lange forklaringer
+- Eksempel: "Her er oppskriften: https://matprat.no/oppskrifter/curry-kylling"
+- Multipart SMS fungerer (opptil ~600 tegn), men koster mer - bruk kun når nødvendig
 
-Svar kort og naturlig (maks 155 tegn)."""
+Svar naturlig og tilpasset spørsmålet."""
             
             # chatgpt_query krever messages-liste, ikke bare prompt
             messages = [{"role": "user", "content": prompt}]
@@ -781,7 +778,7 @@ Du vil sende en melding til {contact['name']} ({contact.get('relation', 'venn')}
 
 Skriv en kort, hyggelig melding der du sier hei og spør hva de holder på med eller hvordan de har det.
 Vær naturlig og personlig. Bruk emoji 🦆 hvis passende.
-Maks 155 tegn."""
+Hold det kort (under 160 tegn er best)."""
             
             # Import HungerManager for status
             from duck_hunger import HungerManager
