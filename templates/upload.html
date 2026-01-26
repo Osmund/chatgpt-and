@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📸 Send Bilde til Anda</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f9f9f9;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 13px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .preview-area {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .preview-area.active {
+            display: block;
+        }
+        
+        .preview-img {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .result-area {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .result-area.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }
+        
+        .result-area.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }
+        
+        .result-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .result-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Send Bilde til Anda</h1>
+        <p class="subtitle">Last opp et bilde så skal hun beskrive det for deg!</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">🖼️</div>
+            <div class="upload-text">Klikk for å velge bilde</div>
+            <div class="upload-hint">eller dra og slipp her</div>
+            <input type="file" id="fileInput" accept="image/*" capture="environment">
+        </div>
+        
+        <div class="preview-area" id="previewArea">
+            <img id="previewImg" class="preview-img" alt="Preview">
+            
+            <div style="margin-bottom: 15px;">
+                <label for="messageInput" style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">
+                    💬 Beskjed til Anda (valgfritt):
+                </label>
+                <textarea 
+                    id="messageInput" 
+                    placeholder="F.eks. 'Dette er et bilde av deg' eller 'Se hva jeg fant!'"
+                    style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px;"
+                ></textarea>
+            </div>
+            
+            <button class="btn btn-primary" id="uploadBtn">
+                📤 Send til Anda
+            </button>
+            <button class="btn btn-secondary" id="cancelBtn">
+                ❌ Avbryt
+            </button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Anda analyserer bildet...</div>
+        </div>
+        
+        <div class="result-area" id="resultArea">
+            <div class="result-title" id="resultTitle"></div>
+            <div class="result-text" id="resultText"></div>
+        </div>
+        
+        <div class="back-link">
+            <a href="/">← Tilbake til kontrollpanel</a>
+        </div>
+    </div>
+    
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
+        const previewImg = document.getElementById('previewImg');
+        const messageInput = document.getElementById('messageInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const loading = document.getElementById('loading');
+        const resultArea = document.getElementById('resultArea');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultText = document.getElementById('resultText');
+        
+        let selectedFile = null;
+        
+        // Click to select file
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // File selected
+        fileInput.addEventListener('change', (e) => {
+            handleFile(e.target.files[0]);
+        });
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+        
+        function handleFile(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('Vennligst velg en bildefil');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                uploadArea.style.display = 'none';
+                previewArea.classList.add('active');
+                resultArea.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Cancel button
+        cancelBtn.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            messageInput.value = '';
+            uploadArea.style.display = 'block';
+            previewArea.classList.remove('active');
+            resultArea.style.display = 'none';
+        });
+        
+        // Upload button
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            uploadBtn.disabled = true;
+            cancelBtn.disabled = true;
+            loading.classList.add('active');
+            resultArea.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('image', selectedFile);
+                formData.append('message', messageInput.value.trim());
+                
+                const response = await fetch('/upload-image-submit', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                loading.classList.remove('active');
+                
+                if (result.success) {
+                    resultArea.className = 'result-area success';
+                    resultTitle.textContent = '✅ Suksess!';
+                    
+                    let resultHTML = `<strong>Anda sier:</strong><br>"${result.description}"`;
+                    
+                    if (result.ai_response) {
+                        resultHTML += `<br><br><strong>📱 SMS-svar:</strong><br>"${result.ai_response}"`;
+                    }
+                    
+                    if (result.categories && result.categories.length > 0) {
+                        resultHTML += `<br><br><strong>Kategorier:</strong> ${result.categories.join(', ')}`;
+                    }
+                    
+                    resultHTML += `<br><br><em>SMS sendt til deg! 📲</em>`;
+                    
+                    resultText.innerHTML = resultHTML;
+                    
+                    // Reset after 5 seconds
+                    setTimeout(() => {
+                        selectedFile = null;
+                        fileInput.value = '';
+                        messageInput.value = '';
+                        uploadArea.style.display = 'block';
+                        previewArea.classList.remove('active');
+                        resultArea.style.display = 'none';
+                        uploadBtn.disabled = false;
+                        cancelBtn.disabled = false;
+                    }, 8000);
+                } else {
+                    throw new Error(result.error || 'Ukjent feil');
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                resultArea.className = 'result-area error';
+                resultTitle.textContent = '❌ Feil';
+                resultText.textContent = `Kunne ikke laste opp bilde: ${error.message}`;
+                uploadBtn.disabled = false;
+                cancelBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

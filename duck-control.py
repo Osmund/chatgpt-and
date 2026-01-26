@@ -70,6 +70,15 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
         
+        elif self.path == '/upload-image':
+            # Bilde-upload side
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            html_content = load_template('upload.html')
+            self.wfile.write(html_content.encode())
+        
         elif self.path == '/status':
             # Hent alle innstillinger for status
             try:
@@ -2268,6 +2277,281 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
+        
+        elif self.path == '/upload-image-submit':
+            # Handle image upload
+            try:
+                import shutil
+                from email import message_from_file
+                from io import BytesIO
+                
+                # Parse multipart form data manually
+                content_type = self.headers['Content-Type']
+                if 'multipart/form-data' not in content_type:
+                    raise Exception('Content-Type must be multipart/form-data')
+                
+                # Get boundary
+                boundary = content_type.split('boundary=')[1].strip()
+                if boundary.startswith('"') and boundary.endswith('"'):
+                    boundary = boundary[1:-1]
+                
+                # Read body
+                content_length = int(self.headers['Content-Length'])
+                body = self.rfile.read(content_length)
+                
+                # Parse multipart manually
+                parts = body.split(('--' + boundary).encode())
+                
+                fileitem = None
+                filename = None
+                file_data = None
+                user_message = ""
+                
+                for part in parts:
+                    # Check for image file
+                    if b'Content-Disposition' in part and b'name="image"' in part:
+                        # Extract filename
+                        lines = part.split(b'\r\n')
+                        for line in lines:
+                            if b'filename=' in line:
+                                # Extract filename from Content-Disposition header
+                                filename_part = line.decode('utf-8', errors='ignore')
+                                filename = filename_part.split('filename="')[1].split('"')[0]
+                                break
+                        
+                        # Extract file data (after double CRLF)
+                        if b'\r\n\r\n' in part:
+                            file_data = part.split(b'\r\n\r\n', 1)[1]
+                            # Remove trailing CRLF
+                            if file_data.endswith(b'\r\n'):
+                                file_data = file_data[:-2]
+                    
+                    # Check for message field
+                    elif b'Content-Disposition' in part and b'name="message"' in part:
+                        if b'\r\n\r\n' in part:
+                            message_data = part.split(b'\r\n\r\n', 1)[1]
+                            if message_data.endswith(b'\r\n'):
+                                message_data = message_data[:-2]
+                            user_message = message_data.decode('utf-8', errors='ignore').strip()
+                
+                if not filename or not file_data:
+                    raise Exception('No image file uploaded')
+                
+                if not filename or not file_data:
+                    raise Exception('No image file uploaded')
+                
+                print(f"📸 Image upload: {filename}", flush=True)
+                if user_message:
+                    print(f"💬 Message: {user_message}", flush=True)
+                
+                # Save to temp file
+                import tempfile
+                from pathlib import Path
+                
+                suffix = Path(filename).suffix or '.jpg'
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                temp_path = temp_file.name
+                
+                # Write uploaded data to temp file
+                temp_file.write(file_data)
+                temp_file.close()
+                
+                print(f"💾 Saved to: {temp_path}", flush=True)
+                
+                # Process with VisionAnalyzer
+                import sys
+                project_root = Path(__file__).parent
+                sys.path.insert(0, str(project_root / 'src'))
+                from duck_vision import VisionAnalyzer, VisionConfig
+                from duck_memory import MemoryManager
+                from duck_user_manager import UserManager
+                
+                if not VisionConfig.ENABLED:
+                    raise Exception('Vision system is disabled')
+                
+                # Get current user (should be Osmund)
+                user_manager = UserManager()
+                current_user = user_manager.get_current_user()
+                sender_name = current_user.get('name', 'Osmund')  # Default to Osmund
+                sender_relation = current_user.get('relation', 'owner')
+                
+                # Get phone number for SMS response
+                from duck_sms import SMSManager
+                
+                sms_manager = SMSManager()
+                # Get Osmund's contact from SMS database
+                osmund_contact = None
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
+                    c = conn.cursor()
+                    c.execute("SELECT * FROM sms_contacts WHERE name = ? LIMIT 1", (sender_name,))
+                    row = c.fetchone()
+                    if row:
+                        osmund_contact = {
+                            'id': row[0],
+                            'name': row[1],
+                            'phone': row[2],
+                            'relation': row[3]
+                        }
+                    conn.close()
+                except Exception as e:
+                    print(f"⚠️ Could not fetch contact: {e}", flush=True)
+                
+                # Initialize vision analyzer
+                import os as _os
+                from dotenv import load_dotenv
+                load_dotenv()
+                api_key = _os.getenv('OPENAI_API_KEY')
+                
+                vision = VisionAnalyzer(api_key)
+                memory_manager = MemoryManager()
+                
+                # Analyze local image file (analyze_image accepts both URL and local path)
+                analysis = vision.analyze_image(
+                    image_url=temp_path,  # Works with local paths too
+                    prompt="Beskriv dette bildet på norsk. Vær detaljert og nevn om det er personer, dyr, gjenstander eller steder."
+                )
+                
+                if not analysis:
+                    raise Exception('Image analysis failed')
+                
+                description = analysis.get('description', 'Kunne ikke analysere bildet')
+                categories = analysis.get('categories', [])
+                
+                print(f"🖼️  Analysis: {description[:100]}...", flush=True)
+                
+                # Move image to permanent location
+                received_dir = project_root / 'received_images'
+                received_dir.mkdir(exist_ok=True)
+                
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"upload_{sender_name}_{timestamp}{suffix}"
+                final_path = received_dir / filename
+                
+                shutil.move(temp_path, str(final_path))
+                print(f"📁 Moved to: {final_path}", flush=True)
+                
+                # Compress if needed
+                vision.compress_image(str(final_path))
+                
+                # Save to database
+                image_id = memory_manager.save_image_memory(
+                    filepath=str(final_path),
+                    sender=sender_name,
+                    description=description,
+                    categories=categories,
+                    message_text=user_message or "Uploaded via web interface",
+                    source_url="local_upload",
+                    people_in_image=[],
+                    sender_relation=sender_relation
+                )
+                
+                print(f"✅ Saved to database with ID: {image_id}", flush=True)
+                
+                # Generate AI response based on image + user message
+                ai_response = None
+                if osmund_contact:
+                    try:
+                        # Simple AI response without full tool stack (to avoid GPIO conflicts)
+                        import os as _os
+                        from dotenv import load_dotenv
+                        import requests
+                        
+                        load_dotenv()
+                        api_key = _os.getenv('OPENAI_API_KEY')
+                        
+                        # Build prompt for AI
+                        if user_message:
+                            prompt = f"""Jeg (Osmund, eieren din) sendte deg et bilde sammen med denne meldingen: "{user_message}"
+
+Basert på bildeanalysen er dette et bilde av: {description}
+
+Hvis jeg sier "Dette er deg" eller lignende, mener jeg at det er et bilde AV deg (Samantha, anda). Gjenkjenn deg selv og svar som deg selv.
+
+Svar meg på norsk med 2-3 setninger. Vær personlig, naturlig og selvbevisst."""
+                        else:
+                            prompt = f"""Jeg (Osmund, eieren din) sendte deg et bilde uten tekst.
+
+Basert på bildeanalysen: {description}
+
+Hvis dette beskriver en and, er det sannsynligvis et bilde av deg (Samantha).
+
+Kommenter kort hva du synes (2-3 setninger). Vær personlig og naturlig."""
+                        
+                        # Call OpenAI API directly (simpler, avoids GPIO conflict)
+                        headers = {
+                            'Authorization': f'Bearer {api_key}',
+                            'Content-Type': 'application/json'
+                        }
+                        
+                        payload = {
+                            'model': 'gpt-4o-mini',
+                            'messages': [
+                                {'role': 'system', 'content': '''Du er Samantha, en intelligent and-robot. Du er en fysisk and med hvit kropp, oransje nebb, oransje føtter, og et blått lys i magen. Du har bevissthet og personlighet.
+
+Når noen viser deg et bilde av deg selv, skal du gjenkjenne deg og svare som deg selv - ikke som en observatør som beskriver en gjenstand.
+
+Svar alltid kort og naturlig på norsk (2-3 setninger).'''},
+                                {'role': 'user', 'content': prompt}
+                            ],
+                            'max_tokens': 150,
+                            'temperature': 0.7
+                        }
+                        
+                        api_response = requests.post(
+                            'https://api.openai.com/v1/chat/completions',
+                            headers=headers,
+                            json=payload,
+                            timeout=30
+                        )
+                        
+                        if api_response.status_code == 200:
+                            result = api_response.json()
+                            ai_response = result['choices'][0]['message']['content'].strip()
+                            print(f"🤖 AI response: {ai_response[:50]}...", flush=True)
+                        
+                        # Send SMS response
+                        if ai_response:
+                            sms_result = sms_manager.send_sms(
+                                to_number=osmund_contact['phone'],
+                                message=ai_response
+                            )
+                            print(f"📱 SMS sent to {sender_name}: {ai_response[:50]}...", flush=True)
+                    
+                    except Exception as ai_error:
+                        print(f"⚠️ AI/SMS error: {ai_error}", flush=True)
+                        import traceback
+                        traceback.print_exc()
+                
+                # Create announcement
+                announcement = f"Jeg fikk et bilde fra {sender_name}! {description}"
+                with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                    f.write(announcement)
+                
+                print(f"📢 Announcement created", flush=True)
+                
+                # Return success
+                response = {
+                    'success': True,
+                    'description': description,
+                    'categories': categories,
+                    'image_id': image_id,
+                    'ai_response': ai_response
+                }
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode())
+                
+            except Exception as e:
+                print(f"❌ Image upload error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
         
         else:
             self.send_response(404)

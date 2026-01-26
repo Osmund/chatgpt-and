@@ -260,6 +260,25 @@ class MemoryManager:
             )
         """)
         
+        # Image history tabell - lagrer metadata om mottatte bilder
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS image_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filepath TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                sender_relation TEXT,
+                description TEXT NOT NULL,
+                categories TEXT,
+                message_text TEXT,
+                source_url TEXT,
+                people_in_image TEXT,
+                timestamp TEXT NOT NULL,
+                accessed_count INTEGER DEFAULT 0,
+                last_accessed TEXT,
+                metadata TEXT
+            )
+        """)
+        
         # FTS5 virtual table for full-text search on memories
         # unicode61 tokenizer for bedre håndtering av æøå
         c.execute("""
@@ -919,6 +938,204 @@ class MemoryManager:
         
         return memory_id
     
+    def save_image_memory(self, filepath: str, sender: str, description: str, 
+                         categories: List[str] = None, message_text: str = "",
+                         source_url: str = "", people_in_image: List[str] = None,
+                         sender_relation: str = "") -> int:
+        """
+        Lagre bildeminne i database.
+        
+        Args:
+            filepath: Lokal sti til bildet
+            sender: Navn på avsender
+            description: AI-generert beskrivelse av bildet
+            categories: Liste med kategorier (mat, dyr, bil, etc.)
+            message_text: Tekst som fulgte med bildet
+            source_url: Original URL (fra Twilio)
+            people_in_image: Liste med navn på personer i bildet
+            sender_relation: Relasjon til avsender (owner, family, friend)
+        
+        Returns:
+            image_id
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        timestamp = datetime.now().isoformat()
+        
+        # Konverter lister til JSON-strings
+        categories_str = json.dumps(categories) if categories else "[]"
+        people_str = json.dumps(people_in_image) if people_in_image else "[]"
+        
+        c.execute("""
+            INSERT INTO image_history 
+            (filepath, sender, sender_relation, description, categories, message_text,
+             source_url, people_in_image, timestamp, accessed_count, last_accessed, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        """, (filepath, sender, sender_relation, description, categories_str, message_text,
+              source_url, people_str, timestamp, timestamp, "{}"))
+        
+        image_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Saved image memory: {sender} - {description[:50]}...", flush=True)
+        
+        return image_id
+    
+    def get_recent_images(self, limit: int = 10, sender: str = None) -> List[Dict]:
+        """
+        Hent nylige bilder.
+        
+        Args:
+            limit: Max antall bilder
+            sender: Filtrer på avsender (optional)
+        
+        Returns:
+            Liste med bildedata
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        if sender:
+            c.execute("""
+                SELECT * FROM image_history
+                WHERE sender = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (sender, limit))
+        else:
+            c.execute("""
+                SELECT * FROM image_history
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (limit,))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        images = []
+        for row in rows:
+            images.append({
+                'id': row['id'],
+                'filepath': row['filepath'],
+                'sender': row['sender'],
+                'sender_relation': row['sender_relation'],
+                'description': row['description'],
+                'categories': json.loads(row['categories']),
+                'message_text': row['message_text'],
+                'people_in_image': json.loads(row['people_in_image']),
+                'timestamp': row['timestamp'],
+                'accessed_count': row['accessed_count']
+            })
+        
+        return images
+    
+    def search_images_by_description(self, query: str, limit: int = 5) -> List[Dict]:
+        """
+        Søk bilder basert på beskrivelse.
+        
+        Args:
+            query: Søkeord (f.eks. "katt", "bil", "strand")
+            limit: Max resultater
+        
+        Returns:
+            Liste med matchende bilder
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        # Simple LIKE search (kunne også brukt FTS5 her)
+        search_pattern = f"%{query}%"
+        c.execute("""
+            SELECT * FROM image_history
+            WHERE description LIKE ? OR message_text LIKE ? OR categories LIKE ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (search_pattern, search_pattern, search_pattern, limit))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        images = []
+        for row in rows:
+            images.append({
+                'id': row['id'],
+                'filepath': row['filepath'],
+                'sender': row['sender'],
+                'description': row['description'],
+                'categories': json.loads(row['categories']),
+                'people_in_image': json.loads(row['people_in_image']),
+                'timestamp': row['timestamp']
+            })
+        
+        return images
+    
+    def update_image_people(self, image_id: int, people: List[str]) -> bool:
+        """
+        Oppdater hvem som er på et bilde.
+        
+        Args:
+            image_id: Bilde-ID
+            people: Liste med navn
+        
+        Returns:
+            True hvis vellykket
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        people_str = json.dumps(people)
+        
+        c.execute("""
+            UPDATE image_history
+            SET people_in_image = ?
+            WHERE id = ?
+        """, (people_str, image_id))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Updated people in image {image_id}: {', '.join(people)}", flush=True)
+        
+        return True
+    
+    def get_images_with_person(self, person_name: str) -> List[Dict]:
+        """
+        Finn alle bilder med en spesifikk person.
+        
+        Args:
+            person_name: Navn på person
+        
+        Returns:
+            Liste med bilder
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        search_pattern = f'%"{person_name}"%'
+        c.execute("""
+            SELECT * FROM image_history
+            WHERE people_in_image LIKE ?
+            ORDER BY timestamp DESC
+        """, (search_pattern,))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        images = []
+        for row in rows:
+            images.append({
+                'id': row['id'],
+                'filepath': row['filepath'],
+                'sender': row['sender'],
+                'description': row['description'],
+                'people_in_image': json.loads(row['people_in_image']),
+                'timestamp': row['timestamp']
+            })
+        
+        return images
+    
     def search_memories(self, query: str, limit: int = 10) -> List[Tuple[Memory, float]]:
         """
         Søk i minner med FTS5 + vektet scoring
@@ -1298,19 +1515,62 @@ class MemoryManager:
         recent_conv.reverse()  # Eldst først
         conn.close()
         
+        # 8. Recent images (siste 5 bilder)
+        recent_images = self.get_recent_images(limit=5)
+        
+        # Format image data for AI context
+        image_context = []
+        for img in recent_images:
+            timestamp = datetime.fromisoformat(img['timestamp'])
+            time_ago = self._human_time_ago(timestamp)
+            
+            img_text = f"{img['sender']} sendte et bilde {time_ago}: {img['description']}"
+            
+            if img['people_in_image']:
+                img_text += f" (Personer: {', '.join(img['people_in_image'])})"
+            
+            if img['message_text']:
+                img_text += f" - De skrev: {img['message_text']}"
+            
+            image_context.append(img_text)
+        
         context = {
             'profile_facts': [asdict(f) for f in profile_facts],
             'relevant_memories': [(m.text, score) for m, score in relevant_memories],
             'recent_topics': topic_stats,
             'recent_conversation': recent_conv,
+            'recent_images': image_context,
             'metadata': {
                 'total_facts': len(profile_facts),
                 'total_memories': len(relevant_memories),
+                'total_images': len(recent_images),
                 'query': query
             }
         }
         
         return context
+    
+    def _human_time_ago(self, timestamp: datetime) -> str:
+        """Convert timestamp to human-readable 'time ago' format in Norwegian"""
+        now = datetime.now()
+        delta = now - timestamp
+        
+        seconds = delta.total_seconds()
+        
+        if seconds < 60:
+            return "nettopp"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"{minutes} minutt{'er' if minutes > 1 else ''} siden"
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            return f"{hours} time{'r' if hours > 1 else ''} siden"
+        elif seconds < 604800:
+            days = int(seconds / 86400)
+            return f"{days} dag{'er' if days > 1 else ''} siden"
+        else:
+            weeks = int(seconds / 604800)
+            return f"{weeks} uke{'r' if weeks > 1 else ''} siden"
     
     # ==================== MAINTENANCE ====================
     
@@ -1417,6 +1677,16 @@ if __name__ == "__main__":
         ai_response="Hei! Det går bra, takk for at du spør!"
     )
     print(f"✅ Saved message (id={msg_id})")
+    
+    # Test image save
+    image_id = manager.save_image_memory(
+        filepath="/test/image.jpg",
+        sender="TestUser",
+        description="Et bilde av en katt",
+        categories=["dyr"],
+        message_text="Se på denne katten!"
+    )
+    print(f"✅ Saved image (id={image_id})")
     
     # Test search
     results = manager.search_memories("Sokndal", limit=5)

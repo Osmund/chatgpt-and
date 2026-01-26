@@ -49,6 +49,10 @@ env/
 # Audio cache
 audio_cache/
 
+# ============ Images ============
+# Received images from MMS/uploads (can contain personal photos)
+received_images/
+
 # ============ Logs ============
 *.log
 *.log.*
