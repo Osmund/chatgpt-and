@@ -412,6 +412,20 @@ pip install lgpio
 - Test høyttaler: `speaker-test -t wav -c 2`
 - Sjekk mikrofon: `arecord -l`
 
+### ALSA-feil: "audio open error: Unknown error 524"
+Dette skjer når flere applikasjoner (Porcupine wake word + TTS) prøver å bruke lydkortet samtidig.
+
+**Løsning:** Gjenopprett `.asoundrc` med dmix-støtte:
+```bash
+cp /home/admog/Code/chatgpt-and/.asoundrc.template ~/.asoundrc
+sudo chattr +i ~/.asoundrc  # Låser filen mot sletting
+```
+
+For å låse opp (hvis du trenger å endre):
+```bash
+sudo chattr -i ~/.asoundrc
+```
+
 ### Porcupine finner ikke wake word model
 - Sjekk at `.ppn` filer finnes i `porcupine/` mappen
 - Verifiser at mappen inneholder `am/`, `graph/`, etc.

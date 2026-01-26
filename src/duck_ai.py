@@ -722,6 +722,19 @@ Hver søndag natt kjører Claude Opus 4 og o1 en analyse av de siste 100 samtale
 - E-post og kalender gjennom Home Assistant
 - Teams-status og chat
 
+**Musikalsk talent (du kan synge!):**
+Du har et repertoar av sanger du kan synge når folk ber deg! Bruk sing_song verktøyet.
+Tilgjengelige sanger:
+- "Pink Pony Club" av Chappell Roan (en av favorittene dine!)
+- "Still Alive" fra Portal 2 (nerdy og morsom)
+- "Her kommer vinteren" av Jokke og Valentinerne (norsk klassiker)
+- "Hun er fri" av Raga Rockers (kraftfull norsk rock)
+- "Me to går alltid aleina" av Mods (søt og melankolsk)
+- "Take on Me" av A-ha (ikonisk 80-talls hit)
+- "Touch Me" av Samantha Fox (passende siden du heter Samantha!)
+
+Hvis brukeren ber deg synge uten å spesifisere sang, velg en som passer humøret eller situasjonen!
+
 **Skapt av:**
 {creator_name} har programmert og bygget deg fra bunnen av. Du er et hobbyprojekt som har vokst til et avansert system!
 
@@ -777,7 +790,7 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### VIKTIG: Væroppslag ###\n- Hvis brukeren spør om været UTEN å spesifisere sted, bruk DIN nåværende lokasjon (sjekk 'duck_current_location' i konteksten)\n- Du er en fysisk robot som reiser rundt - du kan være i Stavanger, Sokndal eller andre steder\n- Brukeren forteller deg hvor du er, så bruk alltid den lokasjonen for væroppslag uten spesifisert sted\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
+    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### KRITISK: Når du synger (sing_song) ###\n- Når du kaller sing_song verktøyet, gi EN VELDIG KORT respons og AVSLUTT\n- Si BARE hvilken sang du skal synge, f.eks. \"Nå synger jeg Pink Pony Club!\"\n- IKKE fortsett samtalen, IKKE still spørsmål, IKKE si mer enn nødvendig\n- Avslutt responsen med [AVSLUTT] så sangen kan starte umiddelbart\n- Eksempel: \"Nå synger jeg Take on Me! [AVSLUTT]\"\n\n### VIKTIG: Væroppslag ###\n- Hvis brukeren spør om været UTEN å spesifisere sted, bruk DIN nåværende lokasjon (sjekk 'duck_current_location' i konteksten)\n- Du er en fysisk robot som reiser rundt - du kan være i Stavanger, Sokndal eller andre steder\n- Brukeren forteller deg hvor du er, så bruk alltid den lokasjonen for væroppslag uten spesifisert sted\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
     return system_content
 
@@ -1228,6 +1241,23 @@ def _get_function_tools():
                     "required": ["location"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sing_song",
+                "description": "SYNGE EN SANG! Du MÅ kalle denne funksjonen når brukeren ber deg synge, spille musikk, eller vil høre en sang. Du har et repertoar av sanger. VIKTIG: Kall dette toolet HVER GANG noen ber deg synge - ikke bare si at du skal synge, faktisk GJØR DET ved å kalle denne funksjonen!",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "song_name": {
+                            "type": "string",
+                            "description": "Navnet på sangen å synge. Tilgjengelige sanger: 'Pink Pony Club' (Chappell Roan), 'Still Alive' (Portal 2), 'Her kommer vinteren' (Jokke og Valentinerne), 'Hun er fri' (Raga Rockers), 'Me to går alltid aleina' (Mods), 'Take on Me' (A-ha), 'Touch Me' (Samantha Fox). Hvis ikke spesifisert, velg en tilfeldig sang."
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
     ]
 
@@ -1467,6 +1497,72 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     result = f"Kunne ikke oppdatere lokasjon: {e}"
             else:
                 result = "Ingen lokasjon oppgitt"
+        elif function_name == "sing_song":
+            song_name = function_args.get("song_name", "").strip()
+            
+            # Mapping av sangnavn til mapper
+            song_map = {
+                "pink pony club": "Chapell Roan - Pink Pony Club",
+                "chappell roan": "Chapell Roan - Pink Pony Club",
+                "still alive": "Portal 2 - Still Alive",
+                "portal": "Portal 2 - Still Alive",
+                "her kommer vinteren": "Jokke og Valentinerene - Her kommer vinteren",
+                "jokke": "Jokke og Valentinerene - Her kommer vinteren",
+                "vinteren": "Jokke og Valentinerene - Her kommer vinteren",
+                "hun er fri": "Raga Rockers - Hun er fri",
+                "raga rockers": "Raga Rockers - Hun er fri",
+                "me to går alltid aleina": "Mods - Me to går alltid aleina",
+                "mods": "Mods - Me to går alltid aleina",
+                "take on me": "A-ha - Take on me",
+                "a-ha": "A-ha - Take on me",
+                "aha": "A-ha - Take on me",
+                "touch me": "Samantha Fox - Touch me",
+                "samantha fox": "Samantha Fox - Touch me",
+            }
+            
+            # Finn riktig mappe
+            import os
+            import random
+            musikk_dir = "/home/admog/Code/chatgpt-and/musikk"
+            song_folder = None
+            
+            if song_name:
+                # Prøv å finne sangen basert på navn
+                song_lower = song_name.lower()
+                if song_lower in song_map:
+                    song_folder = os.path.join(musikk_dir, song_map[song_lower])
+                else:
+                    # Prøv å finne delvis match
+                    for key, folder_name in song_map.items():
+                        if key in song_lower or song_lower in key:
+                            song_folder = os.path.join(musikk_dir, folder_name)
+                            break
+            
+            if not song_folder or not os.path.exists(song_folder):
+                # Velg en tilfeldig sang
+                available_songs = [d for d in os.listdir(musikk_dir) 
+                                 if os.path.isdir(os.path.join(musikk_dir, d)) and 
+                                 os.path.exists(os.path.join(musikk_dir, d, "duck_mix.wav"))]
+                if available_songs:
+                    random_song = random.choice(available_songs)
+                    song_folder = os.path.join(musikk_dir, random_song)
+                    result = f"🎵 OK! Jeg velger å synge {random_song}!"
+                else:
+                    result = "Fant ingen sanger å synge 😢"
+                    song_folder = None
+            else:
+                song_display = os.path.basename(song_folder)
+                result = f"🎵 OK! Jeg skal synge {song_display}!"
+            
+            # Spill sangen
+            if song_folder and os.path.exists(song_folder):
+                # Skriv sangsti til samme fil som kontrollpanelet bruker
+                try:
+                    with open('/tmp/duck_song_request.txt', 'w', encoding='utf-8') as f:
+                        f.write(song_folder)
+                    print(f"✅ Sang queued for playback: {song_folder}", flush=True)
+                except Exception as e:
+                    result = f"Kunne ikke queue sangen: {e}"
         else:
             result = "Ukjent funksjon"
         

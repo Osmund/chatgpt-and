@@ -178,8 +178,40 @@ def boredom_timer_loop():
             
             # Increase boredom
             new_level = sms_manager.increase_boredom(amount=0.5)
+            print(f"🕐 Boredom level: {new_level:.1f}/10", flush=True)
             
-            # Check if threshold reached
+            # MIDDELS KJEDSOMHET (5-6.5): Synge en sang
+            if 5.0 <= new_level < 7.0:
+                import random
+                import os
+                from src.duck_music import play_song
+                
+                # 50% sjanse for å synge når hun kjeder seg litt
+                if random.random() < 0.5:
+                    musikk_dir = "/home/admog/Code/chatgpt-and/musikk"
+                    available_songs = [d for d in os.listdir(musikk_dir) 
+                                     if os.path.isdir(os.path.join(musikk_dir, d)) and 
+                                     os.path.exists(os.path.join(musikk_dir, d, "duck_mix.wav"))]
+                    
+                    if available_songs:
+                        random_song = random.choice(available_songs)
+                        song_folder = os.path.join(musikk_dir, random_song)
+                        
+                        print(f"🎵 Anda kjeder seg (level {new_level:.1f}) - synger {random_song}", flush=True)
+                        
+                        # Skriv annonsering til fil
+                        announcement = f"Jeg kjeder meg litt, så jeg skal synge {random_song}!"
+                        with open('/tmp/duck_song_announcement.txt', 'w', encoding='utf-8') as f:
+                            f.write(announcement)
+                        
+                        # Spill sangen
+                        play_song(song_folder, beak, speech_config)
+                        
+                        # Reduser kjedsomhet etter sang
+                        sms_manager.reduce_boredom(amount=2.0)
+                        print(f"✅ Sang ferdig - boredom redusert til {sms_manager.get_boredom_level():.1f}/10", flush=True)
+            
+            # HØY KJEDSOMHET (≥7): Send SMS
             if sms_manager.check_boredom_trigger():
                 print(f"🥱 Boredom threshold reached ({new_level:.1f}/10) - sending message", flush=True)
                 result = sms_manager.send_bored_message()
@@ -478,6 +510,19 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
             
+            # Sjekk sang-annonseringer (når Anda synger av kjedsomhet)
+            song_announcement_file = '/tmp/duck_song_announcement.txt'
+            if os.path.exists(song_announcement_file):
+                try:
+                    with open(song_announcement_file, 'r', encoding='utf-8') as f:
+                        announcement = f.read().strip()
+                    os.remove(song_announcement_file)
+                    if announcement:
+                        print(f"🎵 [SLEEP MODE] Song announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                except Exception as e:
+                    print(f"⚠️ Error reading song announcement: {e}", flush=True)
+            
             # Sjekk hunger-annonseringer
             hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
             if os.path.exists(hunger_announcement_file):
@@ -514,6 +559,21 @@ def main():
                 set_blue()  # Tilbake til blå LED (klar for wake word)
                 sleep_led_active = False
                 print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
+        
+        # Sjekk sang-forespørsler UTENFOR sleep mode (alltid!)
+        song_request_file = '/tmp/duck_song_request.txt'
+        if os.path.exists(song_request_file):
+            try:
+                with open(song_request_file, 'r', encoding='utf-8') as f:
+                    song_folder = f.read().strip()
+                os.remove(song_request_file)
+                if song_folder and os.path.exists(song_folder):
+                    print(f"🎵 Playing song from request: {song_folder}", flush=True)
+                    from src.duck_music import play_song
+                    play_song(song_folder, beak, speech_config)
+                    # Etter sangen, fortsett normal loop
+            except Exception as e:
+                print(f"⚠️ Error playing song: {e}", flush=True)
         
         # Normal wake word detection
         external_message = wait_for_wake_word()
