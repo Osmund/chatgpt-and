@@ -566,6 +566,9 @@ def get_teams_chat():
 def activate_scene(scene_name):
     """Aktiver en forhåndsdefinert scene i Home Assistant"""
     
+    if not scene_name:
+        return "❌ Scene-navn mangler"
+    
     scenes = {
         "filmkveld": "scene.filmkveld",
         "god_natt": "scene.god_natt",
@@ -642,6 +645,64 @@ def create_movie_scene():
         
         if response.status_code == 200:
             return "✅ Filmkveld scene opprettet! Bruk 'activate_scene(\"filmkveld\")' for å aktivere."
+        else:
+            return f"❌ Kunne ikke opprette scene: {response.status_code}"
+    except Exception as e:
+        return f"❌ Feil ved oppretting av scene: {str(e)}"
+
+
+def create_goodnight_scene():
+    """Opprett 'God Natt' scene i Home Assistant"""
+    
+    scene_data = {
+        "scene_id": "god_natt",
+        "snapshot_entities": [],
+        "entities": {
+            # Dimmer stue-lys til 15%
+            "light.stue": {
+                "state": "on",
+                "brightness": 38  # 15% av 255
+            },
+            "light.stue_tv": {
+                "state": "on",
+                "brightness": 38
+            },
+            "light.stue_spisebord": {
+                "state": "on",
+                "brightness": 38
+            },
+            # Skru på lyset på Jarls rom
+            "light.jarl_rom": {
+                "state": "on"
+            },
+            # Lukk alle gardiner
+            "cover.stue_tv_topp": {"state": "closed"},
+            "cover.stue_tv_bunn": {"state": "closed"},
+            "cover.stue_spisebord": {"state": "closed"}
+        }
+    }
+    
+    try:
+        HA_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
+        HA_TOKEN = os.getenv("HA_TOKEN")
+        
+        if not HA_TOKEN:
+            return "❌ HA_TOKEN mangler i .env"
+        
+        headers = {
+            "Authorization": f"Bearer {HA_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            f"{_get_working_ha_url()}/api/services/scene/create",
+            headers=headers,
+            json=scene_data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return "✅ God Natt scene opprettet! Bruk 'activate_scene(\"god_natt\")' for å aktivere."
         else:
             return f"❌ Kunne ikke opprette scene: {response.status_code}"
     except Exception as e:
