@@ -777,7 +777,7 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
+    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### VIKTIG: Væroppslag ###\n- Hvis brukeren spør om været UTEN å spesifisere sted, bruk DIN nåværende lokasjon (sjekk 'duck_current_location' i konteksten)\n- Du er en fysisk robot som reiser rundt - du kan være i Stavanger, Sokndal eller andre steder\n- Brukeren forteller deg hvor du er, så bruk alltid den lokasjonen for væroppslag uten spesifisert sted\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
     
     return system_content
 
@@ -796,13 +796,13 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_weather",
-                "description": "Hent værmelding og temperatur for et spesifikt sted i Norge. Kan hente vær for nå, i dag eller i morgen.",
+                "description": "Hent værmelding og temperatur. Hvis brukeren ikke spesifiserer sted, brukes Andas nåværende lokasjon automatisk. Brukeren kan også spørre om været på andre steder.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "location": {
                             "type": "string",
-                            "description": "Navnet på stedet/byen i Norge, f.eks. 'Oslo', 'Sokndal', 'Bergen'"
+                            "description": "Navnet på stedet/byen i Norge. La være tom for å bruke Andas nåværende lokasjon. Eksempler: 'Oslo', 'Sokndal', 'Bergen'"
                         },
                         "timeframe": {
                             "type": "string",
@@ -811,7 +811,7 @@ def _get_function_tools():
                             "default": "now"
                         }
                     },
-                    "required": ["location"]
+                    "required": []
                 }
             }
         },
@@ -1211,6 +1211,23 @@ def _get_function_tools():
                     "required": ["color"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_duck_location",
+                "description": "Oppdater Andas nåværende lokasjon/sted. Bruk denne når brukeren forteller hvor Anda er nå. Eksempler: 'vi er i Sokndal nå', 'vi er hjemme i Stavanger', 'vi er på kontoret'. Dette påvirker hvilket sted som brukes når brukeren spør om været.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "Navnet på stedet/byen hvor Anda er nå, f.eks. 'Sokndal', 'Stavanger', 'Oslo'"
+                        }
+                    },
+                    "required": ["location"]
+                }
+            }
         }
     ]
 
@@ -1239,6 +1256,27 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         # Kall faktisk funksjon
         if function_name == "get_weather":
             location = function_args.get("location", "")
+            
+            # Hvis ingen lokasjon oppgitt, bruk Andas nåværende lokasjon
+            if not location:
+                try:
+                    import sqlite3
+                    db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                    conn = sqlite3.connect(db_path, timeout=30.0)
+                    c = conn.cursor()
+                    c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location' LIMIT 1")
+                    row = c.fetchone()
+                    conn.close()
+                    if row:
+                        location = row[0]
+                        print(f"Bruker Andas nåværende lokasjon: {location}", flush=True)
+                    else:
+                        location = "Stavanger"  # Fallback
+                        print("Ingen duck_current_location funnet, bruker Stavanger som fallback", flush=True)
+                except Exception as e:
+                    print(f"Feil ved henting av duck_current_location: {e}, bruker Stavanger", flush=True)
+                    location = "Stavanger"
+            
             timeframe = function_args.get("timeframe", "now")
             result = get_weather(location, timeframe)
         elif function_name == "control_hue_lights":
@@ -1397,6 +1435,38 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 result = f"LED satt til {color} 💡🦆"
             else:
                 result = f"Ukjent farge: {color}"
+        elif function_name == "update_duck_location":
+            location = function_args.get("location", "").strip()
+            if location:
+                try:
+                    import sqlite3
+                    db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                    conn = sqlite3.connect(db_path, timeout=30.0)
+                    c = conn.cursor()
+                    
+                    # Sjekk om duck_current_location finnes
+                    c.execute("SELECT COUNT(*) FROM profile_facts WHERE key = 'duck_current_location'")
+                    exists = c.fetchone()[0] > 0
+                    
+                    if exists:
+                        c.execute("""
+                            UPDATE profile_facts 
+                            SET value = ?, confidence = 1.0, source = 'user', last_updated = datetime('now')
+                            WHERE key = 'duck_current_location'
+                        """, (location,))
+                    else:
+                        c.execute("""
+                            INSERT INTO profile_facts (key, value, topic, confidence, source, last_updated)
+                            VALUES ('duck_current_location', ?, 'location', 1.0, 'user', datetime('now'))
+                        """, (location,))
+                    
+                    conn.commit()
+                    conn.close()
+                    result = f"OK, jeg er nå i {location}! 📍🦆"
+                except Exception as e:
+                    result = f"Kunne ikke oppdatere lokasjon: {e}"
+            else:
+                result = "Ingen lokasjon oppgitt"
         else:
             result = "Ukjent funksjon"
         

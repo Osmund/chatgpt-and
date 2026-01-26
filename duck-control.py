@@ -195,6 +195,29 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
         
+        elif self.path == '/duck_location':
+            # Hent Andas nåværende lokasjon fra profile_facts
+            try:
+                import sqlite3
+                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location'")
+                row = c.fetchone()
+                conn.close()
+                
+                if row:
+                    response = {'location': row[0]}
+                else:
+                    response = {'location': 'Ukjent'}
+            except Exception as e:
+                response = {'location': 'Feil', 'error': str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+        
         elif self.path == '/boredom-status':
             # Hent kjedsomhetsnivå fra database
             try:

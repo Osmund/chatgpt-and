@@ -1240,6 +1240,7 @@ window.onload = function() {
     updateSleepModeStatus();  // Last sleep mode status
     loadSMSHistory();  // Last SMS historikk
     loadContacts();  // Last SMS kontakter
+    loadDuckLocation();  // Last Andas lokasjon
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1251,6 +1252,7 @@ window.onload = function() {
     setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
+    setInterval(loadDuckLocation, 10000);  // Oppdater Andas lokasjon hvert 10. sekund
 };
 
 // Boredom Status
@@ -1268,6 +1270,26 @@ async function loadBoredomStatus() {
         bar.style.background = data.color;
     } catch (error) {
         console.error('Kunne ikke laste kjedsomhetsnivå:', error);
+    }
+}
+
+// Duck Location
+async function loadDuckLocation() {
+    try {
+        const response = await fetch('/duck_location');
+        const data = await response.json();
+        
+        const locationText = document.getElementById('duck-location-text');
+        if (data.location && data.location !== 'Ukjent') {
+            locationText.textContent = data.location;
+            locationText.style.color = '#667eea';
+        } else {
+            locationText.textContent = 'Ukjent';
+            locationText.style.color = '#999';
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste Andas lokasjon:', error);
+        document.getElementById('duck-location-text').textContent = 'Feil';
     }
 }
 

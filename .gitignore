@@ -11,6 +11,9 @@
 # IPC temporary files (inneholder runtime data)
 /tmp/duck_*.txt
 
+# Location update script (brukes lokalt for debugging)
+update_duck_location.sh
+
 # ============ Python ============
 __pycache__/
 *.py[cod]
