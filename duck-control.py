@@ -620,6 +620,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             
             self.send_json_response(response, 200)
         
+        elif self.path == '/api/backup':
+            response = api_handlers.handle_backup_status()
+            self.send_json_response(response, 200)
+        
         else:
             self.send_response(404)
             self.end_headers()
@@ -1698,6 +1702,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+        
+        elif self.path == '/api/backup/start':
+            response = api_handlers.handle_backup_start()
+            status_code = 200 if response.get('status') == 'success' else 500
+            self.send_json_response(response, status_code)
         
         else:
             self.send_response(404)

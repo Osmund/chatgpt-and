@@ -1,0 +1,16 @@
+[Unit]
+Description=Anda 3x Weekly Backup Timer (Mon/Wed/Fri)
+Requires=anda-backup.service
+
+[Timer]
+# Run 3 times per week: Monday, Wednesday, Friday at 3:00 AM
+OnCalendar=Mon,Wed,Fri *-*-* 03:00:00
+
+# If system was off, run on next boot (with 10 min delay)
+OnBootSec=10min
+
+# Ensure timer is persistent across reboots
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=Anda Backup Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+ExecStart=/bin/bash /home/admog/Code/chatgpt-and/backup-anda.sh
+StandardOutput=journal
+StandardError=journal
+
+# Nice level (lower priority to not interfere with main services)
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

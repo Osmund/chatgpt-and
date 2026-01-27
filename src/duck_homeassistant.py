@@ -5,6 +5,7 @@ Kontroller enheter via Home Assistant REST API
 
 import requests
 import os
+import subprocess
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -878,6 +879,31 @@ def control_blinds(location: str, action: str, position: int = None, section: st
     section_display = f" ({section})" if section else ""
     
     return f"{location_display}{section_display}: {', '.join(results)}"
+
+
+def trigger_backup():
+    """
+    Trigger manuell backup av Anda til OneDrive
+    """
+    try:
+        # Kjør backup-script i bakgrunnen
+        script_path = "/home/admog/Code/chatgpt-and/backup-anda.sh"
+        
+        if not os.path.exists(script_path):
+            return "❌ Backup-script ikke funnet"
+        
+        # Start backup i bakgrunnen
+        process = subprocess.Popen(
+            ['/bin/bash', script_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True  # Detach from parent
+        )
+        
+        return "✅ Backup startet! Dette tar noen minutter. Sjekk OneDrive for resultat."
+        
+    except Exception as e:
+        return f"❌ Kunne ikke starte backup: {e}"
 
 
 # Test funksjon

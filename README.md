@@ -585,7 +585,7 @@ ssml = f"""
 │       └── ivector/                   # i-vector ekstraktor
 │
 ├── musikk/                            # 🎵 Musikkfiler
-└── vosk-model-small-sv-rhasspy-0.15/ # 🎤 Vosk modell
+└── porcupine/                         # 🎤 Porcupine wake word models (.ppn)
 ```
 
 ## Systemkrav

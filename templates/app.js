@@ -1803,3 +1803,83 @@ async function toggleContactEnabled(id, newEnabledState) {
         alert('Nettverksfeil: ' + error.message);
     }
 }
+
+// ============================================================================
+// Backup Functions
+// ============================================================================
+
+async function loadBackupStatus() {
+    try {
+        const response = await fetch('/api/backup');
+        const data = await response.json();
+        
+        const latestEl = document.getElementById('latest-backup');
+        const listEl = document.getElementById('backup-list');
+        
+        if (data.status === 'success') {
+            if (data.latest) {
+                latestEl.textContent = data.latest;
+                latestEl.style.color = '#667eea';
+            } else {
+                latestEl.textContent = 'Ingen backups funnet';
+                latestEl.style.color = '#999';
+            }
+            
+            if (data.backups && data.backups.length > 0) {
+                listEl.innerHTML = data.backups.map(backup => 
+                    `<div style="padding: 5px; border-bottom: 1px solid #ddd;">${backup}</div>`
+                ).join('');
+            } else {
+                listEl.innerHTML = '<div style="color: #999;">Ingen backups</div>';
+            }
+        } else {
+            latestEl.textContent = 'Feil: ' + (data.error || 'Ukjent feil');
+            latestEl.style.color = '#e74c3c';
+            listEl.innerHTML = '<div style="color: #e74c3c;">Kunne ikke laste backups</div>';
+        }
+    } catch (error) {
+        console.error('Backup status error:', error);
+        document.getElementById('latest-backup').textContent = 'Feil: ' + error.message;
+        document.getElementById('backup-list').innerHTML = '<div style="color: #e74c3c;">Nettverksfeil</div>';
+    }
+}
+
+async function createBackup() {
+    const button = event.target;
+    const originalText = button.textContent;
+    
+    // Confirm
+    if (!confirm('Start backup til OneDrive? Dette kan ta 1-2 minutter.')) {
+        return;
+    }
+    
+    try {
+        button.textContent = '⏳ Tar backup...';
+        button.disabled = true;
+        
+        const response = await fetch('/api/backup/start', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ ' + data.message);
+            await loadBackupStatus(); // Refresh backup list
+        } else {
+            alert('❌ ' + data.message + (data.error ? '\n\n' + data.error : ''));
+        }
+    } catch (error) {
+        alert('❌ Nettverksfeil: ' + error.message);
+    } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+    }
+}
+
+// Load backup status on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadBackupStatus();
+    // Refresh every 30 seconds
+    setInterval(loadBackupStatus, 30000);
+});

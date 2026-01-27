@@ -16,7 +16,7 @@ from src.duck_config import (
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
-from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
+from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds, trigger_backup
 from src.duck_electricity import format_price_response
 from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
 from src.duck_web_search import web_search
@@ -244,7 +244,8 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'calendar': ['kalender', 'avtale', 'møte'],
         'todo': ['handleliste', 'todo', 'å gjøre', 'huskeliste'],
         'teams': ['teams', 'status', 'tilgjengelig', 'chat', 'melding'],
-        'electricity': ['strømpris', 'strømkostnad', 'strøm', 'elektrisitet', 'kilowatt', 'kwh', 'billig strøm', 'dyr strøm', 'norgespris', 'sparer', 'besparelse']
+        'electricity': ['strømpris', 'strømkostnad', 'strøm', 'elektrisitet', 'kilowatt', 'kwh', 'billig strøm', 'dyr strøm', 'norgespris', 'sparer', 'besparelse'],
+        'backup': ['backup', 'sikkerhetskopi', 'ta backup', 'sikre', 'lagre']
     }
     
     for topic, keywords in topic_keywords.items():
@@ -1075,6 +1076,18 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "trigger_backup",
+                "description": "Start manuell backup av Anda til OneDrive. Sikkerhetskopier database, innstillinger og systemfiler. Bruk når brukeren ber om backup eller ønsker å sikre data.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_email_status",
                 "description": "Sjekk e-post status via Home Assistant. Kan hente uleste e-poster, søke etter avsendere, eller lese siste e-post.",
                 "parameters": {
@@ -1394,6 +1407,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         elif function_name == "get_electricity_price":
             timeframe = function_args.get("timeframe", "now")
             result = format_price_response(timeframe, region='NO2')
+        elif function_name == "trigger_backup":
+            print("🔧 TOOL CALL: trigger_backup()", flush=True)
+            result = trigger_backup()
+            print(f"🔧 TOOL RESULT: {result}", flush=True)
         elif function_name == "get_email_status":
             action = function_args.get("action", "summary")
             print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)

@@ -18,7 +18,7 @@ A complete AI-based voice assistant system with ChatGPT, Azure Speech Services, 
 
 ## Main Features
 
-- 🎤 **Wake Word Detection**: Offline wake word (Vosk) - say "alexa" or "ulrika"
+- 🎤 **Wake Word Detection**: Offline wake word (Porcupine) - say "Samantha"
 - 💬 **ChatGPT Conversations**: Natural dialogue with AI personalities
 - 🗣️ **Azure TTS**: High-quality Norwegian text-to-speech with multiple voices
 - 👄 **Synchronized Beak Movement**: Servo-controlled beak that moves to the sound
@@ -53,9 +53,8 @@ AZURE_STT_KEY=your-key
 AZURE_STT_REGION=westeurope
 EOF
 
-# 4. Download Vosk model
-wget https://alphacephei.com/vosk/models/vosk-model-small-sv-rhasspy-0.15.zip
-unzip vosk-model-small-sv-rhasspy-0.15.zip
+# 4. Porcupine wake word files included in repository
+# (.ppn files for custom wake words)
 
 # 5. Install and start services
 sudo ./scripts/install-services.sh

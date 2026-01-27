@@ -474,6 +474,73 @@ class DuckAPIHandlers:
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
     
+    def handle_backup_status(self) -> Dict[str, Any]:
+        """Get backup status and list of backups"""
+        try:
+            result = subprocess.run(
+                ['rclone', 'lsf', 'anda-backup:duck-backups/Samantha/', '--dirs-only'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                backups = [line.strip('/') for line in result.stdout.strip().split('\n') if line.strip()]
+                backups.sort(reverse=True)  # Newest first
+                return {
+                    'status': 'success',
+                    'backups': backups[:10],  # Last 10
+                    'total': len(backups),
+                    'latest': backups[0] if backups else None
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'error': 'Kunne ikke hente backups',
+                    'backups': [],
+                    'total': 0
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'backups': [],
+                'total': 0
+            }
+    
+    def handle_backup_start(self) -> Dict[str, Any]:
+        """Start a new backup"""
+        try:
+            result = subprocess.run(
+                ['bash', str(self.project_root / 'backup-anda.sh')],
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 min timeout
+            )
+            
+            if result.returncode == 0:
+                return {
+                    'status': 'success',
+                    'message': 'Backup fullført!',
+                    'output': result.stdout
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': 'Backup feilet',
+                    'error': result.stderr
+                }
+        except subprocess.TimeoutExpired:
+            return {
+                'status': 'error',
+                'message': 'Backup timeout (>2 min)'
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+    
     # Helper methods
     
     def _read_temp_file(self, filename: str, default: str = '') -> str:

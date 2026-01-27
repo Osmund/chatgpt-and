@@ -137,6 +137,15 @@ button {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(255,111,0,0.3);
 }
+.btn-backup {
+    background: #9c27b0;
+    color: white;
+}
+.btn-backup:hover {
+    background: #7b1fa2;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(156,39,176,0.3);
+}
 input[type="text"] {
     width: 100%;
     padding: 12px;

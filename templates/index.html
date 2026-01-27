@@ -161,8 +161,28 @@
                     <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
                     <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
                     <button class="btn-wifi" onclick="switchToHotspot()">📡 Bytt WiFi-nettverk</button>
+                    <button class="btn-backup" onclick="createBackup()">💾 Ta Backup</button>
                     <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
                     <button class="btn-shutdown" onclick="shutdownPi()">🔌 Skru av Pi</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Backup Status Panel -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>💾 Backup Status</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div id="backup-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Siste backup:</div>
+                        <div id="latest-backup" style="font-weight: bold; color: #667eea;">Laster...</div>
+                    </div>
+                    <div id="backup-list" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.9em;">
+                        Laster backups...
+                    </div>
                 </div>
             </div>
         </div>
