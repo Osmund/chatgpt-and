@@ -17,6 +17,7 @@ from src.duck_config import (
 )
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds
+from src.duck_electricity import format_price_response
 from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
 from src.duck_web_search import web_search
 
@@ -242,7 +243,8 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'email': ['epost', 'e-post', 'mail', 'melding', 'innboks'],
         'calendar': ['kalender', 'avtale', 'møte'],
         'todo': ['handleliste', 'todo', 'å gjøre', 'huskeliste'],
-        'teams': ['teams', 'status', 'tilgjengelig', 'chat', 'melding']
+        'teams': ['teams', 'status', 'tilgjengelig', 'chat', 'melding'],
+        'electricity': ['strømpris', 'strømkostnad', 'strøm', 'elektrisitet', 'kilowatt', 'kwh', 'billig strøm', 'dyr strøm', 'norgespris', 'sparer', 'besparelse']
     }
     
     for topic, keywords in topic_keywords.items():
@@ -1055,6 +1057,24 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "get_electricity_price",
+                "description": "Hent strømpriser for NO2 (Sør-Norge). Viser priser inkludert strømstøtte og mva (faktisk forbrukerpris). Bruk når brukeren spør om strømpris, strømkostnad, eller når det er billig/dyrt.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {
+                            "type": "string",
+                            "enum": ["now", "today", "cheapest", "advice", "norgespris"],
+                            "description": "'now' = nåværende pris, 'today' = dagens statistikk (snitt/min/max), 'cheapest' = de 3 billigste timene, 'advice' = råd om når det er lurt å bruke strøm, 'norgespris' = sammenligning med Norgespris-avtalen (50 øre/kWh) og besparelse"
+                        }
+                    },
+                    "required": ["timeframe"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "get_email_status",
                 "description": "Sjekk e-post status via Home Assistant. Kan hente uleste e-poster, søke etter avsendere, eller lese siste e-post.",
                 "parameters": {
@@ -1371,6 +1391,9 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             position = function_args.get("position")
             section = function_args.get("section")
             result = control_blinds(location, action, position, section)
+        elif function_name == "get_electricity_price":
+            timeframe = function_args.get("timeframe", "now")
+            result = format_price_response(timeframe, region='NO2')
         elif function_name == "get_email_status":
             action = function_args.get("action", "summary")
             print(f"🔧 TOOL CALL: get_email_status(action='{action}')", flush=True)
