@@ -525,25 +525,28 @@ Svar med JSON format med disse feltene:
         if not row:
             return PersonalityProfile()
         
+        # Konverter sqlite3.Row til dict for å kunne bruke .get()
+        row_dict = dict(row)
+        
         return PersonalityProfile(
-            humor_level=row['humor_level'],
-            verbosity_level=row['verbosity_level'],
-            formality_level=row['formality_level'],
-            enthusiasm_level=row['enthusiasm_level'],
-            technical_depth=row['technical_depth'],
-            empathy_level=row.get('empathy_level', 5.0),
-            directness_level=row.get('directness_level', 5.0),
-            creativity_level=row.get('creativity_level', 5.0),
-            boundary_level=row.get('boundary_level', 5.0),
-            proactivity_level=row.get('proactivity_level', 5.0),
-            ask_followup_questions=bool(row['ask_followup_questions']),
-            use_emojis=bool(row['use_emojis']),
-            preferred_topics=json.loads(row['preferred_topics']) if row['preferred_topics'] else [],
-            engagement_patterns=json.loads(row['engagement_patterns']) if row['engagement_patterns'] else {},
-            response_patterns=json.loads(row['response_patterns']) if row['response_patterns'] else {},
-            last_analyzed=row['last_analyzed'],
-            conversations_analyzed=row['conversations_analyzed'],
-            confidence_score=row['confidence_score']
+            humor_level=row_dict['humor_level'],
+            verbosity_level=row_dict['verbosity_level'],
+            formality_level=row_dict['formality_level'],
+            enthusiasm_level=row_dict['enthusiasm_level'],
+            technical_depth=row_dict['technical_depth'],
+            empathy_level=row_dict.get('empathy_level', 5.0),
+            directness_level=row_dict.get('directness_level', 5.0),
+            creativity_level=row_dict.get('creativity_level', 5.0),
+            boundary_level=row_dict.get('boundary_level', 5.0),
+            proactivity_level=row_dict.get('proactivity_level', 5.0),
+            ask_followup_questions=bool(row_dict['ask_followup_questions']),
+            use_emojis=bool(row_dict['use_emojis']),
+            preferred_topics=json.loads(row_dict['preferred_topics']) if row_dict['preferred_topics'] else [],
+            engagement_patterns=json.loads(row_dict['engagement_patterns']) if row_dict['engagement_patterns'] else {},
+            response_patterns=json.loads(row_dict['response_patterns']) if row_dict['response_patterns'] else {},
+            last_analyzed=row_dict['last_analyzed'],
+            conversations_analyzed=row_dict['conversations_analyzed'],
+            confidence_score=row_dict['confidence_score']
         )
     
     def run_analysis(self, model: str = "gemini", days: int = 7):
