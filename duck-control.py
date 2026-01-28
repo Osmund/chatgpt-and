@@ -1041,24 +1041,34 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             print("🛑 Starting graceful shutdown of Anda and Raspberry Pi", flush=True)
             
             try:
-                # Run graceful shutdown script first
+                # Run graceful shutdown script first (with longer timeout for backup)
                 shutdown_script = '/home/admog/Code/chatgpt-and/scripts/graceful-shutdown.sh'
                 if os.path.exists(shutdown_script):
                     print("  Running graceful shutdown script...", flush=True)
                     subprocess.run(
                         ['bash', shutdown_script],
-                        timeout=15
+                        timeout=30  # Longer timeout to allow backup to complete
                     )
                 
-                # Then shutdown the system
+                # Then shutdown the system (use 'now' instead of '+0')
                 print("  Initiating system shutdown...", flush=True)
                 subprocess.Popen(
-                    ['sudo', 'shutdown', '-h', '+0'],
+                    ['sudo', 'shutdown', '-h', 'now'],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
                 
                 response = {'success': True, 'message': 'Graceful shutdown initiated'}
+                self.send_json_response(response, 200)
+            except subprocess.TimeoutExpired:
+                # If graceful shutdown times out, still try to shut down
+                print("⚠️  Graceful shutdown timed out, forcing shutdown...", flush=True)
+                subprocess.Popen(
+                    ['sudo', 'shutdown', '-h', 'now'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                response = {'success': True, 'message': 'Shutdown initiated (graceful timeout)'}
                 self.send_json_response(response, 200)
             except Exception as e:
                 print(f"❌ Shutdown error: {e}", flush=True)
