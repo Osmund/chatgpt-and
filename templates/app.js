@@ -1313,6 +1313,36 @@ async function loadHungerStatus() {
     }
 }
 
+// Feed Anda from control panel
+async function feedAnda(foodType) {
+    const statusElement = document.getElementById('feed-status');
+    const foodEmoji = foodType === 'cookie' ? '🍪' : '🍕';
+    
+    try {
+        statusElement.textContent = `Gir ${foodEmoji}...`;
+        
+        const response = await fetch('/api/hunger/feed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ food_type: foodType })
+        });
+        const data = await response.json();
+        
+        if (data.status === 'fed') {
+            statusElement.textContent = `✅ ${data.food} Nam nam! Hunger: ${data.new_level}/10`;
+            // Refresh hunger status
+            setTimeout(() => {
+                loadHungerStatus();
+                statusElement.textContent = '';
+            }, 2000);
+        } else {
+            statusElement.textContent = `❌ Feil: ${data.message || 'Ukjent feil'}`;
+        }
+    } catch (error) {
+        statusElement.textContent = `❌ Feil: ${error.message}`;
+    }
+}
+
 // Max Context Facts
 function updateMaxFactsLabel() {
     const slider = document.getElementById('max-facts-slider');

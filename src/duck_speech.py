@@ -173,6 +173,19 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
                     
+                    # Sjekk om Anda ble matet fra kontrollpanelet
+                    hunger_fed_file = '/tmp/duck_hunger_fed.txt'
+                    if check_files and os.path.exists(hunger_fed_file):
+                        try:
+                            with open(hunger_fed_file, 'r', encoding='utf-8') as f:
+                                announcement = f.read().strip()
+                            os.remove(hunger_fed_file)
+                            if announcement:
+                                print(f"😋 Fed from control panel: {announcement}", flush=True)
+                                return f"__HUNGER_FED__{announcement}"
+                        except Exception as e:
+                            print(f"⚠️ Error reading hunger fed announcement: {e}", flush=True)
+                    
                     # Sjekk om det finnes hotspot-annonseringer
                     hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
                     if check_files and os.path.exists(hotspot_announcement_file):

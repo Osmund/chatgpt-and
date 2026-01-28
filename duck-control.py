@@ -628,6 +628,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_get_sensitivity()
             self.send_json_response(response, 200)
         
+        elif self.path == '/api/hunger/feed':
+            # POST endpoint - handled in do_POST
+            self.send_response(405)
+            self.end_headers()
+        
         else:
             self.send_response(404)
             self.end_headers()
@@ -1721,6 +1726,17 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 response = api_handlers.handle_set_sensitivity(sensitivity)
                 status_code = 200 if response.get('status') == 'success' else 400
                 self.send_json_response(response, status_code)
+            except Exception as e:
+                self.send_json_response({'status': 'error', 'message': str(e)}, 400)
+        
+        elif self.path == '/api/hunger/feed':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                food_type = data.get('food_type', 'cookie')
+                response = api_handlers.handle_feed(food_type)
+                self.send_json_response(response, 200)
             except Exception as e:
                 self.send_json_response({'status': 'error', 'message': str(e)}, 400)
         

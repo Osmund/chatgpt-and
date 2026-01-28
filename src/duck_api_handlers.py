@@ -159,6 +159,22 @@ class DuckAPIHandlers:
         except Exception as e:
             return {'level': 0, 'error': str(e)}
     
+    def handle_feed(self, food_type: str) -> Dict[str, Any]:
+        """Feed Anda with food from control panel"""
+        try:
+            hunger_manager = self.services.get_hunger_manager()
+            result = hunger_manager.feed(food_type)
+            
+            # Create announcement file so Anda says thank you
+            if result.get('status') == 'fed':
+                announcement = f"Takk for maten! Nam nam! {result['food']}🦆"
+                with open('/tmp/duck_hunger_fed.txt', 'w', encoding='utf-8') as f:
+                    f.write(announcement)
+            
+            return result
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+    
     def handle_logs(self, lines: int = 50) -> Dict[str, Any]:
         """Get recent logs from chatgpt-duck service"""
         try:

@@ -17,12 +17,12 @@ from typing import Dict, Optional
 import json
 import os
 
-# Food values
+# Food values (halved to require more feeding, like a real Tamagotchi)
 FOOD_VALUES = {
-    '🍪': 5,   # Cookie
-    '🍕': 10,  # Pizza
-    'cookie': 5,
-    'pizza': 10
+    '🍪': 2.5,   # Cookie (was 5)
+    '🍕': 5,     # Pizza (was 10)
+    'cookie': 2.5,
+    'pizza': 5
 }
 
 # Meal times (24-hour format)
