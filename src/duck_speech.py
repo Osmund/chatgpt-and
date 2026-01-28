@@ -55,10 +55,21 @@ def wait_for_wake_word():
     audio_stream = None
     
     try:
+        # Les sensitivity fra konfigurasjonsfil hvis den finnes
+        sensitivity = 0.9  # Default
+        sensitivity_file = "wake_word_sensitivity.txt"
+        if os.path.exists(sensitivity_file):
+            try:
+                with open(sensitivity_file, 'r') as f:
+                    sensitivity = float(f.read().strip())
+                    print(f"Loaded wake word sensitivity: {sensitivity}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Error reading sensitivity file, using default 0.9: {e}", flush=True)
+        
         porcupine = pvporcupine.create(
             access_key=access_key,
             keyword_paths=[keyword_path],
-            sensitivities=[0.8]  # 0.0 til 1.0, høyere = mer sensitiv (flere false positives)
+            sensitivities=[sensitivity]  # 0.0 til 1.0, høyere = mer sensitiv
         )
         
         print(f"Porcupine startet! Sample rate: {porcupine.sample_rate} Hz, Frame length: {porcupine.frame_length}", flush=True)
@@ -91,29 +102,38 @@ def wait_for_wake_word():
                 # Sleep mode tracking for LED
                 sleep_led_started = False
                 
+                # Optimization counters for reduced file I/O
+                file_check_counter = 0
+                sleep_check_counter = 0
+                
                 while True:
-                    # Sjekk sleep mode FØRST - blokkerer ikke andre meldinger (SMS, hunger, etc.)
-                    if is_sleeping():
-                        # Start blå pulsering hvis ikke allerede startet
-                        if not sleep_led_started:
-                            pulse_blue()
-                            sleep_led_started = True
-                            print("💤 [wait_for_wake_word] Sleep mode detektert - starter blå pulsering", flush=True)
+                    # Sjekk sleep mode kun hver 100. iteration (~3.2s) for ytelse
+                    sleep_check_counter += 1
+                    if sleep_check_counter >= 100:
+                        sleep_check_counter = 0
                         
-                        # I sleep mode - ignorer wake word detection
-                        # Men tillat eksterne meldinger (SMS, hunger, etc.)
-                        time.sleep(0.5)  # Kort pause for å ikke slå CPU
-                        # Sjekk eksterne meldinger nedenfor fortsetter normalt
-                    else:
-                        # Stopp LED hvis sleep mode deaktiveres
-                        if sleep_led_started:
-                            stop_blink()
-                            set_blue()  # Tilbake til blå LED (klar for wake word)
-                            sleep_led_started = False
-                            print("⏰ [wait_for_wake_word] Sleep mode deaktivert - blå LED", flush=True)
+                        if is_sleeping():
+                            # Start blå pulsering hvis ikke allerede startet
+                            if not sleep_led_started:
+                                pulse_blue()
+                                sleep_led_started = True
+                                print("💤 [wait_for_wake_word] Sleep mode detektert - starter blå pulsering", flush=True)
+                        else:
+                            # Stopp LED hvis sleep mode deaktiveres
+                            if sleep_led_started:
+                                stop_blink()
+                                set_blue()  # Tilbake til blå LED (klar for wake word)
+                                sleep_led_started = False
+                                print("⏰ [wait_for_wake_word] Sleep mode deaktivert - blå LED", flush=True)
+                    
+                    # Sjekk eksterne meldinger kun hver 50. iteration (~1.6s) for minimal disk I/O
+                    file_check_counter += 1
+                    check_files = file_check_counter >= 50
+                    if check_files:
+                        file_check_counter = 0
                     
                     # Sjekk om det finnes en ekstern melding
-                    if os.path.exists(MESSAGE_FILE):
+                    if check_files and os.path.exists(MESSAGE_FILE):
                         try:
                             with open(MESSAGE_FILE, 'r', encoding='utf-8') as f:
                                 message = f.read().strip()
@@ -142,7 +162,7 @@ def wait_for_wake_word():
                     
                     # Sjekk om det finnes hunger-annonseringer
                     hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
-                    if os.path.exists(hunger_announcement_file):
+                    if check_files and os.path.exists(hunger_announcement_file):
                         try:
                             with open(hunger_announcement_file, 'r', encoding='utf-8') as f:
                                 announcement = f.read().strip()
@@ -155,7 +175,7 @@ def wait_for_wake_word():
                     
                     # Sjekk om det finnes hotspot-annonseringer
                     hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
-                    if os.path.exists(hotspot_announcement_file):
+                    if check_files and os.path.exists(hotspot_announcement_file):
                         try:
                             with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
                                 announcement = f.read().strip()
@@ -167,7 +187,7 @@ def wait_for_wake_word():
                             print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
                     
                     # Sjekk om det finnes en sang-forespørsel
-                    if os.path.exists(SONG_REQUEST_FILE):
+                    if check_files and os.path.exists(SONG_REQUEST_FILE):
                         try:
                             with open(SONG_REQUEST_FILE, 'r', encoding='utf-8') as f:
                                 song_path = f.read().strip()
@@ -178,11 +198,11 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"Feil ved lesing av sang-forespørsel: {e}", flush=True)
                     
-                    # Les audio fra mikrofon
+                    # Les audio fra mikrofon (gjøres hver iterasjon for kontinuerlig deteksjon)
                     pcm_48k, overflowed = audio_stream.read(mic_buffer_size)
                     
                     # Skip wake word detection hvis vi er i sleep mode
-                    if is_sleeping():
+                    if sleep_led_started:  # Raskere sjekk enn is_sleeping() hver gang
                         continue  # Hopp over wake word prosessering
                     
                     # Konverter til numpy array

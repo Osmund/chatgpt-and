@@ -624,6 +624,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_backup_status()
             self.send_json_response(response, 200)
         
+        elif self.path == '/api/wake-word/sensitivity':
+            response = api_handlers.handle_get_sensitivity()
+            self.send_json_response(response, 200)
+        
         else:
             self.send_response(404)
             self.end_headers()
@@ -1707,6 +1711,18 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_backup_start()
             status_code = 200 if response.get('status') == 'success' else 500
             self.send_json_response(response, status_code)
+        
+        elif self.path == '/api/wake-word/sensitivity':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                sensitivity = float(data.get('sensitivity', 0.9))
+                response = api_handlers.handle_set_sensitivity(sensitivity)
+                status_code = 200 if response.get('status') == 'success' else 400
+                self.send_json_response(response, status_code)
+            except Exception as e:
+                self.send_json_response({'status': 'error', 'message': str(e)}, 400)
         
         else:
             self.send_response(404)

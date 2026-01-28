@@ -140,7 +140,7 @@ def speak(text, speech_config, beak):
         print(f"Feil ved lesing av nebbet-konfigurasjon: {e}, nebbet aktivert", flush=True)
     
     # Les talehastighet (0-100, hvor 50 = normal)
-    speed_value = 50
+    speed_value = 40  # Default: litt saktere enn normal (40 = -10%)
     try:
         if os.path.exists(SPEED_FILE):
             with open(SPEED_FILE, 'r') as f:

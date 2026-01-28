@@ -193,7 +193,8 @@ class DuckAPIHandlers:
     
     def handle_current_voice(self) -> Dict[str, Any]:
         """Get current TTS voice"""
-        voice = self._read_temp_file('duck_voice.txt', 'nb-NO-FinnNeural')
+        from src.duck_config import DEFAULT_VOICE
+        voice = self._read_temp_file('duck_voice.txt', DEFAULT_VOICE)
         return {'voice': voice}
     
     def handle_current_beak(self) -> Dict[str, Any]:
@@ -215,6 +216,33 @@ class DuckAPIHandlers:
         """Get list of wake words"""
         wake_words = ['quack quack', 'hey duck', 'samantha']
         return {'wake_words': wake_words}
+    
+    def handle_get_sensitivity(self) -> Dict[str, Any]:
+        """Get current wake word sensitivity"""
+        try:
+            sensitivity_file = self.project_root / 'wake_word_sensitivity.txt'
+            if sensitivity_file.exists():
+                with open(sensitivity_file, 'r') as f:
+                    sensitivity = float(f.read().strip())
+            else:
+                sensitivity = 0.9  # Default from duck_speech.py
+            return {'sensitivity': sensitivity}
+        except Exception as e:
+            return {'sensitivity': 0.9, 'error': str(e)}
+    
+    def handle_set_sensitivity(self, sensitivity: float) -> Dict[str, Any]:
+        """Set wake word sensitivity (0.0-1.0)"""
+        try:
+            if not 0.0 <= sensitivity <= 1.0:
+                return {'status': 'error', 'message': 'Sensitivity must be between 0.0 and 1.0'}
+            
+            sensitivity_file = self.project_root / 'wake_word_sensitivity.txt'
+            with open(sensitivity_file, 'w') as f:
+                f.write(str(sensitivity))
+            
+            return {'status': 'success', 'message': f'Sensitivity set to {sensitivity}. Restart Anda for changes to take effect.'}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
     
     def handle_fan_status(self) -> Dict[str, Any]:
         """Get fan status"""

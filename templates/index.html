@@ -299,6 +299,24 @@
                             <span id="volume-status"></span>
                         </div>
                     </div>
+                    
+                    <div class="speak-section">
+                        <h3>🎤 Wake Word Sensitivity</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span>🔇 Lav</span>
+                            <input type="range" id="sensitivity-slider" min="0" max="100" value="90" 
+                                   oninput="updateSensitivityValue()" onchange="changeSensitivity()" 
+                                   style="flex: 1;">
+                            <span>🔊 Høy</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <span id="sensitivity-value" style="font-weight: bold;">0.90</span>
+                            <span id="sensitivity-status"></span>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 5px; text-align: center;">
+                            ⚠️ Krever restart av Anda for å tre i kraft
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -823,6 +841,49 @@
             }
         }
 
+        function updateSensitivityValue() {
+            const slider = document.getElementById('sensitivity-slider');
+            const value = parseInt(slider.value) / 100;
+            document.getElementById('sensitivity-value').textContent = value.toFixed(2);
+        }
+
+        async function changeSensitivity() {
+            const slider = document.getElementById('sensitivity-slider');
+            const statusElement = document.getElementById('sensitivity-status');
+            const sensitivity = parseInt(slider.value) / 100;
+            updateSensitivityValue();
+            
+            try {
+                const response = await fetch('/api/wake-word/sensitivity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensitivity: sensitivity })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusElement.textContent = ' ✓';
+                    setTimeout(() => statusElement.textContent = '', 2000);
+                } else {
+                    statusElement.textContent = ' ✗ Feil';
+                }
+            } catch (error) {
+                statusElement.textContent = ' ✗ Feil: ' + error.message;
+            }
+        }
+
+        async function loadSensitivity() {
+            try {
+                const response = await fetch('/api/wake-word/sensitivity');
+                const data = await response.json();
+                const slider = document.getElementById('sensitivity-slider');
+                slider.value = Math.round(data.sensitivity * 100);
+                updateSensitivityValue();
+            } catch (error) {
+                console.error('Kunne ikke laste sensitivity:', error);
+            }
+        }
+
         async function setFanMode(mode) {
             try {
                 const response = await fetch('/set-fan-mode', {
@@ -982,7 +1043,10 @@
         }
 
         // Load personality on page load
-        window.addEventListener('load', loadPersonality);
+        window.addEventListener('load', () => {
+            loadPersonality();
+            loadSensitivity();
+        });
         
         // Sjekk HA-status ved oppstart og hver 30. sekund
         checkHAStatus();
