@@ -7,31 +7,87 @@ HOTSPOT_NAME="Hotspot"
 VENV_PYTHON="/home/admog/Code/chatgpt-and/.venv/bin/python3"
 PORTAL_SCRIPT="/home/admog/Code/chatgpt-and/wifi-portal.py"
 PORTAL_PID_FILE="/tmp/wifi-portal.pid"
+LOG_DIR="/home/admog/Code/chatgpt-and/logs"
+LOG_FILE="$LOG_DIR/auto-hotspot-$(date +%Y%m%d-%H%M%S).log"
+
+# Opprett logg-mappe hvis den ikke finnes
+mkdir -p "$LOG_DIR" 2>/dev/null || true
 
 log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
     echo "$1" | logger -t "$LOG_TAG"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg"
+    echo "$msg" >> "$LOG_FILE"
 }
 
-# Vent litt for at NetworkManager skal starte ordentlig
-sleep 5
+# Start med å logge oppstart
+log "=========================================="
+log "Auto-hotspot starter (boot-tid: $(uptime -s))"
+log "Nåværende tid: $(date)"
+log "=========================================="
 
-log "Sjekker WiFi-tilkobling..."
+# Sjekk NetworkManager status
+log "NetworkManager status: $(systemctl is-active NetworkManager)"
+
+# List alle WiFi-connections
+log "Lagrede WiFi-nettverk med autoconnect:"
+nmcli -f NAME,TYPE,AUTOCONNECT connection show | grep wifi >> "$LOG_FILE"
+
+# Vent litt for at NetworkManager skal starte ordentlig og prøve å koble til
+# Vi må vente nok til at NetworkManager har prøvd alle autoconnect-nettverk
+log "Venter 15 sekunder på at NetworkManager prøver å koble til..."
+sleep 15
+
+log "Sjekker WiFi-tilkobling nå..."
+log "Aktive connections før test:"
+nmcli -t -f NAME,TYPE,STATE connection show --active >> "$LOG_FILE"
 
 # Funksjon for å sjekke WiFi-tilkobling
 check_wifi_connected() {
-    # Sjekk om vi har internett-tilkobling (ping test)
-    if timeout 3 ping -c 1 8.8.8.8 > /dev/null 2>&1; then
-        return 0  # Connected
+    log "--- Starter internett-test ---"
+    
+    # Først: Sjekk om vi faktisk har en fullstendig aktiv WiFi-forbindelse
+    local wifi_state=$(nmcli -t -f DEVICE,STATE device | grep "^wlan0:" | cut -d: -f2)
+    log "WiFi device state: $wifi_state"
+    
+    if [ "$wifi_state" != "connected" ]; then
+        log "✗ WiFi device ikke i 'connected' state - ingen tilkobling"
+        return 1
     fi
     
-    # Fallback: Sjekk om noen WiFi-connection er aktiv (IKKE vårt eget hotspot)
-    local active=$(nmcli -t -f NAME,TYPE,STATE connection show --active | grep ":802-11-wireless:activated$" | grep -v "^Hotspot:")
-    if [ -n "$active" ]; then
-        return 0  # Connected
+    # Sjekk at vi faktisk har fått en IP-adresse
+    local ip_addr=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    if [ -z "$ip_addr" ]; then
+        log "✗ Ingen IP-adresse på wlan0 - ingen tilkobling"
+        return 1
     fi
+    log "✓ WiFi tilkoblet med IP: $ip_addr"
     
-    return 1  # Not connected
+    # Test 1: Ping til Google DNS
+    log "Test 1: Pinger 8.8.8.8 (2 pakker, 5s timeout)..."
+    if ! timeout 5 ping -c 2 8.8.8.8 > /dev/null 2>&1; then
+        log "✗ Ping til 8.8.8.8 feilet - ingen IP-tilgang"
+        return 1
+    fi
+    log "✓ Ping til 8.8.8.8 OK"
+    
+    # Test 2: Ping til Cloudflare DNS (ekstra test)
+    log "Test 2: Pinger 1.1.1.1 (1 pakke, 5s timeout)..."
+    if ! timeout 5 ping -c 1 1.1.1.1 > /dev/null 2>&1; then
+        log "✗ Ping til 1.1.1.1 feilet"
+        return 1
+    fi
+    log "✓ Ping til 1.1.1.1 OK"
+    
+    # Test 3: DNS-oppslag og HTTP-test (krever faktisk internett)
+    log "Test 3: Pinger www.google.com (krever DNS, 5s timeout)..."
+    if timeout 5 ping -c 1 www.google.com > /dev/null 2>&1; then
+        log "✓ DNS-oppslag og ping til google.com OK - HAR INTERNETT!"
+        return 0  # Connected with internet
+    else
+        log "✗ DNS-oppslag eller ping til google.com feilet - INGEN INTERNETT"
+        return 1
+    fi
 }
 
 # Funksjon for å sjekke om hotspot kjører
@@ -191,9 +247,6 @@ if check_wifi_connected; then
     log "WiFi tilkoblet etter ekstra ventetid!"
     exit 0
 fi
-    log "WiFi tilkoblet!"
-    exit 0
-fi
 
 # Fortsatt ingen tilkobling, start hotspot
 log "Starter WiFi hotspot..."
@@ -203,7 +256,10 @@ sudo -u admog "$VENV_PYTHON" -c "from rgb_duck import blink_yellow; blink_yellow
 
 # Voice announcement: Hotspot starter med IP-adresse
 HOTSPOT_IP="192.168.50.1"
-echo "Jeg kunne ikke koble til WiFi, så jeg starter hotspot nå. Koble til mitt nettverk ChatGPT-Duck med passord kvakk kvakk kvakk kvakk. Gå til ${HOTSPOT_IP} i nettleseren for å sette opp WiFi." > /tmp/duck_hotspot_announcement.txt
+echo "Jeg kunne ikke koble til WiFi, så jeg starter hotspot nå. Koble til mitt nettverk ChatGPT-Duck med passord kvakkkvakk. Gå til ${HOTSPOT_IP} i nettleseren for å sette opp WiFi." > /tmp/duck_hotspot_announcement.txt
+# Gi admog-brukeren rettigheter til å lese filen
+chmod 644 /tmp/duck_hotspot_announcement.txt
+chown admog:admog /tmp/duck_hotspot_announcement.txt
 
 # Bruk eksisterende Hotspot connection profile
 if timeout 10 nmcli connection up "$HOTSPOT_NAME" 2>&1 | logger -t "$LOG_TAG"; then

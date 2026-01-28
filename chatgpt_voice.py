@@ -515,28 +515,74 @@ def main():
             if attempt < 4:  # Ikke vent etter siste forsøk
                 time.sleep(2)  # Vent 2 sekunder før neste forsøk
     
-    if ip_address and ip_address != "127.0.0.1":
-        greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
-        print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
-    else:
-        greeting = messages_config['startup_messages']['without_network']
-        print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
-    
-    # Prøv å si oppstartshilsen flere ganger hvis TTS/nettverk ikke er klart
+    # Sjekk FØRST om det finnes en hotspot-annonsering (prioriteres over normal greeting)
+    hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
+    hotspot_audio_file = '/home/admog/Code/chatgpt-and/audio/hotspot_announcement.wav'
+    hotspot_active = False
     greeting_success = False
-    for greeting_attempt in range(3):  # Prøv opptil 3 ganger
+    
+    if os.path.exists(hotspot_announcement_file):
         try:
-            speak(greeting, speech_config, beak)
-            print("Oppstartshilsen ferdig", flush=True)
-            greeting_success = True
-            break
+            # Les announcement-filen (for logging)
+            with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
+                announcement = f.read().strip()
+            os.remove(hotspot_announcement_file)
+            
+            if announcement:
+                print(f"📡 Hotspot-modus: Spiller forhåndsinnspilt melding", flush=True)
+                # Sett LED til gul for hotspot-modus
+                set_yellow()
+                hotspot_active = True
+                time.sleep(0.5)
+                
+                # Spill forhåndsinnspilt audio-fil (fungerer uten internett)
+                if os.path.exists(hotspot_audio_file):
+                    try:
+                        # Bruk aplay til å spille WAV-filen
+                        import subprocess
+                        subprocess.run(['aplay', '-q', hotspot_audio_file], check=True)
+                        print("✅ Hotspot announcement spilt - LED forblir gul", flush=True)
+                        greeting_success = True
+                        
+                        # Åpne og lukk nebbet synkront med audio
+                        if beak:
+                            time.sleep(0.5)
+                            beak.close()
+                    except Exception as e:
+                        print(f"⚠️ Kunne ikke spille hotspot audio: {e}", flush=True)
+                else:
+                    print(f"⚠️ Hotspot audio-fil ikke funnet: {hotspot_audio_file}", flush=True)
+                    print(f"   Kjør: .venv/bin/python scripts/generate_hotspot_audio.py", flush=True)
         except Exception as e:
-            print(f"Oppstartshilsen mislyktes (forsøk {greeting_attempt + 1}/3): {e}", flush=True)
-            if greeting_attempt < 2:  # Ikke vent etter siste forsøk
-                time.sleep(5)  # Vent 5 sekunder før neste forsøk
+            print(f"⚠️ Error reading hotspot announcement at startup: {e}", flush=True)
+    
+    # Hvis ikke hotspot-modus, si normal greeting
+    if not hotspot_active:
+        if ip_address and ip_address != "127.0.0.1":
+            greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
+            print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
+        else:
+            greeting = messages_config['startup_messages']['without_network']
+            print("Oppstartshilsen uten IP (nettverk ikke klart)", flush=True)
+        
+        # Prøv å si oppstartshilsen flere ganger hvis TTS/nettverk ikke er klart
+        for greeting_attempt in range(3):  # Prøv opptil 3 ganger
+            try:
+                speak(greeting, speech_config, beak)
+                print("Oppstartshilsen ferdig", flush=True)
+                greeting_success = True
+                break
+            except Exception as e:
+                print(f"Oppstartshilsen mislyktes (forsøk {greeting_attempt + 1}/3): {e}", flush=True)
+                if greeting_attempt < 2:  # Ikke vent etter siste forsøk
+                    time.sleep(5)  # Vent 5 sekunder før neste forsøk
     
     if not greeting_success:
-        print("Oppstartshilsen kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
+        print("Oppstartshilsen/hotspot-melding kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
+    
+    # Sett LED til blå BARE hvis hotspot ikke er aktivt
+    if not hotspot_active:
+        set_blue()
     
     # Vent litt ekstra for å la nebbet fullføre bevegelsene
     time.sleep(0.5)
