@@ -335,6 +335,72 @@ class SMSManager:
         
         return None
     
+    def get_next_contact_weighted(self) -> Optional[Dict]:
+        """
+        Get next contact using weighted random selection based on priority.
+        Lower priority number = higher chance, but everyone has a chance.
+        
+        This adds variety while still respecting priority:
+        - Priority 1: ~40% chance
+        - Priority 2: ~25% chance
+        - Priority 3: ~15% chance
+        - Priority 5: ~8% chance
+        - Priority 10: ~2% chance
+        
+        Still respects:
+        - preferred_hours
+        - max_daily_messages
+        - enabled status
+        """
+        import random
+        
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        now = datetime.now()
+        current_hour = now.hour
+        today = now.date().isoformat()
+        
+        # Get ALL qualified contacts (not just top 1)
+        c.execute("""
+            SELECT 
+                c.*,
+                COUNT(h.id) as messages_today
+            FROM sms_contacts c
+            LEFT JOIN sms_history h ON (
+                c.id = h.contact_id 
+                AND h.direction = 'outbound'
+                AND DATE(h.timestamp) = ?
+            )
+            WHERE 
+                c.enabled = 1
+                AND ? BETWEEN c.preferred_hours_start AND c.preferred_hours_end
+            GROUP BY c.id
+            HAVING messages_today < c.max_daily_messages
+            ORDER BY c.priority ASC
+        """, (today, current_hour))
+        
+        rows = c.fetchall()
+        conn.close()
+        
+        if not rows:
+            return None
+        
+        # Convert to list of dicts
+        contacts = [dict(row) for row in rows]
+        
+        # Calculate weights: weight = 1 / priority (inverse relationship)
+        # Priority 1 → weight 1.0, Priority 5 → weight 0.2, Priority 10 → weight 0.1
+        weights = [1.0 / max(1, contact['priority']) for contact in contacts]
+        
+        # Use random.choices with weights
+        selected = random.choices(contacts, weights=weights, k=1)[0]
+        
+        print(f"📊 Weighted selection: {selected['name']} (priority {selected['priority']}) from {len(contacts)} candidates", flush=True)
+        
+        return selected
+    
     def send_bored_message(self) -> Dict:
         """
         Send a bored message to the next available contact
@@ -342,7 +408,7 @@ class SMSManager:
         Returns:
             {'status': 'sent'|'no_contact'|'error', 'contact': {...}, 'message': '...'}
         """
-        contact = self.get_next_contact()
+        contact = self.get_next_contact_weighted()
         
         if not contact:
             print("😔 No available contacts to message", flush=True)

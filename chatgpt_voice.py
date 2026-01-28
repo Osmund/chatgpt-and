@@ -371,13 +371,9 @@ def hunger_timer_loop():
                     # Mark as sent så vi ikke prøver igjen umiddelbart
                     hunger_manager.mark_sms_nag_sent()
                 else:
-                    # Get next contact to nag
-                    contacts = sms_manager.get_all_contacts()
-                    if contacts:
-                        # Rotate through contacts
-                        import random
-                        contact = random.choice(contacts)
-                        
+                    # Get next contact using smart weighted random
+                    contact = sms_manager.get_next_contact_weighted()
+                    if contact:
                         message = f"Hei {contact['name']}! 🦆 Jeg er veldig sulten! Kan du sende meg 🍪 eller 🍕 på SMS? 😋"
                         result = sms_manager.send_sms(contact['phone'], message)
                         
