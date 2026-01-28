@@ -297,20 +297,28 @@ def boredom_timer_loop():
             
             # HØY KJEDSOMHET (≥7): Send SMS
             if sms_manager.check_boredom_trigger():
-                print(f"🥱 Boredom threshold reached ({new_level:.1f}/10) - sending message", flush=True)
-                result = sms_manager.send_bored_message()
-                
-                if result.get('status') == 'sent':
-                    contact = result.get('contact')
-                    message = result.get('message')
-                    print(f"📤 Sent bored message to {contact['name']}: {message[:50]}...", flush=True)
+                # TIDSBEGRENSNING: Ikke send boredom SMS mellom 01:00 og 07:00
+                from datetime import datetime
+                current_hour = datetime.now().hour
+                if 1 <= current_hour < 7:
+                    print(f"😴 Boredom SMS blokkert: Nattetid ({current_hour:02d}:00)", flush=True)
+                    # Reduser litt så vi ikke bygger opp masse boredom om natten
+                    sms_manager.reduce_boredom(amount=1.0)
+                else:
+                    print(f"🥱 Boredom threshold reached ({new_level:.1f}/10) - sending message", flush=True)
+                    result = sms_manager.send_bored_message()
                     
-                    # Write announcement to file
-                    announcement = f"Jeg sendte en melding til {contact['name']} fordi jeg kjeder meg."
-                    with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                        f.write(announcement)
-                elif result.get('status') == 'no_contact':
-                    print("😔 Ingen kontakter tilgjengelig for kjed-melding", flush=True)
+                    if result.get('status') == 'sent':
+                        contact = result.get('contact')
+                        message = result.get('message')
+                        print(f"📤 Sent bored message to {contact['name']}: {message[:50]}...", flush=True)
+                        
+                        # Write announcement to file
+                        announcement = f"Jeg sendte en melding til {contact['name']} fordi jeg kjeder meg."
+                        with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
+                            f.write(announcement)
+                    elif result.get('status') == 'no_contact':
+                        print("😔 Ingen kontakter tilgjengelig for kjed-melding", flush=True)
         except Exception as e:
             print(f"⚠️ Boredom timer error: {e}", flush=True)
 
@@ -356,19 +364,26 @@ def hunger_timer_loop():
             
             # Check if we should send SMS nag (10 min after announcement)
             if hunger_manager.should_send_sms_nag():
-                # Get next contact to nag
-                contacts = sms_manager.get_all_contacts()
-                if contacts:
-                    # Rotate through contacts
-                    import random
-                    contact = random.choice(contacts)
-                    
-                    message = f"Hei {contact['name']}! 🦆 Jeg er veldig sulten! Kan du sende meg 🍪 eller 🍕 på SMS? 😋"
-                    result = sms_manager.send_sms(contact['phone'], message)
-                    
-                    if result['status'] == 'sent':
-                        print(f"📤 Sent hunger SMS to {contact['name']}", flush=True)
-                        hunger_manager.mark_sms_nag_sent()
+                # TIDSBEGRENSNING: Ikke send hunger SMS mellom 01:00 og 07:00
+                current_hour = current_time.hour
+                if 1 <= current_hour < 7:
+                    print(f"😴 Hunger SMS blokkert: Nattetid ({current_hour:02d}:00)", flush=True)
+                    # Mark as sent så vi ikke prøver igjen umiddelbart
+                    hunger_manager.mark_sms_nag_sent()
+                else:
+                    # Get next contact to nag
+                    contacts = sms_manager.get_all_contacts()
+                    if contacts:
+                        # Rotate through contacts
+                        import random
+                        contact = random.choice(contacts)
+                        
+                        message = f"Hei {contact['name']}! 🦆 Jeg er veldig sulten! Kan du sende meg 🍪 eller 🍕 på SMS? 😋"
+                        result = sms_manager.send_sms(contact['phone'], message)
+                        
+                        if result['status'] == 'sent':
+                            print(f"📤 Sent hunger SMS to {contact['name']}", flush=True)
+                            hunger_manager.mark_sms_nag_sent()
                 
         except Exception as e:
             print(f"⚠️ Hunger timer error: {e}", flush=True)

@@ -507,7 +507,7 @@ Hold det kort (under 160 tegn er best)."""
         conn.close()
     
     def _update_contact_stats(self, contact_id: int, direction: str):
-        """Update contact statistics"""
+        """Update contact statistics and dynamically adjust priority"""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         c = conn.cursor()
         
@@ -519,12 +519,26 @@ Hold det kort (under 160 tegn er best)."""
                 WHERE id = ?
             """, (datetime.now().isoformat(), contact_id))
         else:
+            # Inbound message - update stats
             c.execute("""
                 UPDATE sms_contacts 
                 SET total_received = total_received + 1,
                     last_received_at = ?
                 WHERE id = ?
             """, (datetime.now().isoformat(), contact_id))
+            
+            # DYNAMISK PRIORITERING: De som sender mye til Anda rykker opp
+            # For hver 5. inbound melding, senk priority med 1 (lavere = bedre)
+            c.execute("SELECT total_received, priority FROM sms_contacts WHERE id = ?", (contact_id,))
+            row = c.fetchone()
+            if row:
+                total_received, current_priority = row
+                # Hver 5. melding = -1 priority (men aldri under 1)
+                new_priority = max(1, 10 - (total_received // 5))
+                if new_priority != current_priority:
+                    c.execute("UPDATE sms_contacts SET priority = ? WHERE id = ?", 
+                             (new_priority, contact_id))
+                    print(f"📊 Contact priority updated: {current_priority} → {new_priority} (received: {total_received})", flush=True)
         
         conn.commit()
         conn.close()
