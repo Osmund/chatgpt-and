@@ -1222,7 +1222,7 @@ class MemoryManager:
         
         return scored_memories[:limit]
     
-    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None) -> List[Memory]:
+    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None, boost_user: str = None) -> List[Memory]:
         """
         Søk i memories med embedding similarity (semantisk søk)
         
@@ -1230,7 +1230,8 @@ class MemoryManager:
             query: Søkestreng
             limit: Max antall resultater
             threshold: Minimum similarity score (0-1)
-            user_name: Filter på bruker (optional)
+            user_name: Filter på bruker (optional, strict filtering)
+            boost_user: Gi relevance boost til minner om denne personen (optional, soft preference)
         
         Returns:
             List of Memory objects, sortert etter relevans
@@ -1260,10 +1261,18 @@ class MemoryManager:
                 WHERE embedding IS NOT NULL
             """)
         
+        # Normaliser boost_user hvis satt
+        if boost_user:
+            boost_user = boost_user.strip().title()
+        
         results = []
         for row in c.fetchall():
             memory_embedding = pickle.loads(row[10])  # embedding is last column
             similarity = self.cosine_similarity(query_embedding, memory_embedding)
+            
+            # Relevance boosting: Gi ekstra poeng hvis minnet handler om personen vi snakker med
+            if boost_user and row[9] == boost_user:  # row[9] is user_name
+                similarity = min(1.0, similarity + 0.15)  # Boost by 0.15, max 1.0
             
             if similarity >= threshold:
                 memory = Memory(
@@ -1280,7 +1289,7 @@ class MemoryManager:
         
         conn.close()
         
-        # Sorter etter similarity (høyest først)
+        # Sorter etter justert similarity (høyest først)
         results.sort(key=lambda x: x[0], reverse=True)
         
         # Touch the top memories (update last_accessed)
@@ -1483,9 +1492,15 @@ class MemoryManager:
         profile_facts = combined_facts[:max_facts]
         
         # 5. Relevant memories (EMBEDDING SEARCH - semantisk søk)
-        # IKKE filtrer på user_name - alle brukere skal se alle minner
+        # Søk i ALLE minner, men boost minner om personen vi snakker med
         conn = self._get_connection()  # Re-open connection
-        relevant_memories_list = self.search_memories_by_embedding(query, limit=MEMORY_LIMIT, threshold=MEMORY_THRESHOLD, user_name=None)
+        relevant_memories_list = self.search_memories_by_embedding(
+            query, 
+            limit=MEMORY_LIMIT, 
+            threshold=MEMORY_THRESHOLD, 
+            user_name=None,  # Søk i alle minner
+            boost_user=user_name  # Men boost minner om denne personen
+        )
         # Convert to same format as old search_memories (List[Tuple[Memory, float]])
         # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
         relevant_memories = [(m, 1.0) for m in relevant_memories_list]

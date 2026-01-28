@@ -408,7 +408,8 @@ class MemoryWorker:
                     'source_sms_id': sms['id'],
                     'importance': mem_data.get('importance', 3),
                     'learned_from': 'sms',
-                    'sender': sms['name']
+                    'sender': sms['name'],
+                    'about_person': sms['name']  # Nytt felt: Hvem minnet handler om
                 }
                 
                 memory = Memory(
@@ -418,8 +419,9 @@ class MemoryWorker:
                     source='sms',
                     metadata=auto_metadata
                 )
-                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True, user_name=sms['name'])
-                print(f"  ✅ SMS Memory [{sms['name']}]: {memory.text[:50]}...", flush=True)
+                # Lagre under default bruker (Osmund), men minnet handler om SMS-avsender
+                memory_id = self.memory_manager.save_memory(memory, check_duplicates=True)
+                print(f"  ✅ SMS Memory [om {sms['name']}]: {memory.text[:50]}...", flush=True)
             except Exception as e:
                 print(f"  ⚠️ Kunne ikke lagre SMS memory: {e}", flush=True)
     

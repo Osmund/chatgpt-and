@@ -122,7 +122,9 @@ CREATE TABLE memories (
     source TEXT DEFAULT 'extracted',
     first_seen TEXT NOT NULL,
     last_accessed TEXT,
-    metadata TEXT
+    metadata TEXT,
+    user_name TEXT,  -- Personen minnet handler om (for organisering)
+    embedding BLOB   -- Vector embedding for semantisk søk
 );
 
 -- FTS5 for rask søking
@@ -723,15 +725,48 @@ memory_limit = int(settings.get('memory_limit', MEMORY_LIMIT))
 memory_threshold = float(settings.get('memory_threshold', MEMORY_THRESHOLD))
 max_facts = int(settings.get('max_context_facts', 100))
 
-# 2. Bruk settings i søk
+# 2. Bruk settings i søk med relevance boosting
 searched_facts = self.search_by_embedding(query, limit=embedding_limit)
 relevant_memories = self.search_memories_by_embedding(
-    query, limit=memory_limit, threshold=memory_threshold
+    query, 
+    limit=memory_limit, 
+    threshold=memory_threshold,
+    boost_user=user_name  # Gi prioritet til minner om personen vi snakker med
 )
 
 # 3. Begrens total output
 profile_facts = combined_facts[:max_facts]
 ```
+
+### Relevance Boosting (Personalisering)
+
+Anda bruker **relevance boosting** for å gi mer personaliserte svar:
+
+**Hvordan det fungerer:**
+1. Søk semantisk i **alle** minner (embedding similarity)
+2. Gi **+0.15 boost** til minner hvor `user_name` matcher personen Anda snakker med
+3. Sorter på justert similarity score
+4. Returner topp N minner
+
+**Eksempel:**
+```python
+# Arvid spør: "Har du noen tips om kamskjell?"
+results = search_memories_by_embedding(
+    query="kamskjell oppskrift tips",
+    boost_user="Arvid"  # Boost minner om Arvid
+)
+
+# Resultater:
+# 1. [Arvid, 0.90] "Arvid spurte om oppskrift på kamskjell" (0.75 + 0.15 boost)
+# 2. [Osmund, 0.70] "Osmund liker sjømat og skalldyr"     (0.70, ikke boosted)
+# 3. [Arvid, 0.65] "Arvid og Gunn Torill lager middag"    (0.50 + 0.15 boost)
+```
+
+**Fordeler:**
+- Personlige minner prioriteres (Arvid får mest Arvid-relaterte minner)
+- Relevante minner om andre personer inkluderes også (bredere kontekst)
+- Balanserer personalisering med diversitet
+- Boostverdien kan justeres (0.15 er default)
 
 ### Storage i Database
 

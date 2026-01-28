@@ -485,8 +485,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_memory_profile()
             self.send_json_response(response, 200)
         
-            self.wfile.write(json.dumps(response).encode())
-        
         elif self.path.startswith('/api/memory/memories'):
             # Get memories with optional search
             try:

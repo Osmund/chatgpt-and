@@ -674,17 +674,43 @@ async function loadQuickFacts() {
         const response = await fetch('/api/memory/quick-facts');
         const data = await response.json();
         
-        if (data.status === 'success') {
+        if (data.status === 'success' && data.facts) {
             const content = document.getElementById('quick-facts-content');
-            let html = '<p style="margin: 5px 0;"><strong>Navn:</strong> ' + data.name + '</p>';
             
-            if (data.sisters && data.sisters.length > 0) {
-                html += '<p style="margin: 5px 0;"><strong>Søstre:</strong> ' + data.sisters.join(', ') + ' (' + data.sisters_count + ')</p>';
+            // Parse facts array into structured data
+            const factMap = {};
+            data.facts.forEach(f => {
+                factMap[f.key] = f.value;
+            });
+            
+            let html = '';
+            
+            // Name
+            if (factMap.user_name) {
+                html += '<p style="margin: 5px 0;"><strong>Navn:</strong> ' + factMap.user_name + '</p>';
             }
             
-            html += '<p style="margin: 5px 0;"><strong>Nieser:</strong> ' + data.nieces_count + ' | <strong>Nevøer:</strong> ' + data.nephews_count + '</p>';
+            // Sisters
+            const sisters = [];
+            for (let i = 1; i <= 10; i++) {
+                if (factMap['sister_' + i + '_name']) {
+                    sisters.push(factMap['sister_' + i + '_name']);
+                }
+            }
+            if (sisters.length > 0) {
+                html += '<p style="margin: 5px 0;"><strong>Søstre:</strong> ' + sisters.join(', ') + ' (' + sisters.length + ')</p>';
+            }
             
-            content.innerHTML = html;
+            // Show top facts if we have them
+            if (html === '' && data.facts.length > 0) {
+                html = '<p style="margin: 5px 0; font-size: 12px; color: #666;">Topp fakta:</p>';
+                data.facts.slice(0, 5).forEach(f => {
+                    const keyDisplay = f.key.replace(/_/g, ' ');
+                    html += '<p style="margin: 3px 0; font-size: 11px;">• <strong>' + keyDisplay + ':</strong> ' + f.value + '</p>';
+                });
+            }
+            
+            content.innerHTML = html || '<p style="color: #999;">Ingen fakta ennå</p>';
         }
     } catch (error) {
         console.error('Quick facts error:', error);
@@ -699,9 +725,11 @@ async function loadEmbeddingStatus() {
         
         if (data.status === 'success') {
             const statusText = document.getElementById('embedding-status-text');
-            const percentage = Math.round(data.percentage);
+            const withEmbeddings = data.with_embeddings || data.with_embedding || 0;
+            const totalFacts = data.total_memories || data.total_facts || 0;
+            const percentage = Math.round(data.percentage || 0);
             const emoji = percentage === 100 ? '✅' : percentage >= 80 ? '⚠️' : '❌';
-            statusText.textContent = emoji + ' Embeddings: ' + data.with_embedding + '/' + data.total_facts + ' (' + percentage + '%)';
+            statusText.textContent = emoji + ' Embeddings: ' + withEmbeddings + '/' + totalFacts + ' (' + percentage + '%)';
         }
     } catch (error) {
         console.error('Embedding status error:', error);
@@ -715,11 +743,11 @@ async function loadWorkerStatus() {
         
         if (data.status === 'success') {
             const content = document.getElementById('worker-status-content');
-            const statusEmoji = data.is_active ? '🟢' : '🔴';
-            const statusText = data.is_active ? 'Aktiv' : 'Inaktiv';
+            const statusEmoji = data.running ? '🟢' : '🔴';
+            const statusText = data.running ? 'Aktiv' : 'Inaktiv';
             
             let html = '<p style="margin: 5px 0;">' + statusEmoji + ' <strong>Status:</strong> ' + statusText + '</p>';
-            html += '<p style="margin: 5px 0;"><strong>Uprosesserte:</strong> ' + data.unprocessed_messages + ' meldinger</p>';
+            html += '<p style="margin: 5px 0;"><strong>Uprosesserte:</strong> ' + (data.unprocessed || 0) + ' meldinger</p>';
             
             if (data.last_processed) {
                 const date = new Date(data.last_processed);
@@ -766,15 +794,15 @@ async function loadRecentUpdates() {
             let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
             
             data.updates.forEach(update => {
-                const date = new Date(update.last_updated);
+                const date = new Date(update.first_seen);
                 const timeStr = date.toLocaleTimeString('no-NO', {hour: '2-digit', minute: '2-digit'});
                 const dateStr = date.toLocaleDateString('no-NO', {day: '2-digit', month: '2-digit'});
                 
                 html += '<div style="padding: 8px; background: #f5f5f5; border-radius: 6px; border-left: 3px solid #ff9800;">';
-                html += '<div style="font-weight: bold; color: #333;">' + update.key + '</div>';
-                html += '<div style="font-size: 12px; color: #666; margin-top: 2px;">' + update.value + '</div>';
+                html += '<div style="font-size: 13px; color: #333;">' + update.text + '</div>';
                 html += '<div style="font-size: 11px; color: #999; margin-top: 4px;">📅 ' + dateStr + ' ' + timeStr;
                 if (update.topic) html += ' • ' + update.topic;
+                html += ' • Confidence: ' + Math.round(update.confidence * 100) + '%';
                 html += '</div></div>';
             });
             

@@ -405,6 +405,18 @@ class DuckAPIHandlers:
             )
             running = result.stdout.strip() == 'active'
             
+            # Get unprocessed messages count
+            unprocessed_count = 0
+            try:
+                memory_manager = self.services.get_memory_manager()
+                conn = memory_manager._get_connection()
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM messages WHERE processed = 0")
+                unprocessed_count = c.fetchone()[0]
+                conn.close()
+            except Exception as e:
+                print(f"Warning: Could not get unprocessed count: {e}", flush=True)
+            
             # Get process stats if running
             if running:
                 result = subprocess.run(
@@ -412,9 +424,18 @@ class DuckAPIHandlers:
                      '-p', 'CPUUsageNSec', '-p', 'MemoryCurrent'],
                     capture_output=True, text=True, timeout=5
                 )
-                return {'status': 'success', 'running': True, 'details': result.stdout}
+                return {
+                    'status': 'success', 
+                    'running': True, 
+                    'unprocessed': unprocessed_count,
+                    'details': result.stdout
+                }
             
-            return {'status': 'success', 'running': False}
+            return {
+                'status': 'success', 
+                'running': False,
+                'unprocessed': unprocessed_count
+            }
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
     

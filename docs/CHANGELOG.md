@@ -4,6 +4,33 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.2.1] - 2026-01-28
+
+### Forbedringer
+
+#### 🎯 Relevance Boosting for Personaliserte Minner
+
+**Beskrivelse**: Anda gir nå mer personaliserte svar ved å prioritere minner om personen hun snakker med, samtidig som hun har tilgang til alle sine minner.
+
+**Funksjonalitet**:
+- **Semantisk søk i alle minner**: Alle minner søkes for best mulig kontekst
+- **+0.15 boost** til minner hvor `user_name` matcher personen i samtalen
+- **Balansert prioritering**: Personlige minner kommer først, men relevante minner om andre personer inkluderes også
+- **Eksempel**: Når Arvid spør om kamskjell:
+  - Arvid-minner (0.75 → 0.90) rangeres høyere
+  - Osmund-minner (0.70 → 0.70) inkluderes hvis relevante
+  - Gir både personlig og bredere kontekst
+
+**Teknisk implementering**:
+- `search_memories_by_embedding()`: Ny `boost_user` parameter
+- `build_context_for_ai()`: Sender `user_name` som `boost_user`
+- Boost adderes til similarity score før sortering
+- Justerbar boosting-verdi (default: 0.15)
+
+**Filer endret**:
+- `src/duck_memory.py`: Implementert relevance boosting
+- `docs/MEMORY_SYSTEM.md`: Dokumentert algoritme og eksempler
+
 ## [2.2.0] - 2026-01-25
 
 ### Ny funksjonalitet
