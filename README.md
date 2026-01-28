@@ -643,14 +643,18 @@ Anda er fullstendig integrert med Home Assistant og kan styre alle enheter og tj
 - **Entity**: `calendar.m365_calendar_calendar`
 - **Funksjoner**:
   - `get_calendar_events(action)` - Hent kalenderavtaler
-    - `current`: Pågående møte
-    - `next`: Neste avtale
-    - `today`: Alle avtaler i dag
+    - `current`: Pågående møte akkurat nå
+    - `next`: Neste enkelt avtale
+    - `today`: **Alle avtaler i dag** (ingen begrensning)
+    - `tomorrow`: **Alle avtaler i morgen** (ingen begrensning)
+    - `week`: **Alle avtaler denne uken** (ingen begrensning)
   - `create_calendar_event()` - Opprett ny avtale
     - Parameters: summary, start_datetime, end_datetime, description, location
 - **Eksempler**:
   - "Hva er neste avtale?"
-  - "Har jeg noen møter i dag?"
+  - "Hvilke møter har jeg i dag?"
+  - "Vis alle avtaler i morgen"
+  - "Hva har jeg på agendaen denne uken?"
   - "Lag et møte i morgen kl 14"
 
 #### ✅ **M365 To Do**

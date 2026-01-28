@@ -1111,17 +1111,17 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_calendar_events",
-                "description": "Hent kommende kalenderhendelser via Home Assistant. Kan hente dagens, ukens eller neste hendelse.",
+                "description": "Hent kalenderhendelser via Home Assistant. Kan hente alle avtaler for i dag, i morgen, uken, eller neste enkeltavtale. Returnerer ALLE avtaler for angitt tidsrom (ikke bare første).",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "timeframe": {
+                        "action": {
                             "type": "string",
-                            "enum": ["today", "tomorrow", "week", "next"],
-                            "description": "'today' = i dag, 'tomorrow' = i morgen, 'week' = denne uken, 'next' = neste hendelse"
+                            "enum": ["current", "next", "today", "tomorrow", "week"],
+                            "description": "'current' = pågående møte nå, 'next' = neste enkelt avtale, 'today' = alle avtaler i dag, 'tomorrow' = alle avtaler i morgen, 'week' = alle avtaler denne uken"
                         }
                     },
-                    "required": ["timeframe"]
+                    "required": ["action"]
                 }
             }
         },
