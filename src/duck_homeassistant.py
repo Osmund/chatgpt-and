@@ -365,23 +365,23 @@ def get_calendar_events(action="next", calendar="calendar.m365_calendar_calendar
     from datetime import datetime, timedelta
     
     try:
-        response = requests.get(
-            f"{_get_working_ha_url()}/api/states/{calendar}",
-            headers={"Authorization": f"Bearer {HA_TOKEN}"}
-        )
+        now = datetime.now()
         
-        if response.status_code != 200:
-            return f"❌ Kunne ikke hente kalender: {response.status_code}"
-        
-        data = response.json()
-        state = data.get("state")
-        attributes = data.get("attributes", {})
-        
+        # For "current", use state API to check if we're in a meeting right now
         if action == "current":
-            # Vis pågående avtale
+            response = requests.get(
+                f"{_get_working_ha_url()}/api/states/{calendar}",
+                headers={"Authorization": f"Bearer {HA_TOKEN}"}
+            )
+            if response.status_code != 200:
+                return f"❌ Kunne ikke hente kalender: {response.status_code}"
+            
+            data = response.json()
+            state = data.get("state")
+            attributes = data.get("attributes", {})
+            
             if state == "on":
                 message = attributes.get("message", "Ukjent")
-                start = attributes.get("start_time", "")
                 end = attributes.get("end_time", "")
                 location = attributes.get("location", "")
                 loc_str = f" på {location}" if location else ""
@@ -389,9 +389,42 @@ def get_calendar_events(action="next", calendar="calendar.m365_calendar_calendar
             else:
                 return "Ingen pågående avtaler nå"
         
+        # For other actions, use Calendar Events API to get ALL events in time range
         elif action in ["next", "today", "tomorrow", "week"]:
-            # Use 'data' attribute from calendar entity state (contains upcoming events)
-            events = attributes.get("data", [])
+            # Determine date range based on action
+            if action == "today":
+                start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_time = now.replace(hour=23, minute=59, second=59, microsecond=0)
+            elif action == "tomorrow":
+                tomorrow = now + timedelta(days=1)
+                start_time = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_time = tomorrow.replace(hour=23, minute=59, second=59, microsecond=0)
+            elif action == "week":
+                start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_time = (now + timedelta(days=7)).replace(hour=23, minute=59, second=59, microsecond=0)
+            elif action == "next":
+                # For "next", get upcoming events from now
+                start_time = now
+                end_time = now + timedelta(days=30)  # Look ahead 30 days
+            
+            # Format as ISO 8601 without timezone (HA expects local time)
+            start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S')
+            end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S')
+            
+            # Use Calendar Events API
+            calendar_id = calendar.replace('calendar.', '')  # Remove "calendar." prefix
+            response = requests.get(
+                f"{_get_working_ha_url()}/api/calendars/{calendar}",
+                headers={"Authorization": f"Bearer {HA_TOKEN}"},
+                params={'start': start_str, 'end': end_str}
+            )
+            
+            if response.status_code != 200:
+                return f"❌ Kunne ikke hente kalender: {response.status_code}"
+            
+            events = response.json()
+            
+            events = response.json()
             
             if not events:
                 if action == "next":
@@ -403,74 +436,68 @@ def get_calendar_events(action="next", calendar="calendar.m365_calendar_calendar
                 elif action == "week":
                     return "Ingen avtaler denne uken"
             
-            # Filter events based on action
-            now = datetime.now()
-            filtered_events = []
-            
-            for event in events:
-                start_str = event.get("start", "")
-                try:
-                    # Parse event start time
-                    event_time = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
-                    event_date = event_time.date()
-                    
-                    if action == "today":
-                        if event_date == now.date():
-                            filtered_events.append(event)
-                    elif action == "tomorrow":
-                        tomorrow = (now + timedelta(days=1)).date()
-                        if event_date == tomorrow:
-                            filtered_events.append(event)
-                    elif action == "week":
-                        week_end = (now + timedelta(days=7)).date()
-                        if now.date() <= event_date <= week_end:
-                            filtered_events.append(event)
-                    elif action == "next":
-                        # Just take first event
-                        filtered_events.append(event)
-                        break
-                except Exception as e:
-                    print(f"⚠️ Error parsing event time: {e}", flush=True)
-                    continue
-            
-            if not filtered_events:
-                if action == "next":
-                    return "Ingen kommende avtaler"
-                elif action == "today":
-                    return "Ingen avtaler i dag"
-                elif action == "tomorrow":
-                    return "Ingen avtaler i morgen"
-                elif action == "week":
-                    return "Ingen avtaler denne uken"
-            
-            # Format response
+            # For "next", just return the first event
             if action == "next":
-                event = filtered_events[0]
+                event = events[0]
                 summary = event.get("summary", "Ukjent")
-                start = event.get("start", "")
+                start_info = event.get("start", {})
+                start_time = start_info.get("dateTime", start_info.get("date", ""))
                 location = event.get("location", "")
                 loc_str = f" på {location}" if location else ""
-                return f"Neste avtale: '{summary}'{loc_str} ({start})"
-            else:
-                # Format multiple events
-                event_list = []
-                for event in filtered_events:
-                    summary = event.get("summary", "Ukjent")
-                    start = event.get("start", "")
-                    # Parse and format time nicely
-                    try:
-                        dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%H:%M")
-                    except:
-                        time_str = start
-                    event_list.append(f"  - {time_str}: {summary}")
                 
-                if action == "today":
-                    return f"Avtaler i dag ({len(filtered_events)} stk):\n" + "\n".join(event_list)
-                elif action == "tomorrow":
-                    return f"Avtaler i morgen ({len(filtered_events)} stk):\n" + "\n".join(event_list)
-                elif action == "week":
-                    return f"Avtaler denne uken ({len(filtered_events)} stk):\n" + "\n".join(event_list)
+                try:
+                    dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    time_str = dt.strftime("%d.%m kl %H:%M")
+                except:
+                    time_str = start_time
+                
+                return f"Neste avtale: '{summary}'{loc_str} ({time_str})"
+            
+            # For other actions, split into past and upcoming events
+            past_events = []
+            upcoming_events = []
+            
+            for event in events:
+                summary = event.get("summary", "Ukjent")
+                start_info = event.get("start", {})
+                start_time = start_info.get("dateTime", start_info.get("date", ""))
+                
+                try:
+                    dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    time_str = dt.strftime("%H:%M")
+                    
+                    # Check if event is in the past or upcoming
+                    if dt < now:
+                        past_events.append((time_str, summary))
+                    else:
+                        upcoming_events.append((time_str, summary))
+                except:
+                    # If we can't parse time, assume it's upcoming
+                    upcoming_events.append((start_time, summary))
+            
+            # Format response based on what events we have
+            if action == "today":
+                if not upcoming_events and not past_events:
+                    return "Ingen avtaler i dag"
+                elif not upcoming_events and past_events:
+                    # All meetings are done - just say how many, don't list them
+                    return f"Du hadde {len(past_events)} møter i dag, men alle er ferdige nå. Ingen flere møter! 🎉"
+                elif upcoming_events and not past_events:
+                    # All meetings are upcoming
+                    upcoming_list = [f"  - {time}: {summary}" for time, summary in upcoming_events]
+                    return f"Kommende møter i dag ({len(upcoming_events)} stk):\n" + "\n".join(upcoming_list)
+                else:
+                    # Mix of past and upcoming - mention past count, list upcoming
+                    upcoming_list = [f"  - {time}: {summary}" for time, summary in upcoming_events]
+                    return f"Du hadde {len(past_events)} møter tidligere i dag.\n\nKommende møter ({len(upcoming_events)} stk):\n" + "\n".join(upcoming_list)
+            
+            elif action == "tomorrow":
+                event_list = [f"  - {time}: {summary}" for time, summary in upcoming_events + past_events]
+                return f"Avtaler i morgen ({len(events)} stk):\n" + "\n".join(event_list)
+            
+            elif action == "week":
+                event_list = [f"  - {time}: {summary}" for time, summary in upcoming_events + past_events]
+                return f"Avtaler denne uken ({len(events)} stk):\n" + "\n".join(event_list)
         
         return f"❌ Ukjent action: {action}"
     except Exception as e:
