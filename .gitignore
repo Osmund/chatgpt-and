@@ -85,6 +85,9 @@ Desktop.ini
 
 # Database backups (inneholder personlig data)
 backups/
+
+# Deployment artifacts
+deploy.zip
 *.tar.gz
 
 # ============ Vosk Models ============
