@@ -1037,20 +1037,31 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
         
         elif self.path == '/shutdown':
-            # Shutdown Raspberry Pi
-            print("Shutting down Raspberry Pi", flush=True)
+            # Graceful shutdown of Anda before shutting down Pi
+            print("🛑 Starting graceful shutdown of Anda and Raspberry Pi", flush=True)
             
             try:
-                # Kjør shutdown kommando
+                # Run graceful shutdown script first
+                shutdown_script = '/home/admog/Code/chatgpt-and/scripts/graceful-shutdown.sh'
+                if os.path.exists(shutdown_script):
+                    print("  Running graceful shutdown script...", flush=True)
+                    subprocess.run(
+                        ['bash', shutdown_script],
+                        timeout=15
+                    )
+                
+                # Then shutdown the system
+                print("  Initiating system shutdown...", flush=True)
                 subprocess.Popen(
                     ['sudo', 'shutdown', '-h', '+0'],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
                 
-                response = {'success': True}
+                response = {'success': True, 'message': 'Graceful shutdown initiated'}
                 self.send_json_response(response, 200)
             except Exception as e:
+                print(f"❌ Shutdown error: {e}", flush=True)
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
