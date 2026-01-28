@@ -1161,27 +1161,6 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
-                "name": "send_teams_message",
-                "description": "Send en melding via Microsoft Teams til en person eller gruppe",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "recipient": {
-                            "type": "string",
-                            "description": "Mottaker av meldingen (navn eller e-post)"
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Meldingen som skal sendes"
-                        }
-                    },
-                    "required": ["recipient", "message"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "activate_scene",
                 "description": "Aktiver en smart home-scene via Home Assistant. En scene setter flere enheter til forhåndsdefinerte tilstander.",
                 "parameters": {
