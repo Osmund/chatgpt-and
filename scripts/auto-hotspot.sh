@@ -251,10 +251,20 @@ fi
 # Fortsatt ingen tilkobling, start hotspot
 log "Starter WiFi hotspot..."
 
+# Spill av offline hotspot announcement FØRST (pre-generert med Azure TTS)
+HOTSPOT_AUDIO="/home/admog/Code/chatgpt-and/audio/hotspot_announcement.wav"
+if [ -f "$HOTSPOT_AUDIO" ]; then
+    log "Spiller offline hotspot announcement..."
+    sudo -u admog aplay -q "$HOTSPOT_AUDIO" 2>/dev/null
+    log "Hotspot announcement ferdig"
+else
+    log "⚠️ Offline hotspot announcement ikke funnet: $HOTSPOT_AUDIO"
+fi
+
 # Sett LED til gul blinking for AP-modus (kjør som admog for GPIO-tilgang)
 sudo -u admog "$VENV_PYTHON" -c "from rgb_duck import blink_yellow; blink_yellow()" 2>/dev/null
 
-# Voice announcement: Hotspot starter med IP-adresse
+# Voice announcement: Hotspot starter med IP-adresse (legacy, for TTS fallback)
 HOTSPOT_IP="192.168.50.1"
 echo "Jeg kunne ikke koble til WiFi, så jeg starter hotspot nå. Koble til mitt nettverk ChatGPT-Duck med passord kvakkkvakk. Gå til ${HOTSPOT_IP} i nettleseren for å sette opp WiFi." > /tmp/duck_hotspot_announcement.txt
 # Gi admog-brukeren rettigheter til å lese filen

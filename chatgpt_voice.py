@@ -13,13 +13,14 @@ import uuid
 import threading
 import socket
 import requests
+import subprocess
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
 # Duck moduler
 from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
-from rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink
+from rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow
 from src.duck_config import MESSAGES_FILE
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
@@ -39,6 +40,20 @@ sys.stdout.reconfigure(line_buffering=True)
 
 # MAX98357A SD pin skal kobles til fast 3.3V (pin 1 eller 17)
 print("MAX98357A SD pin skal være koblet til 3.3V - forsterker alltid på", flush=True)
+
+
+def is_hotspot_active():
+    """Sjekk om WiFi hotspot er aktivt via NetworkManager"""
+    try:
+        result = subprocess.run(
+            ['nmcli', 'connection', 'show', '--active'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return 'Hotspot' in result.stdout
+    except Exception:
+        return False
 
 
 def cleanup():
@@ -580,8 +595,11 @@ def main():
     if not greeting_success:
         print("Oppstartshilsen/hotspot-melding kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
-    # Sett LED til blå BARE hvis hotspot ikke er aktivt
-    if not hotspot_active:
+    # Sett LED basert på hotspot status
+    if hotspot_active or is_hotspot_active():
+        set_yellow()
+        print("📡 Hotspot er aktivt - LED er gul", flush=True)
+    else:
         set_blue()
     
     # Vent litt ekstra for å la nebbet fullføre bevegelsene
