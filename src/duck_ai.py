@@ -1533,7 +1533,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             }
             
             if color in color_map:
-                from rgb_duck import set_color
+                from scripts.hardware.rgb_duck import set_color
                 r, g, b = color_map[color]
                 set_color(r, g, b)
                 result = f"LED satt til {color} 💡🦆"

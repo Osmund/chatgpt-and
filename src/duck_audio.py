@@ -12,7 +12,7 @@ import os
 import time
 import threading
 import subprocess
-from rgb_duck import set_red, off, stop_blink, set_intensity
+from scripts.hardware.rgb_duck import set_red, off, stop_blink, set_intensity
 import azure.cognitiveservices.speech as speechsdk
 
 from src.duck_config import (

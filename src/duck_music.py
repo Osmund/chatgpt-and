@@ -10,7 +10,7 @@ import numpy as np
 from pydub import AudioSegment
 import sounddevice as sd
 
-from rgb_duck import set_red, stop_blink, set_intensity
+from scripts.hardware.rgb_duck import set_red, stop_blink, set_intensity
 from src.duck_config import (
     BEAK_FILE, VOLUME_FILE, BEAK_CHUNK_MS, SONG_STOP_FILE
 )

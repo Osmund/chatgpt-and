@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
 # Duck moduler
-from duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
-from rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow
+from scripts.hardware.duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
+from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow
 from src.duck_config import MESSAGES_FILE
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
@@ -59,7 +59,7 @@ def is_hotspot_active():
 def cleanup():
     """Cleanup-funksjon som slår av alle LED ved avslutning"""
     print("Slår av LED og rydder opp...", flush=True)
-    from rgb_duck import stop_blink, off
+    from scripts.hardware.rgb_duck import stop_blink, off
     stop_blink()
     off()
 

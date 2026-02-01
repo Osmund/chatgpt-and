@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
-from rgb_duck import set_blue, set_green, off, pulse_blue, stop_blink
+from scripts.hardware.rgb_duck import set_blue, set_green, off, pulse_blue, stop_blink
 from src.duck_config import (
     MESSAGE_FILE, SONG_REQUEST_FILE,
     PORCUPINE_ACCESS_KEY_ENV, WAKE_WORD_PATH,
