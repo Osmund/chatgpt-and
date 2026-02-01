@@ -826,10 +826,6 @@ Du kan sende og lese SMS-meldinger via Twilio.
     adaptive_personality = get_adaptive_personality_prompt(hunger_level=hunger, boredom_level=boredom)
     if adaptive_personality:
         system_content += adaptive_personality
-        if hunger >= 5 or boredom >= 5:
-            print(f"✨ Adaptiv personlighet aktivert! (Modifisert: sult={hunger:.1f}, kjedsomhet={boredom:.1f})", flush=True)
-        else:
-            print(f"✨ Adaptiv personlighet aktivert!", flush=True)
     
     # Legg til memory section HER - rett før TTS-instruksjon
     # Dette sikrer at minnene er det siste AI-en leser før den svarer
