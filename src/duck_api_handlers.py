@@ -660,6 +660,45 @@ class DuckAPIHandlers:
     
     # Helper methods
     
+    def handle_printer_status(self) -> Dict[str, Any]:
+        """Get 3D printer status from PrusaLink"""
+        try:
+            from duck_prusa import get_prusa_manager
+            prusa = get_prusa_manager()
+            
+            if not prusa.is_configured():
+                return {
+                    'status': 'not_configured',
+                    'message': 'PrusaLink ikke konfigurert'
+                }
+            
+            printer_status = prusa.get_printer_status()
+            
+            if not printer_status:
+                return {
+                    'status': 'error',
+                    'message': 'Kunne ikke hente printerstatus'
+                }
+            
+            return {
+                'status': 'success',
+                'printer': {
+                    'state': printer_status['state'],
+                    'progress': printer_status.get('progress', 0),
+                    'time_remaining': printer_status.get('time_remaining'),
+                    'time_printing': printer_status.get('time_printing'),
+                    'job_name': printer_status.get('job_name', 'Ingen jobb'),
+                    'temp_nozzle': printer_status.get('temp_nozzle'),
+                    'temp_bed': printer_status.get('temp_bed')
+                },
+                'human_readable': prusa.get_human_readable_status(printer_status)
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Feil: {str(e)}'
+            }
+    
     def _read_temp_file(self, filename: str, default: str = '') -> str:
         """Read value from /tmp file"""
         filepath = Path('/tmp') / filename

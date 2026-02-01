@@ -16,6 +16,7 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 - **[PORTS.md](docs/PORTS.md)** - 🌐 Nettverks- og port-konfigurasjon
 - **[CHANGELOG.md](docs/CHANGELOG.md)** - 📝 Versionshistorikk og nye funksjoner
 - **[MEMORY_SYSTEM.md](docs/MEMORY_SYSTEM.md)** - 🧠 Persistent minnessystem
+- **[PRUSALINK_SETUP.md](docs/PRUSALINK_SETUP.md)** - 🖨️ PrusaLink 3D printer integrasjon
 
 ## Hovedfunksjoner
 
@@ -48,6 +49,11 @@ Et komplett AI-basert stemmeassistent-system med ChatGPT, Azure Speech Services,
 - 🍪 **Hunger System**: Anda blir sulten og trenger mat
 - 😴 **Boredom System**: Anda blir kjed seg og trenger oppmerksomhet
 - 💤 **Sleep Mode**: Sett anda i dvale under filmer (blå pulsering)
+
+### 🖨️ 3D Printing Integration
+- 📊 **Prusa Connect**: Overvåk 3D-printer status i sanntid
+- 🔔 **Print Notifications**: Automatiske varsler når print er ferdig
+- ⏱️ **Progress Tracking**: Sjekk fremdrift, tid igjen og temperaturer
 
 ### 🌈 Kontroll & Status
 - 🔴 **RGB LED Status**: Visuell tilbakemelding for alle systemtilstander

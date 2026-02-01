@@ -110,6 +110,46 @@
             </div>
         </div>
         
+        <!-- 3D Printer Status -->
+        <div id="printer-panel" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ff9800;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🖨️ 3D Printer Status</div>
+            <div id="printer-status-container">
+                <div id="printer-loading" style="color: #888;">
+                    <span style="font-size: 1.5em;">⏳</span><br>
+                    Henter status...
+                </div>
+                <div id="printer-status" style="display: none;">
+                    <div style="font-size: 1.5em; margin: 10px 0;">
+                        <span id="printer-emoji">🖨️</span>
+                    </div>
+                    <div style="font-weight: bold; margin: 8px 0; color: #e65100;">
+                        <span id="printer-state-text">IDLE</span>
+                    </div>
+                    <div id="printer-progress-container" style="margin: 10px 0; display: none;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 4px;">
+                            <span id="printer-job-name">job.gcode</span>
+                        </div>
+                        <div style="background: #e0e0e0; border-radius: 10px; height: 24px; overflow: hidden; position: relative; margin: 8px 0;">
+                            <div id="printer-progress-bar" style="background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                <span id="printer-progress-text" style="color: white; font-weight: bold; font-size: 0.9em; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);"></span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.85em; color: #666;">
+                            ⏱️ <span id="printer-time-remaining">...</span>
+                        </div>
+                    </div>
+                    <div id="printer-temps" style="margin: 10px 0; font-size: 0.85em; color: #666; display: flex; justify-content: center; gap: 20px;">
+                        <span>🌡️ Nozzle: <strong id="printer-temp-nozzle">0</strong>°C</span>
+                        <span>🛏️ Bed: <strong id="printer-temp-bed">0</strong>°C</span>
+                    </div>
+                    <div id="printer-message" style="font-size: 0.9em; color: #888; margin-top: 8px; font-style: italic;"></div>
+                </div>
+                <div id="printer-error" style="display: none; color: #d32f2f;">
+                    ❌ <span id="printer-error-text"></span>
+                </div>
+            </div>
+        </div>
+        
         <!-- SMS History Section -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">

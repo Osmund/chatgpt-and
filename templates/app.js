@@ -1283,6 +1283,7 @@ window.onload = function() {
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
     setInterval(loadDuckLocation, 10000);  // Oppdater Andas lokasjon hvert 10. sekund
+    setInterval(loadPrinterStatus, 10000);  // Oppdater 3D printer status hvert 10. sekund
 };
 
 // Boredom Status
@@ -1390,6 +1391,112 @@ async function feedAnda(foodType) {
         }
     } catch (error) {
         statusElement.textContent = `❌ Feil: ${error.message}`;
+    }
+}
+
+// 3D Printer Status
+async function loadPrinterStatus() {
+    try {
+        const response = await fetch('/api/printer/status');
+        const data = await response.json();
+        
+        const loadingEl = document.getElementById('printer-loading');
+        const statusEl = document.getElementById('printer-status');
+        const errorEl = document.getElementById('printer-error');
+        
+        // Hide loading
+        loadingEl.style.display = 'none';
+        
+        if (data.status === 'not_configured') {
+            errorEl.style.display = 'block';
+            statusEl.style.display = 'none';
+            document.getElementById('printer-error-text').textContent = 'PrusaLink ikke konfigurert';
+            return;
+        }
+        
+        if (data.status === 'error') {
+            errorEl.style.display = 'block';
+            statusEl.style.display = 'none';
+            document.getElementById('printer-error-text').textContent = data.message || 'Ukjent feil';
+            return;
+        }
+        
+        // Show printer status
+        errorEl.style.display = 'none';
+        statusEl.style.display = 'block';
+        
+        const printer = data.printer;
+        const state = printer.state;
+        
+        // Update emoji based on state
+        const emojiMap = {
+            'IDLE': '🛌',
+            'PRINTING': '🖨️',
+            'PAUSED': '⏸️',
+            'FINISHED': '✅',
+            'STOPPED': '🛑',
+            'ERROR': '❌'
+        };
+        document.getElementById('printer-emoji').textContent = emojiMap[state] || '🖨️';
+        
+        // Update state text
+        const stateTextMap = {
+            'IDLE': 'Klar',
+            'PRINTING': 'Printer...',
+            'PAUSED': 'Pause',
+            'FINISHED': 'Ferdig!',
+            'STOPPED': 'Stoppet',
+            'ERROR': 'Feil'
+        };
+        document.getElementById('printer-state-text').textContent = stateTextMap[state] || state;
+        
+        // Show/hide progress bar
+        const progressContainer = document.getElementById('printer-progress-container');
+        if (state === 'PRINTING' || state === 'PAUSED') {
+            progressContainer.style.display = 'block';
+            document.getElementById('printer-job-name').textContent = printer.job_name;
+            
+            const progress = Math.round(printer.progress);
+            const progressBar = document.getElementById('printer-progress-bar');
+            const progressText = document.getElementById('printer-progress-text');
+            
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            
+            // Time remaining
+            if (printer.time_remaining) {
+                const hours = Math.floor(printer.time_remaining / 3600);
+                const minutes = Math.floor((printer.time_remaining % 3600) / 60);
+                let timeText = '';
+                if (hours > 0) {
+                    timeText = `${hours}t ${minutes}m igjen`;
+                } else {
+                    timeText = `${minutes}m igjen`;
+                }
+                document.getElementById('printer-time-remaining').textContent = timeText;
+            } else {
+                document.getElementById('printer-time-remaining').textContent = 'Beregner...';
+            }
+        } else {
+            progressContainer.style.display = 'none';
+        }
+        
+        // Update temperatures
+        if (printer.temp_nozzle) {
+            document.getElementById('printer-temp-nozzle').textContent = Math.round(printer.temp_nozzle);
+        }
+        if (printer.temp_bed) {
+            document.getElementById('printer-temp-bed').textContent = Math.round(printer.temp_bed);
+        }
+        
+        // Update human readable message
+        document.getElementById('printer-message').textContent = data.human_readable || '';
+        
+    } catch (error) {
+        console.error('Failed to load printer status:', error);
+        document.getElementById('printer-loading').style.display = 'none';
+        document.getElementById('printer-error').style.display = 'block';
+        document.getElementById('printer-error-text').textContent = 'Kunne ikke hente status: ' + error.message;
     }
 }
 

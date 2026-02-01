@@ -1273,13 +1273,13 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "enable_sleep_mode",
-                "description": "Aktiverer sleep mode for å forhindre falske wake words (f.eks. under filmer). Anda vil ignorere wake words og vise blå pulserende LED. SMS fungerer fortsatt normalt. Kan sette varighet i minutter eller timer.",
+                "description": "Setter Anda i hvilemodus/sleep mode. VIKTIG: Bruk denne funksjonen når brukeren ber om pause, hvile, søvn eller ikke forstyrre. Eksempler på når du skal bruke denne: 'ta en pause', 'sov litt', 'ikke forstyrr meg', 'skal se på film', 'hvilemodus'. Anda vil da ignorere wake words og vise blå pulserende LED. SMS fungerer fortsatt.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "duration": {
                             "type": "string",
-                            "description": "Varighet på sleep mode. Eksempler: '30 minutter', '1 time', '2 timer', '3 timer og 30 minutter', '90 minutter'"
+                            "description": "Varighet på sleep mode. Eksempler: '30 minutter', '1 time', '2 timer', '3 timer', '180 minutter'. Parse brukerens ønsket varighet."
                         }
                     },
                     "required": ["duration"]
@@ -1291,6 +1291,18 @@ def _get_function_tools():
             "function": {
                 "name": "disable_sleep_mode",
                 "description": "Deaktiverer sleep mode og våkner opp Anda. MUST be called when user asks to wake up, e.g. 'våkn opp', 'kan du våkne', 'våkne opp', 'vekk meg', 'ikke sov mer' - ANY variation of wake up requests. Brukes via SMS eller kontrollpanel.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_3d_printer",
+                "description": "Sjekk status på 3D-printeren (PrusaLink). Bruk når bruker spør om printeren, hvor langt printen har kommet, når den er ferdig, eller hva den holder på med. Eksempler: 'hvordan går det med printen?', 'når er 3D-printen ferdig?', 'hva printer jeg?', 'hvor langt har printen kommet?'",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1693,6 +1705,17 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 result = "Jeg er våken igjen! 😊🦆 Hva kan jeg hjelpe deg med?"
             else:
                 result = "Jeg sov ikke, men jeg er her! 🦆"
+        elif function_name == "check_3d_printer":
+            from src.duck_prusa import get_prusa_manager
+            prusa = get_prusa_manager()
+            if not prusa.is_configured():
+                result = "3D-printeren er ikke konfigurert. Be Osmund om å sette opp PRUSALINK_API_KEY og PRUSALINK_HOST i .env filen."
+            else:
+                status = prusa.get_printer_status()
+                if status:
+                    result = prusa.get_human_readable_status(status)
+                else:
+                    result = "Kunne ikke hente status fra 3D-printeren. Sjekk internettforbindelse eller at printeren er på."
         elif function_name == "web_search":
             query = function_args.get("query", "")
             count = function_args.get("count", 5)
@@ -1977,8 +2000,11 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         # Bedre error-håndtering for debugging
         if not response2.ok:
             print(f"❌ OpenAI API error {response2.status_code}: {response2.text[:500]}", flush=True)
-            print(f"📤 Tool result length: {len(result)} chars", flush=True)
-            print(f"📤 Tool result preview: {result[:200]}", flush=True)
+            # Log alle tool results for debugging
+            for msg in final_messages:
+                if msg.get("role") == "tool":
+                    tool_content = msg.get("content", "")
+                    print(f"📤 Tool '{msg.get('name')}' result: {len(tool_content)} chars - {tool_content[:200]}", flush=True)
         
         response2.raise_for_status()
         reply_content = response2.json()["choices"][0]["message"]["content"]
