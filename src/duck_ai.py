@@ -780,6 +780,21 @@ Du har et kamera (Duck-Vision på Raspberry Pi 5 med IMX500 AI-chip) som kan gje
   → Du trenger ikke gjøre noe mer
 
 **Viktig:** Ved wake word gjenkjenner jeg automatisk kjente personer og hilser med navn. Ukjente personer får bare "Hei!" - learning er bruker-initiert.
+
+### SMS ###
+Du kan sende og lese SMS-meldinger via Twilio.
+
+**Sende SMS:**
+- Bruk send_sms(contact_name, message) når brukeren ber deg sende melding
+- Eksempel: "Send SMS til Rune og si han må komme"
+
+**Hente gamle meldinger:**
+- Bruk get_recent_sms() når brukeren spør om gamle SMS-er
+- Eksempel: "Fikk jeg melding fra Rune?" → Kall get_recent_sms(contact_name="Rune", limit=5)
+- Eksempel: "Hva var det Rigmor skrev?" → Kall get_recent_sms(contact_name="Rigmor")
+- Eksempel: "Vis siste meldinger" → Kall get_recent_sms(limit=10)
+
+**Viktig:** Når brukeren spør om en melding de fikk tidligere (selv 1+ time siden), bruk get_recent_sms() for å hente den fra databasen!
 """
     system_content += face_recognition_instructions
     
@@ -1216,6 +1231,27 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "get_recent_sms",
+                "description": "Hent SMS-historikk fra databasen. Bruk dette når brukeren spør om gamle meldinger, eller vil vite hva noen har sendt. Kan filtrere på kontaktnavn.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "contact_name": {
+                            "type": "string",
+                            "description": "Navn på kontakten å hente SMS-er fra (valgfritt). Hvis ikke spesifisert, hent fra alle."
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Antall meldinger å hente (standard: 5, maks: 20)"
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "activate_scene",
                 "description": "Aktiver en smart home-scene via Home Assistant. En scene setter flere enheter til forhåndsdefinerte tilstander.",
                 "parameters": {
@@ -1546,6 +1582,92 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         result = f"Fant ingen kontakt med navn '{contact_name}'"
                 except Exception as e:
                     result = f"Feil ved sending av SMS: {e}"
+        elif function_name == "get_recent_sms":
+            contact_name = function_args.get("contact_name", "").strip()
+            limit = function_args.get("limit", 5)
+            
+            # Begrens til maks 20 meldinger
+            if limit > 20:
+                limit = 20
+            
+            if not sms_manager:
+                result = "SMS-funksjonalitet er ikke tilgjengelig"
+            else:
+                try:
+                    import sqlite3
+                    from datetime import datetime
+                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
+                    conn.row_factory = sqlite3.Row
+                    c = conn.cursor()
+                    
+                    # Hvis kontaktnavn er spesifisert, finn contact_id
+                    contact_id = None
+                    if contact_name:
+                        c.execute("SELECT id, name FROM sms_contacts WHERE name = ?", (contact_name,))
+                        contact = c.fetchone()
+                        if contact:
+                            contact_id = contact['id']
+                            actual_name = contact['name']
+                        else:
+                            conn.close()
+                            result = f"Fant ingen kontakt med navn '{contact_name}'"
+                            continue
+                    
+                    # Hent SMS-er
+                    if contact_id:
+                        query = """
+                            SELECT s.direction, s.message, s.timestamp, c.name
+                            FROM sms_history s
+                            LEFT JOIN sms_contacts c ON s.contact_id = c.id
+                            WHERE s.contact_id = ?
+                            ORDER BY s.timestamp DESC
+                            LIMIT ?
+                        """
+                        c.execute(query, (contact_id, limit))
+                    else:
+                        query = """
+                            SELECT s.direction, s.message, s.timestamp, c.name
+                            FROM sms_history s
+                            LEFT JOIN sms_contacts c ON s.contact_id = c.id
+                            ORDER BY s.timestamp DESC
+                            LIMIT ?
+                        """
+                        c.execute(query, (limit,))
+                    
+                    messages = c.fetchall()
+                    conn.close()
+                    
+                    if not messages:
+                        if contact_name:
+                            result = f"Ingen SMS-historikk funnet med {actual_name}"
+                        else:
+                            result = "Ingen SMS-historikk funnet"
+                    else:
+                        # Formater meldingene
+                        result_lines = []
+                        if contact_name:
+                            result_lines.append(f"📱 SMS-historikk med {actual_name} (siste {len(messages)}):\n")
+                        else:
+                            result_lines.append(f"📱 Siste {len(messages)} SMS-er:\n")
+                        
+                        for msg in messages:
+                            timestamp = msg['timestamp']
+                            # Parse timestamp og formater
+                            try:
+                                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                time_str = dt.strftime("%d.%m kl %H:%M")
+                            except:
+                                time_str = timestamp[:16]  # Fallback
+                            
+                            direction = "➡️" if msg['direction'] == 'outbound' else "⬅️"
+                            name = msg['name'] or "Ukjent"
+                            text = msg['message'] or "(tom melding)"
+                            
+                            result_lines.append(f"{direction} {time_str} ({name}): {text}")
+                        
+                        result = "\n".join(result_lines)
+                except Exception as e:
+                    result = f"Feil ved henting av SMS-historikk: {e}"
         elif function_name == "activate_scene":
             scene_name = function_args.get("scene_name", "")
             result = activate_scene(scene_name)
