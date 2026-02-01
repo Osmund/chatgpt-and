@@ -85,7 +85,13 @@ def wait_for_wake_word():
         # Dette unngår at wake word blir delt over chunk-grenser
         mic_buffer_size = mic_frame_length  # 1536 samples
         
+        # CRITICAL: sounddevice trenger større latency buffer for å unngå overflow
+        # Raspberry Pi SD card I/O kan blokkere, så vi trenger buffer slack
+        # 0.5 sekunder = 500ms buffer (mye større enn 'high' ~200ms)
+        latency_setting = 0.5  # 'low', 'high', eller sekunder (float)
+        
         print(f"Resampling: {mic_sample_rate} Hz -> {porcupine_sample_rate} Hz (ratio: {ratio}), buffer: {mic_buffer_size}", flush=True)
+        print(f"Audio latency: {latency_setting} (reduces overflow risk)", flush=True)
         
         # Prøv å åpne mikrofon-input i en retry-loop
         while True:
@@ -95,7 +101,8 @@ def wait_for_wake_word():
                     blocksize=mic_buffer_size,
                     dtype='int16',
                     channels=1,
-                    device=usb_mic_device
+                    device=usb_mic_device,
+                    latency=latency_setting  # High latency = larger buffer = less overflow
                 )
                 audio_stream.start()
                 
