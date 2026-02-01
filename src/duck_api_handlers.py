@@ -324,6 +324,56 @@ class DuckAPIHandlers:
         except Exception as e:
             return {'running': False, 'error': str(e)}
     
+    def handle_system_stats(self) -> Dict[str, Any]:
+        """Get system stats: CPU temp and memory usage"""
+        try:
+            stats = {}
+            
+            # Get CPU temperature
+            try:
+                result = subprocess.run(
+                    ['vcgencmd', 'measure_temp'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    # Output format: "temp=62.8'C"
+                    temp_str = result.stdout.strip().replace("temp=", "").replace("'C", "")
+                    stats['cpu_temp'] = float(temp_str)
+                else:
+                    stats['cpu_temp'] = None
+            except Exception as e:
+                stats['cpu_temp'] = None
+                stats['temp_error'] = str(e)
+            
+            # Get memory usage
+            try:
+                result = subprocess.run(
+                    ['free', '-m'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    mem_line = lines[1].split()
+                    total = int(mem_line[1])
+                    used = int(mem_line[2])
+                    available = int(mem_line[6])
+                    
+                    stats['memory'] = {
+                        'total': total,
+                        'used': used,
+                        'available': available,
+                        'used_percent': round((used / total) * 100, 1)
+                    }
+                else:
+                    stats['memory'] = None
+            except Exception as e:
+                stats['memory'] = None
+                stats['memory_error'] = str(e)
+            
+            return stats
+        except Exception as e:
+            return {'error': str(e)}
+    
     def handle_users_current(self) -> Dict[str, Any]:
         """Get current user"""
         try:

@@ -1270,6 +1270,7 @@ window.onload = function() {
     loadSMSHistory();  // Last SMS historikk
     loadContacts();  // Last SMS kontakter
     loadDuckLocation();  // Last Andas lokasjon
+    loadSystemStats();  // Last system stats (CPU temp, minne)
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1284,6 +1285,7 @@ window.onload = function() {
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
     setInterval(loadDuckLocation, 10000);  // Oppdater Andas lokasjon hvert 10. sekund
     setInterval(loadPrinterStatus, 10000);  // Oppdater 3D printer status hvert 10. sekund
+    setInterval(loadSystemStats, 5000);  // Oppdater system stats hvert 5. sekund
 };
 
 // Boredom Status
@@ -2061,6 +2063,44 @@ async function createBackup() {
     } finally {
         button.textContent = originalText;
         button.disabled = false;
+    }
+}
+
+// System Stats
+async function loadSystemStats() {
+    try {
+        const response = await fetch('/api/system/stats');
+        const data = await response.json();
+        
+        // Update CPU temperature
+        const cpuTempEl = document.getElementById('cpu-temp');
+        if (data.cpu_temp !== null && data.cpu_temp !== undefined) {
+            const temp = data.cpu_temp;
+            let color = '#4caf50'; // Green
+            if (temp > 70) color = '#ff9800'; // Orange
+            if (temp > 80) color = '#f44336'; // Red
+            cpuTempEl.innerHTML = `<span style="color: ${color};">${temp.toFixed(1)}°C</span>`;
+        } else {
+            cpuTempEl.textContent = 'N/A';
+        }
+        
+        // Update memory
+        const memoryEl = document.getElementById('memory-available');
+        if (data.memory) {
+            const mem = data.memory;
+            const availableGB = (mem.available / 1024).toFixed(1);
+            const totalGB = (mem.total / 1024).toFixed(1);
+            let color = '#4caf50'; // Green
+            if (mem.used_percent > 80) color = '#ff9800'; // Orange
+            if (mem.used_percent > 90) color = '#f44336'; // Red
+            memoryEl.innerHTML = `<span style="color: ${color};">${availableGB}GB / ${totalGB}GB</span>`;
+        } else {
+            memoryEl.textContent = 'N/A';
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste system stats:', error);
+        document.getElementById('cpu-temp').textContent = 'N/A';
+        document.getElementById('memory-available').textContent = 'N/A';
     }
 }
 

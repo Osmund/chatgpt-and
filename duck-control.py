@@ -557,6 +557,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_printer_status()
             self.send_json_response(response, 200)
         
+        elif self.path == '/api/system/stats':
+            response = api_handlers.handle_system_stats()
+            self.send_json_response(response, 200)
+        
         else:
             self.send_response(404)
             self.end_headers()
