@@ -421,20 +421,13 @@ _waiting_for_confirmation = False
 
 
 def on_face_recognized(name: str, confidence: float):
-    """Callback når kjent ansikt gjenkjennes"""
-    global _waiting_for_name, _pending_person_name, _waiting_for_confirmation
-    _waiting_for_name = False
-    _pending_person_name = None
-    _waiting_for_confirmation = False
-    print(f"👋 Gjenkjente {name} ({confidence:.2%})", flush=True)
+    """Callback når kjent ansikt gjenkjennes (LEGACY - ikke brukt uten continuous streaming)"""
+    pass
 
 
 def on_unknown_face():
-    """Callback når ukjent ansikt detekteres"""
-    # Face recognition endret til bruker-initiert læring
-    # Ukjente personer får bare generisk hilsen ved wake word
-    # Læring initieres når bruker sier "husker du meg?"
-    print(f"👤 Ukjent person detektert (callback)", flush=True)
+    """Callback når ukjent ansikt detekteres (LEGACY - ikke brukt uten continuous streaming)"""
+    pass
 
 
 def on_learning_progress(name: str, step: int, total: int, instruction: str):
@@ -1000,20 +993,22 @@ def main():
                 'Åsmund': 'Osmund'
             }
             
-            # Sjekk hvem som er der med Duck-Vision (kort timeout for raskere respons)
+            # Sjekk hvem som er der med Duck-Vision (prøver 3 ganger)
+            vision_recognized = False
             if vision_service and vision_service.is_connected():
                 try:
-                    found, name, confidence = vision_service.check_person(timeout=1.5)
+                    found, name, confidence = vision_service.check_person(timeout=5.0)
                     
                     if found and name:
                         # Map face recognition name to memory system name
                         mapped_name = face_name_mapping.get(name, name)
                         print(f"👋 Gjenkjent {name} ({confidence:.2%}) -> mapped to {mapped_name}", flush=True)
                         user_name = mapped_name
+                        vision_recognized = True
                     else:
                         # Unknown or no person - use generic greeting
                         # Learning will be initiated by user during conversation if desired
-                        print("👤 Ukjent eller ingen person - generisk hilsen", flush=True)
+                        print(f"👤 Ukjent eller ingen person - bruker fallback: {user_name}", flush=True)
                     
                 except Exception as e:
                     print(f"⚠️ Error checking person: {e}", flush=True)
@@ -1021,8 +1016,14 @@ def main():
                 print("⚠️ Duck-Vision not available or not connected", flush=True)
             
             # Generer adaptiv hilsen basert på personlighetsprofil
-            greeting_msg = get_adaptive_greeting(user_name=user_name)
-            print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
+            if vision_recognized:
+                # Enklere hilsen når face recognition gjenkjenner
+                greeting_msg = f"Hei, {user_name}! Hyggelig å se deg igjen!"
+                print(f"🎭 Face recognition greeting: {greeting_msg}", flush=True)
+            else:
+                # Full adaptiv hilsen når ikke gjenkjent visuelt
+                greeting_msg = get_adaptive_greeting(user_name=user_name)
+                print(f"🎭 Adaptive greeting (via user_manager fallback): {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
         

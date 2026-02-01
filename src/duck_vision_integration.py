@@ -103,7 +103,7 @@ class DuckVisionHandler:
             print(f"❌ Error handling MQTT message: {e}")
     
     def _handle_face_event(self, data: dict):
-        """Håndter ansiktsdeteksjon"""
+        """Håndter ansiktsdeteksjon (legacy - ikke brukt med on-demand)"""
         person_name = data.get("person_name")
         is_known = data.get("is_known", False)
         confidence = data.get("confidence", 0.0)
@@ -195,7 +195,14 @@ class DuckVisionHandler:
             # Respons på check_person kommando
             event_data = data.get("data", {})
             found = event_data.get("found", False)
-            if not found:
+            if found:
+                # Person funnet og gjenkjent
+                name = event_data.get("name")
+                confidence = event_data.get("confidence", 0.0)
+                self.last_face_result = (True, name, confidence)
+                print(f"👋 check_person: Gjenkjente {name} ({confidence:.2%})")
+            else:
+                # Ingen person funnet
                 reason = event_data.get("reason", "unknown")
                 print(f"👁️ Ingen person funnet: {reason}")
                 self.last_face_result = (False, None, 0.0)
@@ -323,9 +330,10 @@ class DuckVisionHandler:
         
         return "Fikk ikke svar fra OpenAI Vision (timeout)"
     
-    def check_person(self, timeout: float = 3.0):
+    def check_person(self, timeout: float = 5.0):
         """
         Be Duck-Vision om å sjekke hvem som er foran kameraet (synkron).
+        Duck-Vision prøver opptil 3 ganger før den gir opp.
         Returnerer tuple: (found, name, confidence)
         """
         # Reset previous results
@@ -336,7 +344,7 @@ class DuckVisionHandler:
         }
         self.client.publish("duck/samantha/commands", json.dumps(command))
         
-        # Wait for response
+        # Wait for response (5s timeout for 3 attempts)
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.last_face_result is not None:
@@ -345,8 +353,8 @@ class DuckVisionHandler:
                 return result
             time.sleep(0.2)
         
-        return (False, None, 0.0)  # Timeout
-        print("🔍 Sjekker hvem som er der...")
+        # Timeout - Duck-Vision svarte ikke
+        return (False, None, 0.0)
     
     def learn_person(self, name: str, num_samples: int = 5):
         """Be Duck-Vision om å lære en ny person
