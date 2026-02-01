@@ -1005,22 +1005,17 @@ def main():
             # Sjekk hvem som er der med Duck-Vision (kort timeout for raskere respons)
             if vision_service and vision_service.is_connected():
                 try:
-                    found, name, confidence = vision_service.check_person(timeout=1.5)  # Redusert fra 3.0 til 1.5 sekunder
+                    found, name, confidence = vision_service.check_person(timeout=1.5)
                     
                     if found and name:
                         # Map face recognition name to memory system name
                         mapped_name = face_name_mapping.get(name, name)
                         print(f"👋 Gjenkjent {name} ({confidence:.2%}) -> mapped to {mapped_name}", flush=True)
                         user_name = mapped_name
-                    elif found and not name:
-                        # Unknown person detected (face seen but not recognized)
-                        global _waiting_for_name
-                        _waiting_for_name = True
-                        print("👤 Ukjent person detektert - spør om navn", flush=True)
-                    elif not found:
-                        # No person detected at all (empty room)
-                        print("👁️ Ingen person foran kameraet - bruker standard hilsen", flush=True)
-                        # Keep using current user_name from memory
+                    else:
+                        # Unknown or no person - use generic greeting
+                        # Learning will be initiated by user during conversation if desired
+                        print("👤 Ukjent eller ingen person - generisk hilsen", flush=True)
                     
                 except Exception as e:
                     print(f"⚠️ Error checking person: {e}", flush=True)
@@ -1028,12 +1023,8 @@ def main():
                 print("⚠️ Duck-Vision not available or not connected", flush=True)
             
             # Generer adaptiv hilsen basert på personlighetsprofil
-            # Hvis unknown_person, skal on_unknown_face ha satt waiting_for_name
-            if check_if_waiting_for_name():
-                greeting_msg = "Hei! Jeg ser deg, men jeg vet ikke hvem du er. Hvem er du?"
-            else:
-                greeting_msg = get_adaptive_greeting(user_name=user_name)
-                print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
+            greeting_msg = get_adaptive_greeting(user_name=user_name)
+            print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
         

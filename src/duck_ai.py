@@ -757,6 +757,32 @@ Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER 
     except Exception as e:
         print(f"⚠️ Kunne ikke laste identitet: {e}", flush=True)
     
+    # Face recognition instruksjoner
+    face_recognition_instructions = """
+
+### Face Recognition ###
+Du har et kamera (Duck-Vision på Raspberry Pi 5 med IMX500 AI-chip) som kan gjenkjenne ansikter.
+
+**Når brukeren spør om du husker dem:**
+1. Kall check_face_recognition() for å sjekke
+2. Hvis resultatet er "recognized:[navn]:[confidence]":
+   - Si: "Ja, jeg husker deg! Du er [navn]!" eller lignende naturlig respons
+3. Hvis resultatet er "unknown_person" eller "no_person":
+   - Si: "Nei, jeg kjenner deg ikke ennå. Men jeg kan lære meg hvem du er så jeg husker deg til neste gang. Vil du at jeg skal huske deg?"
+   - Hvis de sier ja (eller "ja jeg heter [navn]"): Kall start_face_learning() (med name parameter hvis oppgitt)
+   - Hvis de sier nei: Fortsett samtalen normalt
+
+**Learning flow:**
+- start_face_learning() returnerer "learning_started_with_name:[navn]" hvis navn oppgitt
+  → Si: "Ok [navn], la meg registrere ansiktet ditt. Se på kameraet!"
+- start_face_learning() returnerer "learning_started_ask_name" hvis ingen navn
+  → Systemet vil automatisk spørre "Hva heter du?" i neste runde
+  → Du trenger ikke gjøre noe mer
+
+**Viktig:** Ved wake word gjenkjenner jeg automatisk kjente personer og hilser med navn. Ukjente personer får bare "Hei!" - learning er bruker-initiert.
+"""
+    system_content += face_recognition_instructions
+    
     if personality_prompt:
         system_content += "\n\n" + personality_prompt
         print(f"Bruker personlighet: {personality}", flush=True)
@@ -1307,6 +1333,35 @@ def _get_function_tools():
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_face_recognition",
+                "description": "Sjekk om jeg gjenkjenner personen foran kameraet via face recognition. Bruk når brukeren spør: 'Husker du meg?', 'Vet du hvem jeg er?', 'Kjenner du meg?', 'Har du registrert meg?', 'Gjenkjenner du meg?'. Returnerer om personen er gjenkjent og eventuelt navnet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "start_face_learning",
+                "description": "Start face recognition læringsprosess for å registrere en ny person. Bruk når brukeren sier ja til å bli registrert etter at check_face_recognition viste at de ikke er kjent. Kan ta et valgfritt navn hvis brukeren allerede sa det.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Navnet på personen som skal registreres (valgfritt, vil spørre hvis ikke oppgitt)"
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
     ]
 
@@ -1637,6 +1692,51 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     print(f"✅ Sang queued for playback: {song_folder}", flush=True)
                 except Exception as e:
                     result = f"Kunne ikke queue sangen: {e}"
+        elif function_name == "check_face_recognition":
+            # Sjekk om personen er registrert med face recognition
+            if vision_service and vision_service.is_connected():
+                try:
+                    found, name, confidence = vision_service.check_person(timeout=2.0)
+                    
+                    # Name mapping
+                    face_name_mapping = {
+                        'åsmund': 'Osmund',
+                        'Åsmund': 'Osmund'
+                    }
+                    
+                    if found and name:
+                        mapped_name = face_name_mapping.get(name, name)
+                        result = f"recognized:{mapped_name}:{confidence:.2%}"
+                        print(f"✅ Face recognition check: Recognized {name} → {mapped_name} ({confidence:.2%})", flush=True)
+                    elif found and not name:
+                        result = "unknown_person"
+                        print(f"👤 Face recognition check: Unknown person detected", flush=True)
+                    else:
+                        result = "no_person"
+                        print(f"👁️ Face recognition check: No person detected", flush=True)
+                except Exception as e:
+                    result = f"error:{str(e)}"
+                    print(f"⚠️ Face recognition check error: {e}", flush=True)
+            else:
+                result = "error:Vision system not available"
+                print(f"⚠️ Face recognition check: Duck-Vision not connected", flush=True)
+        elif function_name == "start_face_learning":
+            # Start face learning workflow
+            name = function_args.get("name", "").strip()
+            
+            # Set global flag to trigger learning workflow
+            import chatgpt_voice
+            chatgpt_voice._waiting_for_name = True
+            
+            if name:
+                # Name already provided - skip to confirmation
+                chatgpt_voice._pending_person_name = name
+                result = f"learning_started_with_name:{name}"
+                print(f"✅ Face learning started with name: {name}", flush=True)
+            else:
+                # Will ask for name
+                result = "learning_started_ask_name"
+                print(f"✅ Face learning started - will ask for name", flush=True)
         else:
             result = "Ukjent funksjon"
         
