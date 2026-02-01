@@ -22,10 +22,26 @@ class SleepModeManager:
     """Manager for sleep mode state"""
     
     def __init__(self):
+        self._last_load_time = 0  # Timestamp for last file read
+        self._cache_duration = 5.0  # Cache state for 5 seconds
         self._load_state()
     
-    def _load_state(self) -> None:
-        """Laster sleep mode state fra fil"""
+    def _load_state(self, force: bool = False) -> None:
+        """
+        Laster sleep mode state fra fil (med caching)
+        
+        Args:
+            force: Tving reload fra fil, ignorer cache
+        """
+        import time
+        current_time = time.time()
+        
+        # Skip reload hvis cache er fersk (unntatt force reload)
+        if not force and (current_time - self._last_load_time) < self._cache_duration:
+            return
+        
+        self._last_load_time = current_time
+        
         try:
             if STATE_FILE.exists():
                 with open(STATE_FILE, 'r') as f:
@@ -64,6 +80,11 @@ class SleepModeManager:
             with open(STATE_FILE, 'w') as f:
                 json.dump(data, f, indent=2)
             print(f"✅ Sleep state lagret OK", flush=True)
+            
+            # Force reload for å oppdatere cache
+            import time
+            self._last_load_time = 0
+            
         except Exception as e:
             print(f"❌ FEIL ved lagring av sleep mode state: {e}", flush=True)
             logger.error(f"Feil ved lagring av sleep mode state: {e}")
@@ -133,7 +154,7 @@ class SleepModeManager:
         Returns:
             True hvis sleep mode er aktiv, False ellers
         """
-        # Re-last state fra fil for å få siste endringer fra andre prosesser
+        # Re-last state fra fil (cached, max hver 5. sekund)
         self._load_state()
         
         if not self.enabled:
