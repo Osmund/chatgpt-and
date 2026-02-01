@@ -604,6 +604,34 @@ def main():
     hunger_timer_thread.start()
     print("✅ Hunger timer started (Tamagotchi mode activated! 🍪🍕)", flush=True)
     
+    # Start 3D printer monitoring thread
+    try:
+        from src.duck_prusa import get_prusa_manager
+        
+        def on_print_finished(job_name):
+            """Callback når 3D-print er ferdig"""
+            try:
+                message = f"🖨️ 3D-printen din er ferdig! {job_name} er klar til å plukkes opp."
+                # speech_config er ikke tilgjengelig ennå, så vi lagrer meldingen til senere
+                trigger_file = '/tmp/duck_prusa_announcement.txt'
+                with open(trigger_file, 'w', encoding='utf-8') as f:
+                    f.write(message)
+                print(f"✅ Prusa: Print ferdig - {job_name}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Prusa callback feilet: {e}", flush=True)
+        
+        prusa = get_prusa_manager()
+        if prusa.is_configured():
+            prusa.start_monitoring(
+                on_print_finished=on_print_finished,
+                on_print_failed=lambda job: print(f"⚠️ Prusa: Print feilet - {job}", flush=True)
+            )
+            print("✅ 3D printer monitoring started", flush=True)
+        else:
+            print("ℹ️ 3D printer not configured (PRUSA_API_TOKEN/PRUSA_PRINTER_UUID missing)", flush=True)
+    except Exception as e:
+        print(f"⚠️ 3D printer monitoring kunne ikke startes: {e}", flush=True)
+    
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     tts_key = os.getenv("AZURE_TTS_KEY")
@@ -749,12 +777,14 @@ def main():
     if not greeting_success:
         print("Oppstartshilsen/hotspot-melding kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
-    # Sett LED basert på hotspot status
-    if hotspot_active or is_hotspot_active():
-        set_yellow()
-        print("📡 Hotspot er aktivt - LED er gul", flush=True)
-    else:
-        set_blue()
+    # Sett LED basert på hotspot status (kun hvis ikke allerede satt)
+    if not hotspot_active:
+        if is_hotspot_active():
+            set_yellow()
+            print("📡 Hotspot er aktivt - LED er gul", flush=True)
+        else:
+            set_blue()
+    # Hvis hotspot_active=True er LED allerede gul fra hotspot-meldingen
     
     # Vent litt ekstra for å la nebbet fullføre bevegelsene
     time.sleep(0.5)
@@ -853,6 +883,21 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
             
+            # Sjekk Prusa-annonseringer
+            prusa_announcement_file = '/tmp/duck_prusa_announcement.txt'
+            if os.path.exists(prusa_announcement_file):
+                try:
+                    with open(prusa_announcement_file, 'r', encoding='utf-8') as f:
+                        announcement = f.read().strip()
+                    os.remove(prusa_announcement_file)
+                    if announcement:
+                        print(f"🖨️ [SLEEP MODE] Prusa announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                        # Sett RGB tilbake til sleep mode etter speaking
+                        pulse_blue()
+                except Exception as e:
+                    print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
+            
             # Vent 0.5 sekunder før vi sjekker igjen (for rask respons)
             time.sleep(0.5)
             continue
@@ -878,6 +923,19 @@ def main():
                     # Etter sangen, fortsett normal loop
             except Exception as e:
                 print(f"⚠️ Error playing song: {e}", flush=True)
+        
+        # Sjekk Prusa-annonseringer UTENFOR sleep mode
+        prusa_announcement_file = '/tmp/duck_prusa_announcement.txt'
+        if os.path.exists(prusa_announcement_file):
+            try:
+                with open(prusa_announcement_file, 'r', encoding='utf-8') as f:
+                    announcement = f.read().strip()
+                os.remove(prusa_announcement_file)
+                if announcement:
+                    print(f"🖨️ Prusa announcement: {announcement[:50]}...", flush=True)
+                    speak(announcement, speech_config, beak)
+            except Exception as e:
+                print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
         
         # Normal wake word detection
         external_message = wait_for_wake_word()
@@ -962,6 +1020,11 @@ def main():
             elif external_message.startswith('__HUNGER_ANNOUNCEMENT__'):
                 # Hunger announcement
                 announcement = external_message.replace('__HUNGER_ANNOUNCEMENT__', '', 1)
+                speak(announcement, speech_config, beak)
+                continue  # Gå tilbake til wake word
+            elif external_message.startswith('__HUNGER_FED__'):
+                # Fed from control panel
+                announcement = external_message.replace('__HUNGER_FED__', '', 1)
                 speak(announcement, speech_config, beak)
                 continue  # Gå tilbake til wake word
             elif external_message.startswith('__HOTSPOT_ANNOUNCEMENT__'):
@@ -1140,6 +1203,10 @@ def main():
                 else:
                     reply = result
                     is_thank_you = False
+                
+                # Håndter hvis chatgpt_query returnerte None (f.eks. ved API-feil)
+                if reply is None:
+                    raise Exception("ChatGPT returnerte None - sannsynligvis API-feil")
                 
                 # Sjekk om AI har markert samtalen som ferdig
                 reply_upper = reply.upper()

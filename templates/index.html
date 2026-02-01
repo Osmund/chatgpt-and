@@ -41,111 +41,131 @@
             <span id="vision-status-text" style="font-weight: bold;">...</span>
         </div>
         
-        <!-- Boredom Meter -->
-        <div id="boredom-meter" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 2px solid #ddd;">
-            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Kjedsomhetsbarometer</div>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                <span id="boredom-emoji" style="font-size: 2em;">😊</span>
-                <div style="flex: 1; max-width: 300px;">
-                    <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
-                        <div id="boredom-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
-                    </div>
-                    <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
-                        <span id="boredom-level">0.0</span>/10 - <span id="boredom-status">Fornøyd</span>
-                    </div>
-                </div>
+        <!-- Tamagotchi Section -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎮 Tamagotchi</span>
+                <span class="arrow">▼</span>
             </div>
-        </div>
-        
-        <!-- Hunger Meter (Tamagotchi!) -->
-        <div id="hunger-meter" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #fff5e6 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ffb74d;">
-            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🍕 Sultbarometer 🍪</div>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                <span id="hunger-emoji" style="font-size: 2em;">😊</span>
-                <div style="flex: 1; max-width: 300px;">
-                    <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
-                        <div id="hunger-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
-                    </div>
-                    <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
-                        <span id="hunger-level">0.0</span>/10 - <span id="hunger-status">Mett</span>
-                        <br>
-                        <span style="font-size: 0.8em;">Måltider i dag: <span id="meals-today">0</span> | Neste: <span id="next-meal">12:00</span></span>
-                    </div>
-                </div>
-            </div>
-            <!-- Feed buttons -->
-            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 12px;">
-                <button onclick="feedAnda('cookie')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
-                    🍪 Gi cookie
-                </button>
-                <button onclick="feedAnda('pizza')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ff9a56 0%, #ff6a00 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
-                    🍕 Gi pizza
-                </button>
-            </div>
-            <div id="feed-status" style="font-size: 0.85em; color: #666; margin-top: 8px; min-height: 20px;"></div>
-        </div>
-        
-        <!-- Sleep Mode -->
-        <div id="sleep-mode-panel" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border: 2px solid #42a5f5;">
-            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">💤 Søvnmodus (Sleep Mode)</div>
-            <div id="sleep-mode-status" style="font-weight: bold; margin-bottom: 10px; color: #1976d2;">
-                Aktiv
-            </div>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-                <select id="sleep-duration" style="padding: 8px; border-radius: 5px; border: 1px solid #42a5f5; font-size: 1em;">
-                    <option value="30">30 minutter</option>
-                    <option value="60" selected>1 time</option>
-                    <option value="90">1.5 timer</option>
-                    <option value="120">2 timer</option>
-                    <option value="180">3 timer</option>
-                    <option value="240">4 timer</option>
-                </select>
-                <button id="sleep-toggle-btn" onclick="toggleSleepMode()" style="padding: 10px 20px; background: #42a5f5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1em;">
-                    💤 Aktiver
-                </button>
-            </div>
-            <div id="sleep-countdown" style="margin-top: 10px; font-size: 0.9em; color: #1565c0; display: none;">
-                Sovner til: <span id="sleep-end-time" style="font-weight: bold;"></span>
-                (<span id="sleep-remaining" style="font-weight: bold;"></span> minutter igjen)
-            </div>
-        </div>
-        
-        <!-- 3D Printer Status -->
-        <div id="printer-panel" style="text-align: center; margin: 15px 0; padding: 12px; background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ff9800;">
-            <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🖨️ 3D Printer Status</div>
-            <div id="printer-status-container">
-                <div id="printer-loading" style="color: #888;">
-                    <span style="font-size: 1.5em;">⏳</span><br>
-                    Henter status...
-                </div>
-                <div id="printer-status" style="display: none;">
-                    <div style="font-size: 1.5em; margin: 10px 0;">
-                        <span id="printer-emoji">🖨️</span>
-                    </div>
-                    <div style="font-weight: bold; margin: 8px 0; color: #e65100;">
-                        <span id="printer-state-text">IDLE</span>
-                    </div>
-                    <div id="printer-progress-container" style="margin: 10px 0; display: none;">
-                        <div style="font-size: 0.9em; color: #666; margin-bottom: 4px;">
-                            <span id="printer-job-name">job.gcode</span>
-                        </div>
-                        <div style="background: #e0e0e0; border-radius: 10px; height: 24px; overflow: hidden; position: relative; margin: 8px 0;">
-                            <div id="printer-progress-bar" style="background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                <span id="printer-progress-text" style="color: white; font-weight: bold; font-size: 0.9em; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);"></span>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <!-- Hunger Meter -->
+                    <div id="hunger-meter" style="text-align: center; margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #fff5e6 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ffb74d;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🍕 Sultbarometer 🍪</div>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                            <span id="hunger-emoji" style="font-size: 2em;">😊</span>
+                            <div style="flex: 1; max-width: 300px;">
+                                <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
+                                    <div id="hunger-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                                </div>
+                                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                                    <span id="hunger-level">0.0</span>/10 - <span id="hunger-status">Mett</span>
+                                    <br>
+                                    <span style="font-size: 0.8em;">Måltider i dag: <span id="meals-today">0</span> | Neste: <span id="next-meal">12:00</span></span>
+                                </div>
                             </div>
                         </div>
-                        <div style="font-size: 0.85em; color: #666;">
-                            ⏱️ <span id="printer-time-remaining">...</span>
+                        <!-- Feed buttons -->
+                        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 12px;">
+                            <button onclick="feedAnda('cookie')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                                🍪 Gi cookie
+                            </button>
+                            <button onclick="feedAnda('pizza')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ff9a56 0%, #ff6a00 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                                🍕 Gi pizza
+                            </button>
+                        </div>
+                        <div id="feed-status" style="font-size: 0.85em; color: #666; margin-top: 8px; min-height: 20px;"></div>
+                    </div>
+                    
+                    <!-- Boredom Meter -->
+                    <div id="boredom-meter" style="text-align: center; margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 2px solid #ddd;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Kjedsomhetsbarometer</div>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                            <span id="boredom-emoji" style="font-size: 2em;">😊</span>
+                            <div style="flex: 1; max-width: 300px;">
+                                <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
+                                    <div id="boredom-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                                </div>
+                                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                                    <span id="boredom-level">0.0</span>/10 - <span id="boredom-status">Fornøyd</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div id="printer-temps" style="margin: 10px 0; font-size: 0.85em; color: #666; display: flex; justify-content: center; gap: 20px;">
-                        <span>🌡️ Nozzle: <strong id="printer-temp-nozzle">0</strong>°C</span>
-                        <span>🛏️ Bed: <strong id="printer-temp-bed">0</strong>°C</span>
+                    
+                    <!-- Sleep Mode -->
+                    <div id="sleep-mode-panel" style="text-align: center; padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border: 2px solid #42a5f5;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">💤 Søvnmodus (Sleep Mode)</div>
+                        <div id="sleep-mode-status" style="font-weight: bold; margin-bottom: 10px; color: #1976d2;">
+                            Aktiv
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                            <select id="sleep-duration" style="padding: 8px; border-radius: 5px; border: 1px solid #42a5f5; font-size: 1em;">
+                                <option value="30">30 minutter</option>
+                                <option value="60" selected>1 time</option>
+                                <option value="90">1.5 timer</option>
+                                <option value="120">2 timer</option>
+                                <option value="180">3 timer</option>
+                                <option value="240">4 timer</option>
+                            </select>
+                            <button id="sleep-toggle-btn" onclick="toggleSleepMode()" style="padding: 10px 20px; background: #42a5f5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1em;">
+                                💤 Aktiver
+                            </button>
+                        </div>
+                        <div id="sleep-countdown" style="margin-top: 10px; font-size: 0.9em; color: #1565c0; display: none;">
+                            Sovner til: <span id="sleep-end-time" style="font-weight: bold;"></span>
+                            (<span id="sleep-remaining" style="font-weight: bold;"></span> minutter igjen)
+                        </div>
                     </div>
-                    <div id="printer-message" style="font-size: 0.9em; color: #888; margin-top: 8px; font-style: italic;"></div>
                 </div>
-                <div id="printer-error" style="display: none; color: #d32f2f;">
-                    ❌ <span id="printer-error-text"></span>
+            </div>
+        </div>
+        
+        <!-- 3D Printer Section -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🖨️ 3D Printer</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div id="printer-panel" style="text-align: center; padding: 12px; background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ff9800;">
+                        <div id="printer-status-container">
+                            <div id="printer-loading" style="color: #888;">
+                                <span style="font-size: 1.5em;">⏳</span><br>
+                                Henter status...
+                            </div>
+                            <div id="printer-status" style="display: none;">
+                                <div style="font-size: 1.5em; margin: 10px 0;">
+                                    <span id="printer-emoji">🖨️</span>
+                                </div>
+                                <div style="font-weight: bold; margin: 8px 0; color: #e65100;">
+                                    <span id="printer-state-text">IDLE</span>
+                                </div>
+                                <div id="printer-progress-container" style="margin: 10px 0; display: none;">
+                                    <div style="font-size: 0.9em; color: #666; margin-bottom: 4px;">
+                                        <span id="printer-job-name">job.gcode</span>
+                                    </div>
+                                    <div style="background: #e0e0e0; border-radius: 10px; height: 24px; overflow: hidden; position: relative; margin: 8px 0;">
+                                        <div id="printer-progress-bar" style="background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                            <span id="printer-progress-text" style="color: white; font-weight: bold; font-size: 0.9em; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);"></span>
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.85em; color: #666;">
+                                        ⏱️ <span id="printer-time-remaining">...</span>
+                                    </div>
+                                </div>
+                                <div id="printer-temps" style="margin: 10px 0; font-size: 0.85em; color: #666; display: flex; justify-content: center; gap: 20px;">
+                                    <span>🌡️ Nozzle: <strong id="printer-temp-nozzle">0</strong>°C</span>
+                                    <span>🛏️ Bed: <strong id="printer-temp-bed">0</strong>°C</span>
+                                </div>
+                                <div id="printer-message" style="font-size: 0.9em; color: #888; margin-top: 8px; font-style: italic;"></div>
+                            </div>
+                            <div id="printer-error" style="display: none; color: #d32f2f;">
+                                ❌ <span id="printer-error-text"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
