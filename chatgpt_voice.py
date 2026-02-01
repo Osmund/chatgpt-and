@@ -431,12 +431,10 @@ def on_face_recognized(name: str, confidence: float):
 
 def on_unknown_face():
     """Callback når ukjent ansikt detekteres"""
-    global _waiting_for_name
-    _waiting_for_name = True
-    print(f"👤 Ukjent person detektert - setter _waiting_for_name=True", flush=True)
-    
-    # Say greeting to unknown person
-    # Will be handled by main loop which checks check_if_waiting_for_name()
+    # Face recognition endret til bruker-initiert læring
+    # Ukjente personer får bare generisk hilsen ved wake word
+    # Læring initieres når bruker sier "husker du meg?"
+    print(f"👤 Ukjent person detektert (callback)", flush=True)
 
 
 def on_learning_progress(name: str, step: int, total: int, instruction: str):

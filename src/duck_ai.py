@@ -794,6 +794,12 @@ Du kan sende og lese SMS-meldinger via Twilio.
 - Eksempel: "Hva var det Rigmor skrev?" → Kall get_recent_sms(contact_name="Rigmor")
 - Eksempel: "Vis siste meldinger" → Kall get_recent_sms(limit=10)
 
+**Viktig om SMS-retning:**
+- "⬅️" betyr meldinger JEG (Anda) MOTTOK = "Rune skrev til meg"
+- "➡️" betyr meldinger JEG (Anda) SENDTE = "Jeg skrev til Rune"
+- Når du oppsummerer, bruk førsteperson: "Jeg sendte..." / "Rune sendte til meg..."
+- IKKE si "du sendte" når det er jeg (Anda) som sendte!
+
 **Viktig:** Når brukeren spør om en melding de fikk tidligere (selv 1+ time siden), bruk get_recent_sms() for å hente den fra databasen!
 """
     system_content += face_recognition_instructions
