@@ -1140,6 +1140,35 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "look_around",
+                "description": "Quick object detection using IMX500 AI camera (0.6ms latency). Use for simple questions like 'Hva ser du?', 'Er det noen her?', 'Hvor mange personer?'. Returns list of detected objects (person, kopp, laptop, etc.). For detailed scene analysis, use analyze_scene instead.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_scene",
+                "description": "ALWAYS use this when user asks about what you see, whether as question or request: 'hva ser du', 'kan du se', 'beskriver du', 'beskriv rommet', 'beskriv hva du ser', 'what do you see', 'can you see'. Also for ANY visual questions about colors, activities, objects, text, people, or scene details. Uses OpenAI Vision (~5s). Returns detailed Norwegian description. When user asks IF you can see, USE THIS to show them you CAN see.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "description": "Specific question about the scene (optional). If not provided, returns general scene description. Examples: 'Hvilken farge har sofaen?', 'Hva gjør personen?', 'Hva står det på skjermen?'"
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "send_sms",
                 "description": "Send en SMS-melding til en kontakt. Bruk dette når brukeren eksplisitt ber deg sende SMS til noen. Meldingen må være kort (maks 155 tegn).",
                 "parameters": {
@@ -1282,7 +1311,7 @@ def _get_function_tools():
     ]
 
 
-def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager):
+def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager, vision_service=None):
     """
     Håndterer alle tool calls fra ChatGPT ved å kalle riktig funksjon og legge til resultatet i messages.
     
@@ -1292,6 +1321,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         source: "voice" eller "sms"
         source_user_id: ID på bruker (for SMS autorisation)
         sms_manager: SMSManager instans
+        vision_service: DuckVisionService instans (for Duck-Vision kamera)
     """
     for tool_call in tool_calls:
         function_name = tool_call["function"]["name"]
@@ -1413,6 +1443,23 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             result = get_teams_status()
         elif function_name == "get_teams_chat":
             result = get_teams_chat()
+        elif function_name == "look_around":
+            # Use Duck-Vision camera to see what's in the room (IMX500 - quick)
+            if not vision_service or not vision_service.is_connected():
+                result = "Kameraet er ikke tilgjengelig for øyeblikket"
+            else:
+                result = vision_service.look_around(timeout=10.0)
+                if not result:
+                    result = "Jeg fikk ikke svar fra kameraet (timeout)"
+        elif function_name == "analyze_scene":
+            # Use Duck-Vision OpenAI Vision for deep scene analysis
+            question = function_args.get("question")
+            if not vision_service or not vision_service.is_connected():
+                result = "Kameraet er ikke tilgjengelig for øyeblikket"
+            else:
+                result = vision_service.analyze_scene(question=question, timeout=15.0)
+                if not result or "timeout" in result.lower():
+                    result = "Jeg fikk ikke svar fra OpenAI Vision (kan ta 5-10 sekunder)"
         elif function_name == "send_sms":
             contact_name = function_args.get("contact_name", "")
             message = function_args.get("message", "")
@@ -1602,7 +1649,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         })
 
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, source=None, source_user_id=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, vision_service=None, source=None, source_user_id=None):
     """
     Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
     
@@ -1614,6 +1661,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         user_manager: UserManager instans
         sms_manager: SMSManager instans (for boredom status)
         hunger_manager: HungerManager instans (for hunger status)
+        vision_service: DuckVisionService instans (for Duck-Vision kamera)
         source: "voice" eller "sms" - hvor forespørselen kommer fra
         source_user_id: ID på bruker (for SMS autorisation)
     
@@ -1696,7 +1744,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         final_messages.append(message)
         
         # Håndter alle tool calls
-        _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager)
+        _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager, vision_service)
         
         # Kall API igjen med all tool data
         data["messages"] = final_messages

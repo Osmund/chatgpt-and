@@ -1265,6 +1265,7 @@ window.onload = function() {
     loadMemorySettings();  // Last alle memory settings
     loadBoredomStatus();  // Last kjedsomhetsnivå
     loadHungerStatus();  // Last hunger nivå
+    loadVisionStatus();  // Last Duck-Vision status
     updateSleepModeStatus();  // Last sleep mode status
     loadSMSHistory();  // Last SMS historikk
     loadContacts();  // Last SMS kontakter
@@ -1277,6 +1278,7 @@ window.onload = function() {
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
+    setInterval(loadVisionStatus, 5000);  // Oppdater Duck-Vision status hvert 5. sekund
     setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
@@ -1318,6 +1320,26 @@ async function loadDuckLocation() {
     } catch (error) {
         console.error('Kunne ikke laste Andas lokasjon:', error);
         document.getElementById('duck-location-text').textContent = 'Feil';
+    }
+}
+
+// Duck-Vision Status
+async function loadVisionStatus() {
+    try {
+        const response = await fetch('/vision-status');
+        const data = await response.json();
+        
+        const statusText = document.getElementById('vision-status-text');
+        if (data.connected) {
+            statusText.textContent = '✅ Tilkoblet';
+            statusText.style.color = '#10b981';  // grønn
+        } else {
+            statusText.textContent = '❌ Ikke tilkoblet';
+            statusText.style.color = '#ef4444';  // rød
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste Duck-Vision status:', error);
+        document.getElementById('vision-status-text').textContent = '❓ Feil';
     }
 }
 

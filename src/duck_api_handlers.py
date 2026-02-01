@@ -159,6 +159,58 @@ class DuckAPIHandlers:
         except Exception as e:
             return {'level': 0, 'error': str(e)}
     
+    def handle_vision_status(self) -> Dict[str, Any]:
+        """Get Duck-Vision connection status by checking active MQTT clients"""
+        try:
+            # Check Mosquitto logs for active duck-vision client
+            result = subprocess.run(
+                ['sudo', 'tail', '-100', '/var/log/mosquitto/mosquitto.log'],
+                capture_output=True, text=True, timeout=2
+            )
+            
+            if result.returncode == 0:
+                # Look for recent duck-vision connection (within last 50 lines)
+                lines = result.stdout.strip().split('\n')[-50:]
+                
+                # Check if duck-vision is connected and not immediately disconnected
+                connected_recently = False
+                for i, line in enumerate(lines):
+                    if 'duck-vision' in line and 'connected from 192.168.10.' in line:
+                        # Check if next few lines show it's still connected (no immediate "closed")
+                        disconnect_found = False
+                        for j in range(i+1, min(i+3, len(lines))):
+                            if 'duck-vision' in lines[j] and 'closed' in lines[j]:
+                                disconnect_found = True
+                                break
+                        if not disconnect_found:
+                            connected_recently = True
+                
+                if connected_recently:
+                    return {
+                        'connected': True,
+                        'status': 'connected',
+                        'message': 'Duck-Vision tilkoblet'
+                    }
+                else:
+                    return {
+                        'connected': False,
+                        'status': 'disconnected',
+                        'message': 'Duck-Vision ikke tilkoblet'
+                    }
+            else:
+                return {
+                    'connected': False,
+                    'status': 'unknown',
+                    'message': 'Kunne ikke lese Mosquitto logs'
+                }
+        except Exception as e:
+            return {
+                'connected': False,
+                'status': 'error',
+                'error': str(e),
+                'message': f'Feil: {str(e)}'
+            }
+    
     def handle_feed(self, food_type: str) -> Dict[str, Any]:
         """Feed Anda with food from control panel"""
         try:

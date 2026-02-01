@@ -410,6 +410,141 @@ def heartbeat_loop():
             print(f"⚠️ Heartbeat failed: {e}", flush=True)
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# FACE RECOGNITION HANDLERS
+# ═══════════════════════════════════════════════════════════════════════
+
+# Global state for face learning workflow
+_waiting_for_name = False
+_pending_person_name = None
+_waiting_for_confirmation = False
+
+
+def on_face_recognized(name: str, confidence: float):
+    """Callback når kjent ansikt gjenkjennes"""
+    global _waiting_for_name, _pending_person_name, _waiting_for_confirmation
+    _waiting_for_name = False
+    _pending_person_name = None
+    _waiting_for_confirmation = False
+    print(f"👋 Gjenkjente {name} ({confidence:.2%})", flush=True)
+
+
+def on_unknown_face():
+    """Callback når ukjent ansikt detekteres"""
+    global _waiting_for_name
+    _waiting_for_name = True
+    print(f"👤 Ukjent person detektert - setter _waiting_for_name=True", flush=True)
+    
+    # Say greeting to unknown person
+    # Will be handled by main loop which checks check_if_waiting_for_name()
+
+
+def on_learning_progress(name: str, step: int, total: int, instruction: str):
+    """Callback under face learning - gi stemme-instruksjoner"""
+    try:
+        services = get_services()
+        # Get speech config from main scope (will be set in main())
+        if hasattr(on_learning_progress, 'speech_config') and hasattr(on_learning_progress, 'beak'):
+            speak(instruction, on_learning_progress.speech_config, on_learning_progress.beak)
+            print(f"📸 {step}/{total}: {instruction}", flush=True)
+        else:
+            print(f"📸 {step}/{total}: {instruction}", flush=True)
+    except Exception as e:
+        print(f"⚠️ Error in learning_progress callback: {e}", flush=True)
+
+
+def check_if_waiting_for_name():
+    """Check if we're waiting for user to give their name"""
+    print(f"🔍 check_if_waiting_for_name() returning: {_waiting_for_name}", flush=True)
+    return _waiting_for_name
+
+
+def handle_name_response(user_text: str, speech_config, beak) -> bool:
+    """
+    Handle user response when waiting for name.
+    Returns True if handled, False otherwise.
+    """
+    global _waiting_for_name, _pending_person_name, _waiting_for_confirmation
+    
+    print(f"🔍 handle_name_response called: _waiting_for_name={_waiting_for_name}, _waiting_for_confirmation={_waiting_for_confirmation}", flush=True)
+    
+    if _waiting_for_name:
+        # Extract name from response
+        import re
+        
+        # Strip punctuation
+        user_text_clean = user_text.strip().rstrip('.,!?')
+        
+        # Use Unicode word characters to match Norwegian letters (æøå)
+        # Match multiple words to catch full names
+        patterns = [
+            r"jeg heter ([a-zæøåA-ZÆØÅ\s]+)",
+            r"mitt navn er ([a-zæøåA-ZÆØÅ\s]+)",
+            r"navnet mitt er ([a-zæøåA-ZÆØÅ\s]+)",
+            r"jeg er ([a-zæøåA-ZÆØÅ\s]+)",
+            r"det er ([a-zæøåA-ZÆØÅ\s]+)",
+            r"^([a-zæøåA-ZÆØÅ\s]+)$"  # Just the name(s)
+        ]
+        
+        name = None
+        for pattern in patterns:
+            match = re.search(pattern, user_text_clean.lower())
+            if match:
+                # Clean up: remove extra spaces, capitalize each word
+                name_raw = match.group(1).strip()
+                # Remove words like "jo", "bare", etc that aren't names
+                filler_words = ['jo', 'bare', 'vel', 'altså', 'liksom', 'da', 'men']
+                name_words = [w.capitalize() for w in name_raw.split() if w not in filler_words]
+                if name_words:
+                    name = ' '.join(name_words)
+                    break
+        
+        if name:
+            print(f"✅ Name extracted: '{name}'", flush=True)
+            speak(f"Hyggelig å møte deg, {name}! Kan jeg lagre deg?", speech_config, beak)
+            _pending_person_name = name
+            _waiting_for_name = False
+            _waiting_for_confirmation = True
+            return True
+        else:
+            print(f"❌ Name extraction failed for: '{user_text}'", flush=True)
+            speak("Beklager, jeg hørte ikke navnet ditt. Hvem er du?", speech_config, beak)
+            return True
+    
+    elif _waiting_for_confirmation:
+        # User confirms/denies learning
+        if "ja" in user_text.lower() or "ok" in user_text.lower():
+            try:
+                services = get_services()
+                vision_service = services.get_vision_service()
+                
+                speak("Perfekt! Vi tar 5 bilder. Beveg hodet litt når jeg ber deg om det.", speech_config, beak)
+                
+                # Save name before calling learn_person (in case callback resets it)
+                name_to_learn = _pending_person_name
+                vision_service.learn_person(name_to_learn, num_samples=5)
+                
+                # Wait for learning to complete
+                # Each image takes ~2 seconds (1.5s TTS instruction + 0.8s capture + processing)
+                time.sleep(15)  # 5 images * 2.5s + extra buffer
+                speak(f"Ferdig! Nå husker jeg deg, {name_to_learn}!", speech_config, beak)
+                
+            except Exception as e:
+                print(f"⚠️ Error learning person: {e}", flush=True)
+                speak("Beklager, noe gikk galt.", speech_config, beak)
+            
+            _pending_person_name = None
+            _waiting_for_confirmation = False
+            return True
+        else:
+            speak("Ok, jeg lagrer deg ikke.", speech_config, beak)
+            _pending_person_name = None
+            _waiting_for_confirmation = False
+            return True
+    
+    return False
+
+
 def main():
     """Hovedloop for stemmeassistenten"""
     # Rydd opp gamle trigger-filer ved oppstart
@@ -436,16 +571,23 @@ def main():
         user_manager = services.get_user_manager()
         sms_manager = services.get_sms_manager()
         hunger_manager = services.get_hunger_manager()
+        vision_service = services.get_vision_service()
         
         current_user = user_manager.get_current_user()
         print(f"✅ ServiceManager initialisert - bruker: {current_user['display_name']}", flush=True)
         print(f"   Boredom: {sms_manager.get_boredom_level():.1f}/10, Hunger: {hunger_manager.get_hunger_level():.1f}/10", flush=True)
+        
+        # Start Duck-Vision service (optional, fails gracefully if not available)
+        # NOTE: Will be started after speech_config is initialized
+        print("🦆 Duck-Vision will be started after speech_config init...", flush=True)
+            
     except Exception as e:
         print(f"⚠️ ServiceManager feilet: {e}", flush=True)
         memory_manager = None
         user_manager = None
         sms_manager = None
         hunger_manager = None
+        vision_service = None
     
     # Register with SMS relay server
     register_with_relay()
@@ -477,6 +619,27 @@ def main():
     tts_region = os.getenv("AZURE_TTS_REGION")
     speech_config = speechsdk.SpeechConfig(subscription=tts_key, region=tts_region)
     speech_config.speech_synthesis_voice_name = "nb-NO-FinnNeural"
+    
+    # Start Duck-Vision service NOW (after speech_config is available)
+    if vision_service:
+        try:
+            print("🦆 Starting Duck-Vision service...", flush=True)
+            
+            # Set up speech_config and beak for learning progress callback
+            on_learning_progress.speech_config = speech_config
+            on_learning_progress.beak = beak
+            
+            vision_connected = vision_service.start(
+                on_face_detected=on_face_recognized,
+                on_unknown_face=on_unknown_face,
+                on_learning_progress=on_learning_progress
+            )
+            if vision_connected:
+                print("✅ Duck-Vision connected!", flush=True)
+            else:
+                print("⚠️ Duck-Vision not available (is Duck-Vision running on Pi 5?)", flush=True)
+        except Exception as e:
+            print(f"⚠️ Duck-Vision initialization error: {e}", flush=True)
 
     # Last meldinger fra konfigurasjonsfil
     messages_config = {}
@@ -507,7 +670,7 @@ def main():
 
     # Start bakgrunnstråd for AI-queries fra kontrollpanelet
     import threading
-    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager, user_manager, sms_manager, hunger_manager), daemon=True)
+    ai_thread = threading.Thread(target=check_ai_queries, args=(api_key, speech_config, beak, memory_manager, user_manager, sms_manager, hunger_manager, vision_service), daemon=True)
     ai_thread.start()
     print("AI-query tråd startet", flush=True)
 
@@ -833,9 +996,44 @@ def main():
             else:
                 user_name = 'på du'
             
+            # Name mapping for face recognition (Åsmund = Osmund)
+            face_name_mapping = {
+                'åsmund': 'Osmund',
+                'Åsmund': 'Osmund'
+            }
+            
+            # Sjekk hvem som er der med Duck-Vision (kort timeout for raskere respons)
+            if vision_service and vision_service.is_connected():
+                try:
+                    found, name, confidence = vision_service.check_person(timeout=1.5)  # Redusert fra 3.0 til 1.5 sekunder
+                    
+                    if found and name:
+                        # Map face recognition name to memory system name
+                        mapped_name = face_name_mapping.get(name, name)
+                        print(f"👋 Gjenkjent {name} ({confidence:.2%}) -> mapped to {mapped_name}", flush=True)
+                        user_name = mapped_name
+                    elif found and not name:
+                        # Unknown person detected (face seen but not recognized)
+                        global _waiting_for_name
+                        _waiting_for_name = True
+                        print("👤 Ukjent person detektert - spør om navn", flush=True)
+                    elif not found:
+                        # No person detected at all (empty room)
+                        print("👁️ Ingen person foran kameraet - bruker standard hilsen", flush=True)
+                        # Keep using current user_name from memory
+                    
+                except Exception as e:
+                    print(f"⚠️ Error checking person: {e}", flush=True)
+            else:
+                print("⚠️ Duck-Vision not available or not connected", flush=True)
+            
             # Generer adaptiv hilsen basert på personlighetsprofil
-            greeting_msg = get_adaptive_greeting(user_name=user_name)
-            print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
+            # Hvis unknown_person, skal on_unknown_face ha satt waiting_for_name
+            if check_if_waiting_for_name():
+                greeting_msg = "Hei! Jeg ser deg, men jeg vet ikke hvem du er. Hvem er du?"
+            else:
+                greeting_msg = get_adaptive_greeting(user_name=user_name)
+                print(f"🎭 Adaptive greeting: {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
         
@@ -867,6 +1065,14 @@ def main():
             
             # Reset teller når vi får svar
             no_response_count = 0
+            
+            # Check if we're in face learning workflow
+            print(f"🔍 Before handle_name_response: _waiting_for_name={_waiting_for_name}, _waiting_for_confirmation={_waiting_for_confirmation}, prompt='{prompt}'", flush=True)
+            if handle_name_response(prompt, speech_config, beak):
+                # Name/confirmation handled, continue conversation loop
+                print("🔍 handle_name_response returned True, continuing loop", flush=True)
+                continue
+            print("🔍 handle_name_response returned False, proceeding to ChatGPT", flush=True)
             
             # Sjekk om bruker vil bytte nettverk (trigger fra AI funksjon)
             if os.path.exists('/tmp/duck_switch_network.txt'):
@@ -933,6 +1139,7 @@ def main():
                     user_manager=user_manager,
                     sms_manager=sms_manager,
                     hunger_manager=hunger_manager,
+                    vision_service=vision_service,
                     source="voice"
                 )
                 # LED fortsetter å blinke til speak() tar over (rød LED når lyd starter)

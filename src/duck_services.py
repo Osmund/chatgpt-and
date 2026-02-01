@@ -20,6 +20,7 @@ from duck_sms import SMSManager
 from duck_vision import VisionAnalyzer, VisionConfig
 from duck_hunger import HungerManager
 from duck_ai_response import AIResponseGenerator
+from duck_vision_service import DuckVisionService
 
 # Load environment
 load_dotenv()
@@ -54,6 +55,10 @@ class ServiceManager:
         self.user_manager = UserManager(db_path=self.db_path)
         self.sms_manager = SMSManager(db_path=self.db_path)
         self.hunger_manager = HungerManager(db_path=self.db_path)
+        
+        # Duck-Vision service (MQTT) - broker on localhost
+        self.vision_service = DuckVisionService(broker_host="localhost")
+        # Note: Will be started with callbacks in main.py
         
         # Vision requires API key
         api_key = os.getenv('OPENAI_API_KEY')
@@ -90,6 +95,10 @@ class ServiceManager:
     def get_ai_response_generator(self) -> Optional[AIResponseGenerator]:
         """Get AIResponseGenerator instance (None if no API key)"""
         return self.ai_response_generator
+    
+    def get_vision_service(self) -> DuckVisionService:
+        """Get DuckVisionService instance"""
+        return self.vision_service
 
 
 # Global singleton instance

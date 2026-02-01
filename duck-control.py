@@ -105,48 +105,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.send_json_response(response, 200)
         
         elif self.path == '/ha-status':
-            # Sjekk Home Assistant tilgjengelighet (prøver lokal og cloud)
-            try:
-                import requests
-                from dotenv import load_dotenv
-                load_dotenv()
-                
-                HA_LOCAL_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
-                HA_CLOUD_URL = os.getenv("HA_CLOUD_URL", "")
-                HA_TOKEN = os.getenv("HA_TOKEN")
-                
-                if not HA_TOKEN:
-                    response = {'available': False, 'error': 'HA_TOKEN ikke konfigurert'}
-                else:
-                    # Prøv lokal først
-                    try:
-                        r = requests.get(f"{HA_LOCAL_URL}/api/", 
-                                       headers={"Authorization": f"Bearer {HA_TOKEN}"}, 
-                                       timeout=3)
-                        if r.status_code == 200:
-                            response = {'available': True, 'url': HA_LOCAL_URL, 'mode': 'local'}
-                        else:
-                            response = {'available': False, 'error': f'HTTP {r.status_code}'}
-                    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-                        # Fallback til cloud
-                        if HA_CLOUD_URL:
-                            try:
-                                r = requests.get(f"{HA_CLOUD_URL}/api/",
-                                               headers={"Authorization": f"Bearer {HA_TOKEN}"},
-                                               timeout=10)
-                                if r.status_code == 200:
-                                    response = {'available': True, 'url': HA_CLOUD_URL, 'mode': 'cloud'}
-                                else:
-                                    response = {'available': False, 'error': 'Lokal og cloud ikke tilgjengelig'}
-                            except Exception as e:
-                                response = {'available': False, 'error': f'Lokal og cloud feilet: {str(e)}'}
-                        else:
-                            response = {'available': False, 'error': 'Lokal timeout, cloud URL ikke konfigurert'}
-                    except Exception as e:
-                        response = {'available': False, 'error': str(e)}
-            except Exception as e:
-                response = {'available': False, 'error': f'Config error: {str(e)}'}
-            
+            response = api_handlers.handle_ha_status()
             self.send_json_response(response, 200)
         
         elif self.path == '/duck_location':
@@ -154,48 +113,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             self.send_json_response(response, 200)
         
         elif self.path == '/boredom-status':
-            # Hent kjedsomhetsnivå fra database
-            try:
-                import sqlite3
-                db_path = Path(__file__).parent / 'duck_memory.db'
-                conn = sqlite3.connect(str(db_path))
-                c = conn.cursor()
-                c.execute("SELECT current_level, last_check FROM boredom_state WHERE id = 1")
-                row = c.fetchone()
-                conn.close()
-                
-                if row:
-                    level, last_check = row
-                    # Bestem emoji og farge basert på nivå
-                    if level < 3:
-                        emoji = "😊"
-                        color = "#4ade80"  # grønn
-                        status = "Fornøyd"
-                    elif level < 5:
-                        emoji = "😐"
-                        color = "#fbbf24"  # gul
-                        status = "OK"
-                    elif level < 7:
-                        emoji = "😕"
-                        color = "#fb923c"  # oransje
-                        status = "Litt kjed"
-                    else:
-                        emoji = "😞"
-                        color = "#ef4444"  # rød
-                        status = "Veldig kjed"
-                    
-                    response = {
-                        'level': round(level, 1),
-                        'emoji': emoji,
-                        'color': color,
-                        'status': status,
-                        'last_check': last_check
-                    }
-                else:
-                    response = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'Fornøyd'}
-            except Exception as e:
-                response = {'level': 0, 'emoji': '❓', 'color': '#gray', 'status': 'Ukjent', 'error': str(e)}
-            
+            response = api_handlers.handle_boredom_status()
+            self.send_json_response(response, 200)
+        
+        elif self.path == '/vision-status':
+            response = api_handlers.handle_vision_status()
             self.send_json_response(response, 200)
         
         elif self.path == '/hunger-status':
