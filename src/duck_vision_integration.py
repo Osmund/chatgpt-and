@@ -40,8 +40,8 @@ class DuckVisionHandler:
         self.on_object_detected = on_object_detected
         self.on_learning_progress = on_learning_progress
         
-        # MQTT client
-        self.client = mqtt.Client()
+        # MQTT client with fixed ID for status detection
+        self.client = mqtt.Client(client_id="duck-vision")
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         
