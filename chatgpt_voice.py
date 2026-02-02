@@ -283,18 +283,21 @@ def sms_polling_loop():
             messages = sms_manager.poll_duck_messages()
             
             if messages:
+                print(f"🦆📬 Received {len(messages)} duck message(s)", flush=True)
                 for msg in messages:
                     from_duck = msg['from_duck']
                     message_text = msg['message']
                     media_url = msg.get('media_url')
                     
+                    print(f"   From {from_duck}: {message_text[:50]}...", flush=True)
+                    
                     # Check for loop
-                    if duck_messenger.detect_loop(from_duck, message_text):
+                    if messenger.detect_loop(from_duck, message_text):
                         print(f"⚠️ Loop detektert med {from_duck}, hopper over", flush=True)
                         continue
                     
                     # Format announcement
-                    announcement = duck_messenger.format_incoming_announcement(from_duck, message_text)
+                    announcement = messenger.format_incoming_announcement(from_duck, message_text)
                     
                     print(f"🦆💬 Message from {from_duck}: {message_text[:50]}...", flush=True)
                     
@@ -308,7 +311,7 @@ def sms_polling_loop():
                         }))
                     
                     # Log as received message
-                    duck_messenger.log_message(
+                    messenger.log_message(
                         from_duck=from_duck,
                         to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
                         message=message_text,
@@ -326,7 +329,7 @@ def sms_polling_loop():
                     # Build context and generate response
                     from duck_ai import chatgpt_query
                     
-                    relation = duck_messenger.get_duck_relation(from_duck)
+                    relation = messenger.get_duck_relation(from_duck)
                     prompt = f"""Du fikk nettopp en melding fra {relation}:
 "{message_text}"
 
@@ -343,7 +346,7 @@ Hold det kort og personlig (maks 160 tegn)."""
                     
                     if response:
                         # Log and send response
-                        duck_messenger.log_message(
+                        messenger.log_message(
                             from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
                             to_duck=from_duck,
                             message=response,
