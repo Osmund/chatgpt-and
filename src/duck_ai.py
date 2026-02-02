@@ -1963,7 +1963,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         })
 
 
-def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, vision_service=None, source=None, source_user_id=None):
+def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, vision_service=None, source=None, source_user_id=None, enable_tools=True):
     """
     Spør ChatGPT med full kontekst, memory system, perspektiv-håndtering og tools.
     
@@ -2034,14 +2034,16 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
     final_messages.insert(0, {"role": "system", "content": system_content})
     
     # Hent function tools
-    tools = _get_function_tools()
+    tools = _get_function_tools() if enable_tools else []
     
     data = {
         "model": model,
-        "messages": final_messages,
-        "tools": tools,
-        "tool_choice": "auto"  # La modellen velge når den skal bruke tools
+        "messages": final_messages
     }
+    
+    if enable_tools and tools:
+        data["tools"] = tools
+        data["tool_choice"] = "auto"  # La modellen velge når den skal bruke tools
     
     response = requests.post(url, headers=headers, json=data)
     response.raise_for_status()

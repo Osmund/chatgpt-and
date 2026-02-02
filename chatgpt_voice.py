@@ -341,7 +341,8 @@ Hold det kort og personlig (maks 160 tegn)."""
                     response_tuple = chatgpt_query(
                         messages_context,
                         api_key=os.getenv('OPENAI_API_KEY'),
-                        model="gpt-4o"
+                        model="gpt-4o",
+                        enable_tools=False  # Disable tools for auto-response to avoid recursion
                     )
                     
                     if response_tuple:
@@ -361,8 +362,8 @@ Hold det kort og personlig (maks 160 tegn)."""
                         
                         # Save to memory
                         memory_manager.save_message(
-                            user_query=user_query,
-                            assistant_response=response,
+                            user_text=message_text,
+                            ai_response=response,
                             user_name=from_duck
                         )
         except Exception as e:
