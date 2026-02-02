@@ -273,7 +273,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(error_msg).encode())
         
         elif self.path == '/sms_history':
-            # Hent SMS-historikk
+            # Hent SMS-historikk OG duck messages kombinert
             try:
                 import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
@@ -289,10 +289,25 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                         h.timestamp,
                         h.status,
                         c.name,
-                        c.phone
+                        c.phone,
+                        'sms' as message_type
                     FROM sms_history h
                     LEFT JOIN sms_contacts c ON h.contact_id = c.id
-                    ORDER BY h.timestamp DESC
+                    
+                    UNION ALL
+                    
+                    SELECT
+                        d.id,
+                        d.direction,
+                        d.message,
+                        d.timestamp,
+                        'delivered' as status,
+                        d.from_duck || ' → ' || d.to_duck as name,
+                        NULL as phone,
+                        'duck' as message_type
+                    FROM duck_messages d
+                    
+                    ORDER BY timestamp DESC
                     LIMIT 100
                 """)
                 
@@ -308,7 +323,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                         'timestamp': row[3],
                         'status': row[4],
                         'contact_name': row[5] if row[5] else 'Ukjent',
-                        'phone_number': row[6] if row[6] else 'Ukjent'
+                        'phone_number': row[6] if row[6] else None,
+                        'message_type': row[7]  # 'sms' eller 'duck'
                     })
                 
                 self.send_response(200)

@@ -1771,9 +1771,12 @@ async function loadSMSHistory() {
         
         smsList.forEach(sms => {
             const isIncoming = sms.direction === 'inbound';
-            const bgColor = isIncoming ? '#e3f2fd' : '#f1f8e9';
-            const borderColor = isIncoming ? '#42a5f5' : '#66bb6a';
-            const icon = isIncoming ? '📩' : '📤';
+            const isDuckMessage = sms.message_type === 'duck';
+            
+            // Different styling for duck messages
+            const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
+            const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
+            const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
             const directionText = isIncoming ? 'Fra' : 'Til';
             
             // Format timestamp

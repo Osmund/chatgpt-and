@@ -13,6 +13,8 @@ Ender kan sende meldinger til hverandre via SMS Relay uten SMS-kostnad, med inte
 - ✅ Memory integration (lagres som vanlige messages)
 - ✅ Audio announcements ("Jeg har fått en melding fra min søster Seven")
 - ✅ Smart auto-response med AI
+- ✅ Voice command: "send melding til Seven"
+- ✅ Web UI: Duck messages vises sammen med SMS i kontrollpanel
 
 ## Arkitektur
 
@@ -286,18 +288,33 @@ if os.path.exists(duck_msg_file):
         print(f"Error reading duck message: {e}")
 ```
 
-### 2. Voice command for sending
+### 2. Voice Command for Sending
 
-Legg til tool i duck_tools.py:
+✅ **IMPLEMENTERT** - Voice command er nå tilgjengelig!
+
+Brukere kan si: **"send melding til Seven"** og AI-en vil kalle `send_duck_message` tool.
+
+Tool er definert i `src/duck_ai.py`:
 
 ```python
 {
     "type": "function",
     "function": {
         "name": "send_duck_message",
-        "description": "Send a message to another duck (Samantha or Seven) without using SMS",
+        "description": "Send en melding til en annen and (duck). Bruk dette når brukeren eksplisitt ber deg sende melding til en annen and, f.eks. 'send melding til Seven'. Sjekker token-budsjett automatisk.",
         "parameters": {
             "type": "object",
+            "properties": {
+                "duck_name": {
+                    "type": "string",
+                    "description": "Navnet på anden (f.eks. 'Seven', 'Samantha')"
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Meldingen som skal sendes (maks 500 tegn)"
+                }
+            },
+            "required": ["duck_name", "message"]
             "properties": {
                 "to_duck": {
                     "type": "string",
@@ -363,6 +380,54 @@ def get_duck_contacts(self) -> List[str]:
     """Get list of other ducks"""
     all_ducks = ['samantha', 'seven']  # Legg til flere her
     return [d for d in all_ducks if d.lower() != self.duck_name.lower()]
+```
+
+## Web Kontrollpanel
+
+✅ **IMPLEMENTERT** - Duck messages vises nå sammen med SMS!
+
+### Visning
+
+Duck messages vises i **SMS Historikk** seksjonen i kontrollpanelet sammen med vanlige SMS-er:
+
+- 🦆 **Duck-ikon** (vs 📩📤 for SMS)
+- 🟠 **Oransje styling** (vs blå/grønn for SMS)
+- **Formattering:** "Seven → Samantha" (viser fra/til)
+- **Kronologisk:** Sortert sammen med SMS etter tidsstempel
+
+### Database Query
+
+Endpoint `/sms_history` i `duck-control.py` bruker UNION ALL:
+
+```python
+SELECT 
+    h.id, h.direction, h.message, h.timestamp,
+    h.status, c.name, c.phone, 'sms' as message_type
+FROM sms_history h
+LEFT JOIN sms_contacts c ON h.contact_id = c.id
+
+UNION ALL
+
+SELECT
+    d.id, d.direction, d.message, d.timestamp,
+    'delivered' as status,
+    d.from_duck || ' → ' || d.to_duck as name,
+    NULL as phone, 'duck' as message_type
+FROM duck_messages d
+
+ORDER BY timestamp DESC
+LIMIT 100
+```
+
+### JavaScript (templates/app.js)
+
+```javascript
+const isDuckMessage = sms.message_type === 'duck';
+const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
+const bgColor = isDuckMessage 
+    ? (isIncoming ? '#fff3e0' : '#ffe0b2')  // Orange tones
+    : (isIncoming ? '#e3f2fd' : '#f1f8e9'); // Blue/green
+const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
 ```
 
 ## Token Budgets & Sikkerhet

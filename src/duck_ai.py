@@ -801,6 +801,17 @@ Du kan sende og lese SMS-meldinger via Twilio.
 - IKKE si "du sendte" når det er jeg (Anda) som sendte!
 
 **Viktig:** Når brukeren spør om en melding de fikk tidligere (selv 1+ time siden), bruk get_recent_sms() for å hente den fra databasen!
+
+### Duck-to-Duck Messages ###
+Du kan sende meldinger til andre ender (ducks) via SMS relay.
+
+**Sende til andre ender:**
+- Bruk send_duck_message(duck_name, message) når brukeren ber deg sende melding til en annen and
+- Eksempel: "Send melding til Seven at jeg savner henne"
+- Token-budsjett: Maks 10 initialiserte meldinger per dag, 20 totalt per dag
+- Loop-deteksjon: Systemet hindrer melding-loops automatisk
+
+**Viktig:** Dette er IKKE SMS - dette er gratis meldinger mellom ender via internett!
 """
     system_content += face_recognition_instructions
     
@@ -1254,6 +1265,27 @@ def _get_function_tools():
         {
             "type": "function",
             "function": {
+                "name": "send_duck_message",
+                "description": "Send en melding til en annen and (duck). Bruk dette når brukeren eksplisitt ber deg sende melding til en annen and, f.eks. 'send melding til Seven'. Sjekker token-budsjett automatisk.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "duck_name": {
+                            "type": "string",
+                            "description": "Navnet på anden (f.eks. 'Seven', 'Samantha')"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Meldingen som skal sendes (maks 500 tegn)"
+                        }
+                    },
+                    "required": ["duck_name", "message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "activate_scene",
                 "description": "Aktiver en smart home-scene via Home Assistant. En scene setter flere enheter til forhåndsdefinerte tilstander.",
                 "parameters": {
@@ -1596,6 +1628,36 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         result = f"Fant ingen kontakt med navn '{contact_name}'"
                 except Exception as e:
                     result = f"Feil ved sending av SMS: {e}"
+        elif function_name == "send_duck_message":
+            duck_name = function_args.get("duck_name", "")
+            message = function_args.get("message", "")
+            
+            if not sms_manager:
+                result = "Duck messaging er ikke tilgjengelig"
+            elif not duck_name or not message:
+                result = "Må oppgi både andenavn og melding"
+            else:
+                try:
+                    # Import duck_messenger for token validation
+                    from duck_messenger import DuckMessenger
+                    duck_messenger = DuckMessenger(sms_manager.db_path)
+                    
+                    # Check if we can send
+                    can_send, reason = duck_messenger.can_initiate_message(duck_name)
+                    if not can_send:
+                        result = f"❌ Kan ikke sende melding til {duck_name}: {reason}"
+                    else:
+                        # Send via SMS relay
+                        send_result = sms_manager.send_duck_message(duck_name, message)
+                        
+                        if send_result['status'] == 'sent':
+                            # Log in database
+                            duck_messenger.log_message(duck_name, message, 'outgoing', initiated_by_user=True)
+                            result = f"✅ Melding sendt til {duck_name}: {message}"
+                        else:
+                            result = f"❌ Kunne ikke sende melding til {duck_name}: {send_result.get('error', 'Ukjent feil')}"
+                except Exception as e:
+                    result = f"Feil ved sending av duck message: {e}"
         elif function_name == "get_recent_sms":
             contact_name = function_args.get("contact_name", "").strip()
             limit = function_args.get("limit", 5)
