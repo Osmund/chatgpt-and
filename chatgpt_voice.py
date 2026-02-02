@@ -264,6 +264,124 @@ def sms_polling_loop():
             print(f"⚠️ SMS polling error: {e}", flush=True)
 
 
+def duck_message_polling_loop():
+    """Poll for messages from other ducks every 5 seconds"""
+    import sys
+    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+    from duck_sms import SMSManager
+    from duck_messenger import DuckMessenger
+    from duck_services import get_services
+    
+    sms_manager = SMSManager()
+    messenger = DuckMessenger()
+    
+    while True:
+        time.sleep(5)  # Poll every 5 seconds
+        try:
+            messages = sms_manager.poll_duck_messages()
+            
+            if messages:
+                for msg in messages:
+                    from_duck = msg['from_duck']
+                    message_text = msg['message']
+                    media_url = msg.get('media_url')
+                    
+                    # Check for loop
+                    if messenger.detect_loop(from_duck, message_text):
+                        print(f"⚠️ Loop detektert med {from_duck}, hopper over", flush=True)
+                        continue
+                    
+                    # Format announcement
+                    announcement = messenger.format_incoming_announcement(from_duck, message_text)
+                    
+                    print(f"🦆💬 Message from {from_duck}: {message_text[:50]}...", flush=True)
+                    
+                    # Write announcement to file for main loop to speak
+                    with open('/tmp/duck_message_announcement.txt', 'w', encoding='utf-8') as f:
+                        f.write(json.dumps({
+                            'announcement': announcement,
+                            'from_duck': from_duck,
+                            'message': message_text,
+                            'media_url': media_url
+                        }))
+                    
+                    # Log as received message
+                    messenger.log_message(
+                        from_duck=from_duck,
+                        to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                        message=message_text,
+                        direction='received',
+                        initiated=False
+                    )
+                    
+                    # Generate AI response
+                    services = get_services()
+                    memory_manager = services.get_memory_manager()
+                    
+                    # Save as message in memory
+                    user_query = f"[Duck message from {from_duck}]: {message_text}"
+                    
+                    # Build context and generate response
+                    from duck_ai import chatgpt_query
+                    
+                    relation = messenger.get_duck_relation(from_duck)
+                    prompt = f"""Du fikk nettopp en melding fra {relation}:
+"{message_text}"
+
+Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
+Hold det kort og personlig (maks 160 tegn)."""
+                    
+                    messages_context = [{"role": "user", "content": prompt}]
+                    response = chatgpt_query(
+                        messages_context,
+                        api_key=os.getenv('OPENAI_API_KEY'),
+                        model='gpt-4o-mini',
+                        sms_manager=sms_manager,
+                        hunger_manager=services.get_hunger_manager(),
+                        vision_service=services.get_vision_service()
+                    )
+                    
+                    if isinstance(response, tuple):
+                        response_text = response[0]
+                    else:
+                        response_text = response
+                    
+                    response_text = response_text.strip()
+                    
+                    # Save to memory
+                    memory_manager.save_message(
+                        user_text=user_query,
+                        ai_response=response_text,
+                        user_name=from_duck,
+                        metadata=json.dumps({
+                            'type': 'duck_message',
+                            'from_duck': from_duck,
+                            'media_url': media_url
+                        })
+                    )
+                    
+                    # Send reply
+                    result = sms_manager.send_duck_message(from_duck, response_text)
+                    
+                    if result.get('status') == 'sent':
+                        # Log sent message
+                        messenger.log_message(
+                            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                            to_duck=from_duck,
+                            message=response_text,
+                            direction='sent',
+                            initiated=False,
+                            tokens_used=len(response_text.split())  # Approx tokens
+                        )
+                        
+                        print(f"🦆➡️🦆 Sent reply to {from_duck}: {response_text[:50]}...", flush=True)
+        
+        except Exception as e:
+            print(f"⚠️ Duck message polling error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+
+
 def boredom_timer_loop():
     """Increase boredom gradually every hour and check for triggers"""
     import sys
@@ -594,6 +712,11 @@ def main():
     sms_polling_thread.start()
     print("✅ SMS polling started", flush=True)
     
+    # Start duck message polling thread
+    duck_msg_polling_thread = threading.Thread(target=duck_message_polling_loop, daemon=True)
+    duck_msg_polling_thread.start()
+    print("✅ Duck-to-duck message polling started", flush=True)
+    
     # Start boredom timer thread
     boredom_timer_thread = threading.Thread(target=boredom_timer_loop, daemon=True)
     boredom_timer_thread.start()
@@ -837,6 +960,22 @@ def main():
                         pulse_blue()
                 except Exception as e:
                     print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+            
+            # Sjekk duck-to-duck message announcements
+            duck_msg_file = '/tmp/duck_message_announcement.txt'
+            if os.path.exists(duck_msg_file):
+                try:
+                    with open(duck_msg_file, 'r', encoding='utf-8') as f:
+                        data = json.loads(f.read())
+                    os.remove(duck_msg_file)
+                    
+                    announcement = data.get('announcement')
+                    if announcement:
+                        print(f"🦆💬 [SLEEP MODE] Duck message: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                        pulse_blue()  # Sett RGB tilbake til sleep mode
+                except Exception as e:
+                    print(f"⚠️ Error reading duck message: {e}", flush=True)
             
             # Sjekk sang-annonseringer (når Anda synger av kjedsomhet)
             song_announcement_file = '/tmp/duck_song_announcement.txt'
