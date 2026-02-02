@@ -1647,20 +1647,20 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     
                     # Send via SMS relay
                     send_result = sms_manager.send_duck_message(duck_name, message)
-                        
-                        if send_result['status'] == 'sent':
-                            # Log in database
-                            duck_messenger.log_message(
-                                from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
-                                to_duck=duck_name.lower(),
-                                message=message,
-                                direction='sent',
-                                initiated=True,
-                                tokens_used=len(message.split())
-                            )
-                            result = f"✅ Melding sendt til {duck_name}: {message}"
-                        else:
-                            result = f"❌ Kunne ikke sende melding til {duck_name}: {send_result.get('error', 'Ukjent feil')}"
+                    
+                    if send_result['status'] == 'sent':
+                        # Log in database
+                        duck_messenger.log_message(
+                            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                            to_duck=duck_name.lower(),
+                            message=message,
+                            direction='sent',
+                            initiated=True,
+                            tokens_used=len(message.split())
+                        )
+                        result = f"✅ Melding sendt til {duck_name}: {message}"
+                    else:
+                        result = f"❌ Kunne ikke sende melding til {duck_name}: {send_result.get('error', 'Ukjent feil')}"
                 except Exception as e:
                     result = f"Feil ved sending av duck message: {e}"
         elif function_name == "get_recent_sms":
