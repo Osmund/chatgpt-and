@@ -340,8 +340,7 @@ Hold det kort og personlig (maks 160 tegn)."""
                     response = chatgpt_query(
                         messages_context,
                         api_key=os.getenv('OPENAI_API_KEY'),
-                        model="gpt-4o",
-                        max_tokens=100
+                        model="gpt-4o"
                     )
                     
                     if response:
