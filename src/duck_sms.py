@@ -481,7 +481,8 @@ Hold det kort (under 160 tegn er best)."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=services.get_hunger_manager()
+                hunger_manager=services.get_hunger_manager(),
+                vision_service=services.get_vision_service()
             )
             
             # Handle tuple response
@@ -816,6 +817,7 @@ Svar naturlig og tilpasset spørsmålet."""
                 model='gpt-4o-mini',
                 sms_manager=self,
                 hunger_manager=services.get_hunger_manager(),
+                vision_service=services.get_vision_service(),
                 source="sms",
                 source_user_id=contact['id']
             )
@@ -872,7 +874,8 @@ Hold det kort (under 160 tegn er best)."""
                 api_key=os.getenv('OPENAI_API_KEY'),
                 model='gpt-4o-mini',
                 sms_manager=self,
-                hunger_manager=services.get_hunger_manager()
+                hunger_manager=services.get_hunger_manager(),
+                vision_service=services.get_vision_service()
             )
             
             # Handle tuple response
