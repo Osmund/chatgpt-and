@@ -316,7 +316,8 @@ def sms_polling_loop():
                         to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
                         message=message_text,
                         direction='received',
-                        initiated=False
+                        initiated=False,
+                        tokens_used=len(message_text.split())
                     )
                     
                     # Generate AI response
@@ -350,7 +351,8 @@ Hold det kort og personlig (maks 160 tegn)."""
                             to_duck=from_duck,
                             message=response,
                             direction='sent',
-                            initiated=False
+                            initiated=False,
+                            tokens_used=len(response.split())
                         )
                         
                         sms_manager.send_duck_message(from_duck, response)
