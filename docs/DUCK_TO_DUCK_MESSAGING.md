@@ -365,10 +365,16 @@ OPENAI_API_KEY=your_key_here
 
 Oppdater relasjoner for Seven:
 
+**Duck Personalities (Lore):**
+- **Samantha**: Den ansvarlige storesøsteren. Hjelpsom, vennlig og pålitelig
+- **Seven**: Den rampete lillesøsteren. Litt frekkere og mer freidig enn Samantha, gjør gjerne litt ugagn, men aldri ufin. Samantha er veldig glad i henne!
+
+**Relasjonskonfigurasjon:**
+
 ```python
 DUCK_RELATIONS = {
     'samantha': 'min søster Samantha',  # Seven -> Samantha
-    'seven': 'min søster Seven',        # Samantha -> Seven
+    'seven': 'min lillesøster Seven',   # Samantha -> Seven (viktig: LILLE-søster!)
     'oslo-duck': 'and-vennen min i Oslo'
 }
 ```
@@ -598,15 +604,36 @@ SMS_RELAY_URL=https://sms-relay.duckberry.no
 - Registrering legger automatisk til `/register` i `chatgpt_voice.py`
 - SMS polling fjerner `/register` hvis den finnes for å bruke base URL
 
-### Steg 4: Oppdater relasjoner
+### Steg 4: Oppdater relasjoner og personlighet
 
-I `src/duck_messenger.py`, sett relasjon til Samantha:
+**I `src/duck_messenger.py`:**
 
+For Samantha:
 ```python
 DUCK_RELATIONS = {
-    'samantha': 'min søster Samantha',
+    'seven': 'min lillesøster Seven',  # Viktig: lillesøster!
     # ... andre ender
 }
+```
+
+For Seven:
+```python
+DUCK_RELATIONS = {
+    'samantha': 'min søster Samantha',  # Storesøster
+    # ... andre ender
+}
+```
+
+**I `config/samantha_identity.json` (eller tilsvarende for Seven):**
+
+Legg til i `additional_info`:
+```json
+"Jeg har en lillesøster som heter Seven! Hun er litt rampete og frekkere enn meg, men aldri ufin. Jeg er veldig glad i henne!"
+```
+
+For Seven's identity fil:
+```json
+"Jeg har en storesøster som heter Samantha! Hun er litt mer ansvarlig og seriøs enn meg. Jeg er den rampete lillesøsteren som gjerne tuller litt, men aldri er ufin!"
 ```
 
 ### Steg 5: Test

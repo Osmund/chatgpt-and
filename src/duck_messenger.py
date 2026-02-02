@@ -33,9 +33,11 @@ class DuckMessenger:
     MAX_RAPID_MESSAGES = 5         # Max meldinger uten pause
     
     # Relasjon-mapping for naturlig tale
+    # Seven er Samanthas lillesøster (rampete og frekk, men aldri ufin)
+    # Samantha er Seven's storesøster (ansvarlig og omsorgsfull)
     DUCK_RELATIONS = {
-        'seven': 'min søster Seven',
-        'samantha': 'min søster Samantha',
+        'seven': 'min lillesøster Seven',      # Fra Samantha's perspektiv
+        'samantha': 'min søster Samantha',     # Fra Seven's perspektiv
         'oslo-duck': 'and-vennen min i Oslo'
     }
     
