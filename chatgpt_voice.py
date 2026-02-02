@@ -338,13 +338,14 @@ Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
 Hold det kort og personlig (maks 160 tegn)."""
                     
                     messages_context = [{"role": "user", "content": prompt}]
-                    response = chatgpt_query(
+                    response_tuple = chatgpt_query(
                         messages_context,
                         api_key=os.getenv('OPENAI_API_KEY'),
                         model="gpt-4o"
                     )
                     
-                    if response:
+                    if response_tuple:
+                        response = response_tuple[0] if isinstance(response_tuple, tuple) else response_tuple
                         # Log and send response
                         messenger.log_message(
                             from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
