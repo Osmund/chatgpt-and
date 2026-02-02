@@ -72,7 +72,9 @@ signal.signal(signal.SIGINT, lambda sig, frame: (cleanup(), sys.exit(0)))
 
 def register_with_relay():
     """Register Duck with SMS relay server on startup"""
-    relay_url = os.getenv('SMS_RELAY_URL', 'https://relay.duckberry.no/register')
+    base_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no')
+    # Ensure we add /register endpoint
+    relay_url = base_url.rstrip('/') + '/register'
     twilio_number = os.getenv('TWILIO_NUMBER')
     duck_name = os.getenv('DUCK_NAME', 'Duck-Oslo')
     
