@@ -1642,13 +1642,11 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     from duck_messenger import DuckMessenger
                     duck_messenger = DuckMessenger(sms_manager.db_path)
                     
-                    # Check if we can send
-                    can_send, reason = duck_messenger.can_initiate_message(duck_name)
-                    if not can_send:
-                        result = f"❌ Kan ikke sende melding til {duck_name}: {reason}"
-                    else:
-                        # Send via SMS relay
-                        send_result = sms_manager.send_duck_message(duck_name, message)
+                    # Voice command is user-initiated, so skip token validation
+                    # (user explicitly asked to send message)
+                    
+                    # Send via SMS relay
+                    send_result = sms_manager.send_duck_message(duck_name, message)
                         
                         if send_result['status'] == 'sent':
                             # Log in database
