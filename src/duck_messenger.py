@@ -30,7 +30,8 @@ class DuckMessenger:
     COOLDOWN_HOURS = 2             # Timer mellom initiering
     BOREDOM_THRESHOLD = 4.5        # Kedsomhet for auto-initering
     SIMILARITY_THRESHOLD = 0.9     # Loop detection threshold
-    MAX_RAPID_MESSAGES = 5         # Max meldinger uten pause
+    MAX_RAPID_MESSAGES = 10        # Max meldinger før rapid check
+    RAPID_TIME_WINDOW = 3          # Minutter for rapid detection
     
     # Relasjon-mapping for naturlig tale
     # Seven er Samanthas lillesøster (rampete og frekk, men aldri ufin)
@@ -179,7 +180,7 @@ class DuckMessenger:
             last_time = datetime.fromisoformat(recent[0]['timestamp'])
             time_diff = (last_time - first_time).total_seconds() / 60  # minutter
             
-            if time_diff < 10:  # 5+ meldinger på < 10 min
+            if time_diff < self.RAPID_TIME_WINDOW:  # 10+ meldinger på < 3 min
                 print(f"⚠️ Rapid messaging detektert! {len(recent)} meldinger på {time_diff:.1f} min", flush=True)
                 return True
         

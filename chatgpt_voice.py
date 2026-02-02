@@ -1059,6 +1059,49 @@ def main():
             except Exception as e:
                 print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
         
+        # Sjekk SMS og duck messages UTENFOR sleep mode
+        # SMS-annonseringer
+        sms_announcement_file = '/tmp/duck_sms_announcement.txt'
+        if os.path.exists(sms_announcement_file):
+            try:
+                with open(sms_announcement_file, 'r', encoding='utf-8') as f:
+                    announcement = f.read().strip()
+                os.remove(sms_announcement_file)
+                if announcement:
+                    print(f"📬 SMS announcement: {announcement[:50]}...", flush=True)
+                    speak(announcement, speech_config, beak)
+                    
+                    # Sjekk om det er en respons-annonsering
+                    sms_response_file = '/tmp/duck_sms_response.txt'
+                    time.sleep(1)
+                    if os.path.exists(sms_response_file):
+                        try:
+                            with open(sms_response_file, 'r', encoding='utf-8') as f:
+                                response_announcement = f.read().strip()
+                            if response_announcement:
+                                time.sleep(0.5)
+                                speak(response_announcement, speech_config, beak)
+                            os.remove(sms_response_file)
+                        except Exception as e:
+                            print(f"⚠️ Error reading SMS response: {e}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+        
+        # Duck-to-duck message announcements
+        duck_msg_file = '/tmp/duck_message_announcement.txt'
+        if os.path.exists(duck_msg_file):
+            try:
+                with open(duck_msg_file, 'r', encoding='utf-8') as f:
+                    data = json.loads(f.read())
+                os.remove(duck_msg_file)
+                
+                announcement = data.get('announcement')
+                if announcement:
+                    print(f"🦆💬 Duck message: {announcement[:50]}...", flush=True)
+                    speak(announcement, speech_config, beak)
+            except Exception as e:
+                print(f"⚠️ Error reading duck message: {e}", flush=True)
+        
         # Normal wake word detection
         external_message = wait_for_wake_word()
         
