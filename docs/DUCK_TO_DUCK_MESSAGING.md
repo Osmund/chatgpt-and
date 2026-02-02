@@ -509,6 +509,22 @@ print(messages)
 
 ## Feilsøking
 
+### SMS Registrering feiler (405 Method Not Allowed)
+
+Problem: `SMS_RELAY_URL` må være base URL uten `/register`
+
+**Riktig .env:**
+```bash
+SMS_RELAY_URL=https://sms-relay.duckberry.no
+```
+
+**Feil .env:**
+```bash
+SMS_RELAY_URL=https://sms-relay.duckberry.no/register  # FEIL!
+```
+
+Koden i `chatgpt_voice.py` legger automatisk til `/register` ved registrering.
+
 ### Messages går ikke fram
 
 1. Sjekk at SMS Relay kjører:
@@ -545,9 +561,10 @@ print(messages)
 ### Steg 2: Oppdater eksisterende filer
 
 **chatgpt_voice.py:**
-- Legg til `duck_message_polling_loop()` funksjon (se linje 267)
-- Start thread i `main()` (se linje 715)
-- Legg til duck message announcement handling i main loop (se linje 960)
+- `register_with_relay()`: Legger nå automatisk til `/register` til base URL (linje 73)
+- `sms_polling_loop()`: Integrert duck message polling sammen med SMS (linje 110)
+- Main loop: Duck message announcement handling (linje 960)
+- **VIKTIG:** Duck messages polles i SAMME loop som SMS (hver 10. sekund), IKKE separat thread!
 
 **src/duck_sms.py:**
 - Legg til `send_duck_message()` metode
@@ -555,12 +572,31 @@ print(messages)
 - Legg til `get_duck_contacts()` metode
 - Oppdater `__init__` med `sms_relay_url`
 
+**src/duck_ai.py:**
+- Legg til `send_duck_message` tool (linje ~1255)
+- Legg til handler for `send_duck_message` (linje ~1598)
+- Oppdater system prompt med duck messaging instruksjoner (linje ~800)
+
+**duck-control.py:**
+- Oppdater `/sms_history` endpoint til å bruke UNION ALL query (linje ~275)
+- Kombinerer SMS og duck messages i kronologisk rekkefølge
+
+**templates/app.js:**
+- Oppdater `loadSMSHistory()` til å vise duck messages med 🦆 ikon (linje ~1773)
+
 ### Steg 3: Konfigurer .env
+
+**VIKTIG:** Bruk base URL uten `/register` - koden legger til endepunkter automatisk!
 
 ```bash
 DUCK_NAME=Seven
 SMS_RELAY_URL=https://sms-relay.duckberry.no
 ```
+
+**Forklaring:**
+- Base URL brukes for duck messaging (`/duck/send`, `/duck/poll/{duck_name}`)
+- Registrering legger automatisk til `/register` i `chatgpt_voice.py`
+- SMS polling fjerner `/register` hvis den finnes for å bruke base URL
 
 ### Steg 4: Oppdater relasjoner
 
