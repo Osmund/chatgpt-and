@@ -104,22 +104,35 @@ def register_with_relay():
 
 
 def sms_polling_loop():
-    """Poll relay for new SMS messages every 10 seconds"""
+    """Poll relay for new SMS messages and duck-to-duck messages every 10 seconds"""
+    import sys
+    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+    from duck_sms import SMSManager
+    from duck_messenger import DuckMessenger
+    from duck_services import get_services
+    
     relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no/register')
     base_url = relay_url.replace('/register', '')
     twilio_number = os.getenv('TWILIO_NUMBER')
+    duck_name = os.getenv('DUCK_NAME', 'Samantha')
     
     if not twilio_number:
         print("⚠️ TWILIO_NUMBER not set - skipping SMS polling", flush=True)
         return
     
-    # URL encode the number
+    # Initialize managers
+    sms_manager = SMSManager()
+    messenger = DuckMessenger()
+    
+    # URL encode the number for SMS polling
     import urllib.parse
     encoded_number = urllib.parse.quote(twilio_number, safe='')
     poll_url = f"{base_url}/poll/{encoded_number}"
     
     while True:
         time.sleep(10)  # Poll every 10 seconds
+        
+        # 1. Poll for SMS messages
         try:
             response = requests.get(poll_url, timeout=5)
             
@@ -262,21 +275,8 @@ def sms_polling_loop():
                             print(f"⚠️ Error processing SMS: {msg_error}", flush=True)
         except Exception as e:
             print(f"⚠️ SMS polling error: {e}", flush=True)
-
-
-def duck_message_polling_loop():
-    """Poll for messages from other ducks every 5 seconds"""
-    import sys
-    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_sms import SMSManager
-    from duck_messenger import DuckMessenger
-    from duck_services import get_services
-    
-    sms_manager = SMSManager()
-    messenger = DuckMessenger()
-    
-    while True:
-        time.sleep(5)  # Poll every 5 seconds
+        
+        # Also poll for duck-to-duck messages
         try:
             messages = sms_manager.poll_duck_messages()
             
@@ -287,12 +287,12 @@ def duck_message_polling_loop():
                     media_url = msg.get('media_url')
                     
                     # Check for loop
-                    if messenger.detect_loop(from_duck, message_text):
+                    if duck_messenger.detect_loop(from_duck, message_text):
                         print(f"⚠️ Loop detektert med {from_duck}, hopper over", flush=True)
                         continue
                     
                     # Format announcement
-                    announcement = messenger.format_incoming_announcement(from_duck, message_text)
+                    announcement = duck_messenger.format_incoming_announcement(from_duck, message_text)
                     
                     print(f"🦆💬 Message from {from_duck}: {message_text[:50]}...", flush=True)
                     
@@ -306,7 +306,7 @@ def duck_message_polling_loop():
                         }))
                     
                     # Log as received message
-                    messenger.log_message(
+                    duck_messenger.log_message(
                         from_duck=from_duck,
                         to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
                         message=message_text,
@@ -324,7 +324,7 @@ def duck_message_polling_loop():
                     # Build context and generate response
                     from duck_ai import chatgpt_query
                     
-                    relation = messenger.get_duck_relation(from_duck)
+                    relation = duck_messenger.get_duck_relation(from_duck)
                     prompt = f"""Du fikk nettopp en melding fra {relation}:
 "{message_text}"
 
@@ -335,51 +335,31 @@ Hold det kort og personlig (maks 160 tegn)."""
                     response = chatgpt_query(
                         messages_context,
                         api_key=os.getenv('OPENAI_API_KEY'),
-                        model='gpt-4o-mini',
-                        sms_manager=sms_manager,
-                        hunger_manager=services.get_hunger_manager(),
-                        vision_service=services.get_vision_service()
+                        model="gpt-4o",
+                        max_tokens=100
                     )
                     
-                    if isinstance(response, tuple):
-                        response_text = response[0]
-                    else:
-                        response_text = response
-                    
-                    response_text = response_text.strip()
-                    
-                    # Save to memory
-                    memory_manager.save_message(
-                        user_text=user_query,
-                        ai_response=response_text,
-                        user_name=from_duck,
-                        metadata=json.dumps({
-                            'type': 'duck_message',
-                            'from_duck': from_duck,
-                            'media_url': media_url
-                        })
-                    )
-                    
-                    # Send reply
-                    result = sms_manager.send_duck_message(from_duck, response_text)
-                    
-                    if result.get('status') == 'sent':
-                        # Log sent message
-                        messenger.log_message(
+                    if response:
+                        # Log and send response
+                        duck_messenger.log_message(
                             from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
                             to_duck=from_duck,
-                            message=response_text,
+                            message=response,
                             direction='sent',
-                            initiated=False,
-                            tokens_used=len(response_text.split())  # Approx tokens
+                            initiated=False
                         )
                         
-                        print(f"🦆➡️🦆 Sent reply to {from_duck}: {response_text[:50]}...", flush=True)
-        
+                        sms_manager.send_duck_message(from_duck, response)
+                        print(f"🦆📤 Sent response to {from_duck}: {response[:50]}...", flush=True)
+                        
+                        # Save to memory
+                        memory_manager.save_message(
+                            user_query=user_query,
+                            assistant_response=response,
+                            user_name=from_duck
+                        )
         except Exception as e:
             print(f"⚠️ Duck message polling error: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
 
 
 def boredom_timer_loop():
@@ -707,15 +687,10 @@ def main():
     heartbeat_thread.start()
     print("✅ SMS relay heartbeat started", flush=True)
     
-    # Start SMS polling thread
+    # Start SMS polling thread (now also handles duck-to-duck messages)
     sms_polling_thread = threading.Thread(target=sms_polling_loop, daemon=True)
     sms_polling_thread.start()
-    print("✅ SMS polling started", flush=True)
-    
-    # Start duck message polling thread
-    duck_msg_polling_thread = threading.Thread(target=duck_message_polling_loop, daemon=True)
-    duck_msg_polling_thread.start()
-    print("✅ Duck-to-duck message polling started", flush=True)
+    print("✅ SMS and duck-to-duck message polling started", flush=True)
     
     # Start boredom timer thread
     boredom_timer_thread = threading.Thread(target=boredom_timer_loop, daemon=True)
