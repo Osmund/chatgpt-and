@@ -35,6 +35,9 @@ class SMSManager:
         self.from_number = os.getenv('TWILIO_NUMBER')
         self.duck_name = os.getenv('DUCK_NAME', 'Duck-Oslo')
         
+        # SMS Relay for duck-to-duck messaging
+        self.sms_relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no')
+        
         if self.account_sid and self.auth_token:
             self.client = Client(self.account_sid, self.auth_token)
         else:
@@ -896,6 +899,93 @@ Hold det kort (under 160 tegn er best)."""
             ]
             import random
             return random.choice(messages)
+    
+    # ==================== DUCK-TO-DUCK MESSAGING ====================
+    
+    def send_duck_message(self, to_duck: str, message: str, media_url: str = None) -> Dict:
+        """
+        Send message to another duck via SMS relay (no SMS cost).
+        
+        Args:
+            to_duck: Name of recipient duck (e.g., "seven", "samantha")
+            message: Message text
+            media_url: Optional image/media URL
+        
+        Returns:
+            Dict with status
+        """
+        try:
+            import requests
+            
+            payload = {
+                'from_duck': self.duck_name.lower(),
+                'to_duck': to_duck.lower(),
+                'message': message,
+                'media_url': media_url
+            }
+            
+            response = requests.post(
+                f"{self.sms_relay_url}/duck/send",
+                json=payload,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                print(f"🦆➡️🦆 Sent duck message to {to_duck}: {message[:50]}...", flush=True)
+                return {'status': 'sent', 'to': to_duck}
+            else:
+                print(f"❌ Failed to send duck message: {response.status_code}", flush=True)
+                return {'status': 'error', 'message': response.text}
+        
+        except Exception as e:
+            print(f"❌ Duck message error: {e}", flush=True)
+            return {'status': 'error', 'message': str(e)}
+    
+    def poll_duck_messages(self) -> List[Dict]:
+        """
+        Poll for messages from other ducks.
+        
+        Returns:
+            List of messages: [{from_duck, message, media_url, timestamp}, ...]
+        """
+        try:
+            import requests
+            
+            response = requests.get(
+                f"{self.sms_relay_url}/duck/poll/{self.duck_name.lower()}",
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get('messages', [])
+                
+                if messages:
+                    print(f"🦆📬 Received {len(messages)} duck message(s)", flush=True)
+                    for msg in messages:
+                        print(f"   From {msg['from_duck']}: {msg['message'][:50]}...", flush=True)
+                
+                return messages
+            else:
+                print(f"⚠️ Failed to poll duck messages: {response.status_code}", flush=True)
+                return []
+        
+        except Exception as e:
+            print(f"⚠️ Duck poll error: {e}", flush=True)
+            return []
+    
+    def get_duck_contacts(self) -> List[str]:
+        """
+        Get list of other ducks (could be hardcoded or from config).
+        
+        Returns:
+            List of duck names
+        """
+        # For now, hardcoded - could move to config file
+        all_ducks = ['samantha', 'seven']
+        
+        # Remove self
+        return [d for d in all_ducks if d.lower() != self.duck_name.lower()]
 
 
 # Test/demo script

@@ -19,6 +19,9 @@ DUCK_REGISTRY = {}
 # Message queue: {twilio_number: [messages]}
 MESSAGE_QUEUE = {}
 
+# Duck-to-duck message queue: {duck_name: [messages]}
+DUCK_TO_DUCK_QUEUE = {}
+
 # Configuration
 HEARTBEAT_TIMEOUT = int(os.getenv('HEARTBEAT_TIMEOUT_MINUTES', 10))
 DUCK_WEBHOOK_PATH = '/webhook/sms'
@@ -198,6 +201,90 @@ def poll_messages(twilio_number):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/duck/send', methods=['POST'])
+def duck_send_message():
+    """
+    Duck-to-duck messaging (no SMS cost).
+    POST body: {
+        "from_duck": "samantha",
+        "to_duck": "seven",
+        "message": "Hello!",
+        "media_url": "optional url"
+    }
+    """
+    try:
+        data = request.json
+        from_duck = data.get('from_duck')
+        to_duck = data.get('to_duck')
+        message_body = data.get('message')
+        media_url = data.get('media_url')
+        
+        if not all([from_duck, to_duck, message_body]):
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing required fields: from_duck, to_duck, message'
+            }), 400
+        
+        # Initialize queue for recipient duck if needed
+        if to_duck not in DUCK_TO_DUCK_QUEUE:
+            DUCK_TO_DUCK_QUEUE[to_duck] = []
+        
+        # Create message
+        duck_message = {
+            'from_duck': from_duck,
+            'to_duck': to_duck,
+            'message': message_body,
+            'media_url': media_url,
+            'timestamp': datetime.now().isoformat(),
+            'id': f"duck_{datetime.now().timestamp()}"
+        }
+        
+        DUCK_TO_DUCK_QUEUE[to_duck].append(duck_message)
+        
+        # Limit queue size
+        if len(DUCK_TO_DUCK_QUEUE[to_duck]) > MAX_QUEUE_SIZE:
+            DUCK_TO_DUCK_QUEUE[to_duck] = DUCK_TO_DUCK_QUEUE[to_duck][-MAX_QUEUE_SIZE:]
+        
+        print(f"🦆➡️🦆 Duck message: {from_duck} → {to_duck} (queue: {len(DUCK_TO_DUCK_QUEUE[to_duck])})")
+        
+        return jsonify({
+            'status': 'queued',
+            'from': from_duck,
+            'to': to_duck,
+            'queue_size': len(DUCK_TO_DUCK_QUEUE[to_duck])
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Duck message error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/duck/poll/<duck_name>', methods=['GET'])
+def duck_poll_messages(duck_name):
+    """
+    Duck polls for messages from other ducks.
+    Returns all pending duck-to-duck messages and clears the queue.
+    """
+    try:
+        # Get pending duck messages
+        messages = DUCK_TO_DUCK_QUEUE.get(duck_name, [])
+        
+        if messages:
+            print(f"🦆📬 {duck_name} polling: {len(messages)} duck message(s)")
+            # Clear queue after retrieval
+            DUCK_TO_DUCK_QUEUE[duck_name] = []
+        
+        return jsonify({
+            'status': 'ok',
+            'messages': messages,
+            'count': len(messages)
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Duck poll error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/status', methods=['GET'])
 def status():
     """
@@ -211,7 +298,8 @@ def status():
             'ip': duck['current_ip'],
             'last_heartbeat': duck['last_heartbeat'],
             'online': is_duck_online(duck),
-            'pending_messages': len(MESSAGE_QUEUE.get(number, []))
+            'pending_messages': len(MESSAGE_QUEUE.get(number, [])),
+            'pending_duck_messages': len(DUCK_TO_DUCK_QUEUE.get(duck['name'], []))
         }
     
     return jsonify({
