@@ -195,7 +195,7 @@ class DuckMessenger:
             INSERT INTO duck_messages 
             (from_duck, to_duck, message, direction, initiated, tokens_used, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (from_duck, to_duck, message, direction, initiated, tokens_used, 
+        """, (from_duck, to_duck, message, direction, int(initiated), tokens_used, 
               datetime.now().isoformat()))
         
         conn.commit()
