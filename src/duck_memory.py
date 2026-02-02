@@ -204,6 +204,7 @@ class MemoryManager:
                 timestamp TEXT NOT NULL,
                 processed INTEGER DEFAULT 0,
                 session_id TEXT,
+                user_name TEXT DEFAULT 'Osmund',
                 metadata TEXT
             )
         """)
@@ -218,7 +219,8 @@ class MemoryManager:
                 frequency INTEGER DEFAULT 1,
                 source TEXT DEFAULT 'user',
                 last_updated TEXT NOT NULL,
-                metadata TEXT
+                metadata TEXT,
+                embedding BLOB
             )
         """)
         
@@ -233,7 +235,9 @@ class MemoryManager:
                 source TEXT DEFAULT 'extracted',
                 first_seen TEXT NOT NULL,
                 last_accessed TEXT NOT NULL,
-                metadata TEXT
+                user_name TEXT DEFAULT 'Osmund',
+                metadata TEXT,
+                embedding BLOB
             )
         """)
         
@@ -275,6 +279,19 @@ class MemoryManager:
                 timestamp TEXT NOT NULL,
                 accessed_count INTEGER DEFAULT 0,
                 last_accessed TEXT,
+                metadata TEXT
+            )
+        """)
+        
+        # Users tabell for multi-user support
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                display_name TEXT NOT NULL,
+                relation_to_primary TEXT,
+                first_seen TEXT NOT NULL,
+                last_active TEXT NOT NULL,
+                total_messages INTEGER DEFAULT 0,
                 metadata TEXT
             )
         """)
@@ -366,9 +383,11 @@ class MemoryManager:
         # Indexes for performance
         c.execute("CREATE INDEX IF NOT EXISTS idx_messages_processed ON messages(processed, timestamp)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_name, timestamp DESC)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_memories_topic ON memories(topic)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_memories_frequency ON memories(frequency DESC)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(last_accessed DESC)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_name, last_accessed DESC)")
         
         conn.commit()
         conn.close()
