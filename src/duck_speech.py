@@ -161,18 +161,36 @@ def wait_for_wake_word():
                         except Exception as e:
                             print(f"Feil ved lesing av meldingsfil: {e}", flush=True)
                     
-                    # Sjekk om det finnes SMS-annonseringer (CRITICAL - every iteration)
-                    sms_announcement_file = '/tmp/duck_sms_announcement.txt'
-                    if os.path.exists(sms_announcement_file):
-                        try:
-                            with open(sms_announcement_file, 'r', encoding='utf-8') as f:
-                                announcement = f.read().strip()
-                            os.remove(sms_announcement_file)
-                            if announcement:
-                                print(f"📬 SMS announcement: {announcement[:50]}...", flush=True)
-                                return f"__SMS_ANNOUNCEMENT__{announcement}"
-                        except Exception as e:
-                            print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+                    # Sjekk SMS og duck messages (CRITICAL - every ~1.6s / 50 iterations)
+                    if check_critical:
+                        # SMS announcements
+                        sms_announcement_file = '/tmp/duck_sms_announcement.txt'
+                        if os.path.exists(sms_announcement_file):
+                            try:
+                                with open(sms_announcement_file, 'r', encoding='utf-8') as f:
+                                    announcement = f.read().strip()
+                                os.remove(sms_announcement_file)
+                                if announcement:
+                                    print(f"📬 SMS announcement: {announcement[:50]}...", flush=True)
+                                    return f"__SMS_ANNOUNCEMENT__{announcement}"
+                            except Exception as e:
+                                print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
+                        
+                        # Duck-to-duck message announcements
+                        duck_msg_file = '/tmp/duck_message_announcement.txt'
+                        if os.path.exists(duck_msg_file):
+                            try:
+                                with open(duck_msg_file, 'r', encoding='utf-8') as f:
+                                    import json
+                                    data = json.loads(f.read())
+                                os.remove(duck_msg_file)
+                                
+                                announcement = data.get('announcement')
+                                if announcement:
+                                    print(f"🦆💬 Duck message: {announcement[:50]}...", flush=True)
+                                    return f"__DUCK_MESSAGE__{announcement}"
+                            except Exception as e:
+                                print(f"⚠️ Error reading duck message: {e}", flush=True)
                     
                     # Sjekk om det finnes hunger-annonseringer (NORMAL - every ~4.8s)
                     hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
