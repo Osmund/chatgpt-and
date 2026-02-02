@@ -1652,7 +1652,14 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         
                         if send_result['status'] == 'sent':
                             # Log in database
-                            duck_messenger.log_message(duck_name, message, 'outgoing', initiated_by_user=True)
+                            duck_messenger.log_message(
+                                from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                                to_duck=duck_name.lower(),
+                                message=message,
+                                direction='sent',
+                                initiated=True,
+                                tokens_used=len(message.split())
+                            )
                             result = f"✅ Melding sendt til {duck_name}: {message}"
                         else:
                             result = f"❌ Kunne ikke sende melding til {duck_name}: {send_result.get('error', 'Ukjent feil')}"
