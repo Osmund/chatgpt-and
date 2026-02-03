@@ -177,24 +177,24 @@ class DuckAPIHandlers:
     def handle_vision_status(self) -> Dict[str, Any]:
         """Get Duck-Vision connection status by checking active MQTT clients"""
         try:
-            # Check Mosquitto logs for active duck-vision client
+            # Check Mosquitto logs for active samantha-vision-client
             result = subprocess.run(
                 ['sudo', 'tail', '-100', '/var/log/mosquitto/mosquitto.log'],
                 capture_output=True, text=True, timeout=2
             )
             
             if result.returncode == 0:
-                # Look for recent duck-vision connection (within last 50 lines)
+                # Look for recent samantha-vision-client connection (within last 50 lines)
                 lines = result.stdout.strip().split('\n')[-50:]
                 
-                # Check if duck-vision is connected and not immediately disconnected
+                # Check if samantha-vision-client is connected and not immediately disconnected
                 connected_recently = False
                 for i, line in enumerate(lines):
-                    if 'duck-vision' in line and 'connected from 192.168.10.' in line:
+                    if 'samantha-vision-client' in line and 'connected from 127.0.0.1' in line:
                         # Check if next few lines show it's still connected (no immediate "closed")
                         disconnect_found = False
                         for j in range(i+1, min(i+3, len(lines))):
-                            if 'duck-vision' in lines[j] and 'closed' in lines[j]:
+                            if 'samantha-vision-client' in lines[j] and 'closed' in lines[j]:
                                 disconnect_found = True
                                 break
                         if not disconnect_found:
