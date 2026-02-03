@@ -1792,8 +1792,8 @@ async function loadSMSHistory() {
         
         // Build contact list + message area
         let html = `
-            <div style="display: flex; flex-direction: column; height: 100%;">
-                <div style="border-bottom: 2px solid #ddd; padding: 10px; background: white;">
+            <div style="display: flex; flex-direction: column; height: 780px;">
+                <div style="border-bottom: 2px solid #ddd; padding: 10px; background: white; flex-shrink: 0;">
                     <strong style="display: block; margin-bottom: 8px;">Velg kontakt:</strong>
                     <div id="contact-filter-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
         `;
@@ -1827,7 +1827,7 @@ async function loadSMSHistory() {
                     </button>
                 </div>
             </div>
-            <div id="sms-messages-area" style="flex: 1; overflow-y: auto; padding: 10px;">
+            <div id="sms-messages-area" style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px; max-height: 650px;">
                 <div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>
             </div>
         </div>
