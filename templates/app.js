@@ -1880,7 +1880,8 @@ function filterSMSByContact(contactName) {
     }
     
     if (!contactName) {
-        messagesArea.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>';
+        // Vis alle meldinger
+        displayAllMessages();
         return;
     }
     
@@ -1960,6 +1961,67 @@ function displayContactMessages(contactName, contact) {
             <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                     <strong>${icon} ${directionText}</strong>
+                    <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
+                </div>
+                <div style="color: #333;">
+                    ${sms.message}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    messagesArea.innerHTML = html;
+}
+
+function displayAllMessages() {
+    const messagesArea = document.getElementById('sms-messages-area');
+    
+    if (!messagesArea) {
+        console.error('ERROR: sms-messages-area not found in displayAllMessages!');
+        return;
+    }
+    
+    // Samle alle meldinger fra alle kontakter
+    const allMessages = [];
+    for (const [contactName, data] of Object.entries(window.smsHistoryData)) {
+        data.messages.forEach(msg => {
+            allMessages.push({
+                ...msg,
+                displayContact: contactName
+            });
+        });
+    }
+    
+    // Sorter etter tidsstempel, nyeste først
+    allMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    console.log('Displaying all messages:', allMessages.length);
+    
+    let html = `<div style="display: flex; flex-direction: column; gap: 10px;">`;
+    
+    allMessages.forEach(sms => {
+        const isIncoming = sms.direction === 'inbound';
+        const isDuckMessage = sms.message_type === 'duck';
+        
+        const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
+        const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
+        const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
+        const directionText = isIncoming ? 'Fra' : 'Til';
+        
+        // Format timestamp
+        const date = new Date(sms.timestamp);
+        const timeStr = date.toLocaleString('nb-NO', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        html += `
+            <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <strong>${icon} ${directionText} ${sms.displayContact}</strong>
                     <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
                 </div>
                 <div style="color: #333;">
