@@ -1792,10 +1792,10 @@ async function loadSMSHistory() {
         
         // Build contact list + message area
         let html = `
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="border-bottom: 2px solid #ddd; padding-bottom: 10px;">
-                    <strong>Velg kontakt:</strong>
-                    <div id="contact-filter-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+            <div style="display: flex; flex-direction: column; height: 100%;">
+                <div style="border-bottom: 2px solid #ddd; padding: 10px; background: white;">
+                    <strong style="display: block; margin-bottom: 8px;">Velg kontakt:</strong>
+                    <div id="contact-filter-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
         `;
         
         // Sort contacts by most recent message
@@ -1811,7 +1811,9 @@ async function loadSMSHistory() {
                 : '';
             html += `
                 <button onclick="filterSMSByContact('${contactName.replace(/'/g, "\\'")}')" 
-                        style="padding: 8px 12px; background: #e3f2fd; border: 2px solid #42a5f5; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        data-contact="${contactName.replace(/'/g, "\\'")}"
+                        class="contact-filter-btn"
+                        style="padding: 8px 12px; background: white; border: 2px solid #42a5f5; border-radius: 20px; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap;">
                     ${contactName}${newBadge}
                 </button>
             `;
@@ -1819,12 +1821,13 @@ async function loadSMSHistory() {
         
         html += `
                     <button onclick="filterSMSByContact(null)" 
-                            style="padding: 8px 12px; background: #f5f5f5; border: 2px solid #999; border-radius: 6px; cursor: pointer;">
+                            class="contact-filter-btn"
+                            style="padding: 8px 12px; background: white; border: 2px solid #999; border-radius: 20px; cursor: pointer; white-space: nowrap;">
                         Vis alle
                     </button>
                 </div>
             </div>
-            <div id="sms-messages-area" style="margin-top: 10px;">
+            <div id="sms-messages-area" style="flex: 1; overflow-y: auto; padding: 10px;">
                 <div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>
             </div>
         </div>
@@ -1851,6 +1854,20 @@ function filterSMSByContact(contactName) {
         clearInterval(smsFilterInterval);
         smsFilterInterval = null;
     }
+    
+    // Update button styles to show selected contact
+    document.querySelectorAll('.contact-filter-btn').forEach(btn => {
+        const btnContact = btn.getAttribute('data-contact');
+        if ((contactName && btnContact === contactName) || (!contactName && !btnContact)) {
+            btn.style.background = '#42a5f5';
+            btn.style.color = 'white';
+            btn.style.fontWeight = 'bold';
+        } else {
+            btn.style.background = 'white';
+            btn.style.color = 'black';
+            btn.style.fontWeight = '500';
+        }
+    });
     
     currentSMSContact = contactName;
     const messagesArea = document.getElementById('sms-messages-area');
