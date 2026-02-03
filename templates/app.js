@@ -1257,7 +1257,7 @@ window.onload = function() {
     loadCurrentVolume();
     loadCurrentBeak();
     loadCurrentSpeed();
-    loadFanStatus();
+    loadFanStatus();  // Lastes én gang
     getWiFiNetworks();
     loadSongs();  // Last sanger
     loadMemoryStats();  // Last memory stats
@@ -1269,23 +1269,24 @@ window.onload = function() {
     updateSleepModeStatus();  // Last sleep mode status
     loadSMSHistory();  // Last SMS historikk
     loadContacts();  // Last SMS kontakter
-    loadDuckLocation();  // Last Andas lokasjon
+    loadDuckLocation();  // Last Andas lokasjon - lastes én gang
     loadSystemStats();  // Last system stats (CPU temp, minne)
     loadPrinterStatus();  // Last printer status én gang
+    loadCurrentUser();  // Last current user - lastes én gang
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
-    setInterval(loadCurrentUser, 10000);  // Oppdater current user hvert 10. sekund
-    setInterval(loadFanStatus, 5000);
+    // loadCurrentUser lastes kun ved page load
+    // loadFanStatus lastes kun ved page load
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
-    // Vision status lastes kun ved page load (linje 1268), ikke kontinuerlig polling
+    // Vision status lastes kun ved page load, ikke kontinuerlig polling
     setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
-    setInterval(loadDuckLocation, 10000);  // Oppdater Andas lokasjon hvert 10. sekund
-    // Printer status lastes kun ved page load, ikke kontinuerlig polling
+    // loadDuckLocation lastes kun ved page load
+    // Printer status lastes kun ved page load
     setInterval(loadSystemStats, 5000);  // Oppdater system stats hvert 5. sekund
 };
 
