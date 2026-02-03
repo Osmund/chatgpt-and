@@ -226,8 +226,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/fan-status':
             response = api_handlers.handle_fan_status()
             self.send_json_response(response, 200)
-            
-            self.send_json_response(response, 200)
         
         elif self.path == '/songs':
             # Hent liste over tilgjengelige sanger
