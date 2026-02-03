@@ -1279,7 +1279,7 @@ window.onload = function() {
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
-    setInterval(loadVisionStatus, 5000);  // Oppdater Duck-Vision status hvert 5. sekund
+    // Vision status lastes kun ved page load (linje 1268), ikke kontinuerlig polling
     setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
