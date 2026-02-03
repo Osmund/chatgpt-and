@@ -1282,7 +1282,7 @@ window.onload = function() {
     setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
     setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
     // Vision status lastes kun ved page load, ikke kontinuerlig polling
-    setInterval(updateSleepModeStatus, 1000);  // Oppdater sleep mode hvert sekund (rask respons)
+    setInterval(updateSleepModeStatus, 10000);  // Oppdater sleep mode hvert 10. sekund
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
     // loadDuckLocation lastes kun ved page load
