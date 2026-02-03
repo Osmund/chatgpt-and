@@ -1271,6 +1271,7 @@ window.onload = function() {
     loadContacts();  // Last SMS kontakter
     loadDuckLocation();  // Last Andas lokasjon
     loadSystemStats();  // Last system stats (CPU temp, minne)
+    loadPrinterStatus();  // Last printer status én gang
     
     // Oppdater status automatisk hvert 5. sekund
     setInterval(updateStatus, 5000);
@@ -1284,7 +1285,7 @@ window.onload = function() {
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
     setInterval(loadDuckLocation, 10000);  // Oppdater Andas lokasjon hvert 10. sekund
-    setInterval(loadPrinterStatus, 10000);  // Oppdater 3D printer status hvert 10. sekund
+    // Printer status lastes kun ved page load, ikke kontinuerlig polling
     setInterval(loadSystemStats, 5000);  // Oppdater system stats hvert 5. sekund
 };
 
