@@ -104,6 +104,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_duck_status()
             self.send_json_response(response, 200)
         
+        elif self.path == '/duck-name':
+            # Return duck name from environment
+            duck_name = os.getenv('DUCK_NAME', 'Samantha')
+            self.send_json_response({'name': duck_name}, 200)
+        
         elif self.path == '/ha-status':
             response = api_handlers.handle_ha_status()
             self.send_json_response(response, 200)

@@ -1246,8 +1246,24 @@ function formatTimestamp(isoString) {
     return `${Math.floor(diffMins / 1440)} dager siden`;
 }
 
+// Load Duck Name
+async function loadDuckName() {
+    try {
+        const response = await fetch('/duck-name');
+        const data = await response.json();
+        const titleElement = document.getElementById('duck-title');
+        if (titleElement && data.name) {
+            titleElement.textContent = data.name;
+            document.title = `${data.name} Control`;
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste duck name:', error);
+    }
+}
+
 // Load current settings on page load
 window.onload = function() {
+    loadDuckName();  // Last duck name først
     updateStatus();
     loadCurrentUser();  // Last current user
     loadWakeWords();
