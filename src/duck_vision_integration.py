@@ -40,8 +40,8 @@ class DuckVisionHandler:
         self.on_object_detected = on_object_detected
         self.on_learning_progress = on_learning_progress
         
-        # MQTT client with fixed ID for status detection
-        self.client = mqtt.Client(client_id="duck-vision")
+        # MQTT client with fixed ID for status detection (samantha-vision-client)
+        self.client = mqtt.Client(client_id="samantha-vision-client")
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
         
@@ -75,6 +75,10 @@ class DuckVisionHandler:
         self.client.loop_stop()
         self.client.disconnect()
         self.connected = False
+    
+    def is_connected(self):
+        """Sjekk om MQTT er koblet til"""
+        return self.connected
     
     def _on_connect(self, client, userdata, flags, rc):
         """Callback når koblet til broker"""

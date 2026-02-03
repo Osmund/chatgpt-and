@@ -760,6 +760,8 @@ def main():
                 on_learning_progress=on_learning_progress
             )
             if vision_connected:
+                # Wait briefly for MQTT on_connect callback to set connected flag
+                time.sleep(0.5)
                 print("✅ Duck-Vision connected!", flush=True)
             else:
                 print("⚠️ Duck-Vision not available (is Duck-Vision running on Pi 5?)", flush=True)

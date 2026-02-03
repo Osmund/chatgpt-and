@@ -65,11 +65,16 @@ class DuckAPIHandlers:
             return {'running': False, 'error': str(e)}
     
     def handle_ha_status(self) -> Dict[str, Any]:
-        """Check Home Assistant availability (local and cloud)"""
+        """Check Home Assistant availability (local and cloud) - only for Samantha"""
         try:
             import requests
             from dotenv import load_dotenv
             load_dotenv()
+            
+            # Only Samantha has Home Assistant
+            duck_name = os.getenv('DUCK_NAME', '').lower()
+            if duck_name != 'samantha':
+                return {'available': False, 'error': 'Home Assistant kun tilgjengelig for Samantha'}
             
             HA_LOCAL_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
             HA_CLOUD_URL = os.getenv("HA_CLOUD_URL", "")
@@ -108,8 +113,9 @@ class DuckAPIHandlers:
             return {'available': False, 'error': f'Config error: {str(e)}'}
     
     def handle_duck_location(self) -> Dict[str, Any]:
-        """Get Duck's current location from profile_facts"""
+        """Get Duck's current location from profile_facts or default by DUCK_NAME"""
         try:
+            # Check database first
             conn = sqlite3.connect(str(self.db_path))
             c = conn.cursor()
             c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location'")
@@ -118,8 +124,17 @@ class DuckAPIHandlers:
             
             if row:
                 return {'location': row[0]}
-            else:
-                return {'location': 'Ukjent'}
+            
+            # Fallback to default location based on DUCK_NAME
+            duck_name = os.getenv('DUCK_NAME', '').lower()
+            default_locations = {
+                'samantha': 'Sokndal (Åmot)',
+                'seven': 'Stavanger (Hundvåg)'
+            }
+            
+            location = default_locations.get(duck_name, 'Ukjent')
+            return {'location': location}
+            
         except Exception as e:
             return {'location': 'Feil', 'error': str(e)}
     
