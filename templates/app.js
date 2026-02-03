@@ -1284,7 +1284,7 @@ window.onload = function() {
     // Vision status lastes kun ved page load, ikke kontinuerlig polling
     setInterval(updateSleepModeStatus, 10000);  // Oppdater sleep mode hvert 10. sekund
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
-    setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
+    // SMS history lastes ved page load, polling starter når kontakt velges
     // loadDuckLocation lastes kun ved page load
     // Printer status lastes kun ved page load
     setInterval(loadSystemStats, 10000);  // Oppdater system stats hvert 10. sekund
@@ -1769,51 +1769,172 @@ async function loadSMSHistory() {
             return;
         }
         
-        let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+        // Group messages by contact
+        const contactMessages = {};
+        const fiveHoursAgo = Date.now() - (5 * 60 * 60 * 1000);
         
         smsList.forEach(sms => {
-            const isIncoming = sms.direction === 'inbound';
-            const isDuckMessage = sms.message_type === 'duck';
+            const contactName = sms.contact_name || 'Ukjent';
+            if (!contactMessages[contactName]) {
+                contactMessages[contactName] = {
+                    messages: [],
+                    newCount: 0,
+                    phone: sms.phone_number
+                };
+            }
+            contactMessages[contactName].messages.push(sms);
             
-            // Different styling for duck messages
-            const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
-            const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
-            const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
-            const directionText = isIncoming ? 'Fra' : 'Til';
-            
-            // Format timestamp
-            const date = new Date(sms.timestamp);
-            const timeStr = date.toLocaleString('nb-NO', {
-                day: '2-digit',
-                month: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            
+            // Count new messages (from last 5 hours, inbound only)
+            if (sms.direction === 'inbound' && new Date(sms.timestamp).getTime() > fiveHoursAgo) {
+                contactMessages[contactName].newCount++;
+            }
+        });
+        
+        // Build contact list + message area
+        let html = `
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="border-bottom: 2px solid #ddd; padding-bottom: 10px;">
+                    <strong>Velg kontakt:</strong>
+                    <div id="contact-filter-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+        `;
+        
+        // Sort contacts by most recent message
+        const sortedContacts = Object.entries(contactMessages).sort((a, b) => {
+            const lastA = new Date(a[1].messages[0].timestamp);
+            const lastB = new Date(b[1].messages[0].timestamp);
+            return lastB - lastA;
+        });
+        
+        sortedContacts.forEach(([contactName, data]) => {
+            const newBadge = data.newCount > 0 ? 
+                `<span style="background: #f44336; color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 4px;">${data.newCount}</span>` 
+                : '';
             html += `
-                <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <strong>${icon} ${directionText}: ${sms.contact_name}</strong>
-                        <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
-                    </div>
-                    <div style="color: #333; margin-left: 20px;">
-                        ${sms.message}
-                    </div>
-                    ${sms.phone_number && sms.phone_number !== 'Ukjent' ? 
-                        `<div style="font-size: 0.8em; color: #888; margin-top: 5px; margin-left: 20px;">${sms.phone_number}</div>` 
-                        : ''}
-                </div>
+                <button onclick="filterSMSByContact('${contactName.replace(/'/g, "\\'")}')" 
+                        style="padding: 8px 12px; background: #e3f2fd; border: 2px solid #42a5f5; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                    ${contactName}${newBadge}
+                </button>
             `;
         });
         
-        html += '</div>';
+        html += `
+                    <button onclick="filterSMSByContact(null)" 
+                            style="padding: 8px 12px; background: #f5f5f5; border: 2px solid #999; border-radius: 6px; cursor: pointer;">
+                        Vis alle
+                    </button>
+                </div>
+            </div>
+            <div id="sms-messages-area" style="margin-top: 10px;">
+                <div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>
+            </div>
+        </div>
+        `;
+        
         container.innerHTML = html;
+        
+        // Store messages globally for filtering
+        window.smsHistoryData = contactMessages;
         
     } catch (error) {
         console.error('Feil ved lasting av SMS:', error);
         document.getElementById('sms-history-container').innerHTML = 
             '<div style="text-align: center; color: #d32f2f; padding: 20px;">⚠️ Kunne ikke laste SMS-historikk</div>';
     }
+}
+
+let smsFilterInterval = null;
+let currentSMSContact = null;
+
+function filterSMSByContact(contactName) {
+    // Clear any existing polling
+    if (smsFilterInterval) {
+        clearInterval(smsFilterInterval);
+        smsFilterInterval = null;
+    }
+    
+    currentSMSContact = contactName;
+    const messagesArea = document.getElementById('sms-messages-area');
+    
+    if (!contactName) {
+        messagesArea.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>';
+        return;
+    }
+    
+    const contact = window.smsHistoryData[contactName];
+    if (!contact) {
+        messagesArea.innerHTML = '<div style="text-align: center; color: #d32f2f; padding: 20px;">Kontakt ikke funnet</div>';
+        return;
+    }
+    
+    displayContactMessages(contactName, contact);
+    
+    // Start polling for new messages every 5 seconds
+    smsFilterInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/sms_history');
+            if (response.ok) {
+                const smsList = await response.json();
+                
+                // Update contact data
+                const updatedMessages = smsList.filter(sms => 
+                    (sms.contact_name || 'Ukjent') === contactName
+                );
+                
+                if (updatedMessages.length !== contact.messages.length) {
+                    // New messages arrived
+                    window.smsHistoryData[contactName].messages = updatedMessages;
+                    displayContactMessages(contactName, window.smsHistoryData[contactName]);
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }, 5000);
+}
+
+function displayContactMessages(contactName, contact) {
+    const messagesArea = document.getElementById('sms-messages-area');
+    
+    // Sort messages by timestamp, newest first
+    const sortedMessages = [...contact.messages].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    let html = `<div style="display: flex; flex-direction: column; gap: 10px;">`;
+    
+    sortedMessages.forEach(sms => {
+        const isIncoming = sms.direction === 'inbound';
+        const isDuckMessage = sms.message_type === 'duck';
+        
+        const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
+        const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
+        const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
+        const directionText = isIncoming ? 'Fra' : 'Til';
+        
+        // Format timestamp
+        const date = new Date(sms.timestamp);
+        const timeStr = date.toLocaleString('nb-NO', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        html += `
+            <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <strong>${icon} ${directionText}</strong>
+                    <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
+                </div>
+                <div style="color: #333;">
+                    ${sms.message}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    messagesArea.innerHTML = html;
 }
 
 // === SMS Contacts Management ===
