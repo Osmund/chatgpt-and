@@ -76,10 +76,6 @@ class DuckVisionHandler:
         self.client.disconnect()
         self.connected = False
     
-    def is_connected(self):
-        """Sjekk om MQTT er koblet til"""
-        return self.connected
-    
     def _on_connect(self, client, userdata, flags, rc):
         """Callback når koblet til broker"""
         if rc == 0:
