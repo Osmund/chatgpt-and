@@ -1639,7 +1639,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             else:
                 try:
                     # Import duck_messenger for token validation
-                    from duck_messenger import DuckMessenger
+                    from src.duck_messenger import DuckMessenger
                     duck_messenger = DuckMessenger(sms_manager.db_path)
                     
                     # Voice command is user-initiated, so skip token validation
