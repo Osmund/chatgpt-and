@@ -1274,20 +1274,20 @@ window.onload = function() {
     loadPrinterStatus();  // Last printer status én gang
     loadCurrentUser();  // Last current user - lastes én gang
     
-    // Oppdater status automatisk hvert 5. sekund
-    setInterval(updateStatus, 5000);
+    // Oppdater status automatisk hvert 10. sekund
+    setInterval(updateStatus, 10000);
     // loadCurrentUser lastes kun ved page load
     // loadFanStatus lastes kun ved page load
     setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
-    setInterval(loadBoredomStatus, 5000);  // Oppdater kjedsomhet hvert 5. sekund
-    setInterval(loadHungerStatus, 5000);  // Oppdater hunger hvert 5. sekund
+    setInterval(loadBoredomStatus, 10000);  // Oppdater kjedsomhet hvert 10. sekund
+    setInterval(loadHungerStatus, 10000);  // Oppdater hunger hvert 10. sekund
     // Vision status lastes kun ved page load, ikke kontinuerlig polling
     setInterval(updateSleepModeStatus, 10000);  // Oppdater sleep mode hvert 10. sekund
     setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
     setInterval(loadSMSHistory, 10000);  // Oppdater SMS historikk hvert 10. sekund
     // loadDuckLocation lastes kun ved page load
     // Printer status lastes kun ved page load
-    setInterval(loadSystemStats, 5000);  // Oppdater system stats hvert 5. sekund
+    setInterval(loadSystemStats, 10000);  // Oppdater system stats hvert 10. sekund
 };
 
 // Boredom Status
