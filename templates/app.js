@@ -1813,7 +1813,7 @@ async function loadSMSHistory() {
                 <button onclick="filterSMSByContact('${contactName.replace(/'/g, "\\'")}')" 
                         data-contact="${contactName.replace(/'/g, "\\'")}"
                         class="contact-filter-btn"
-                        style="padding: 8px 12px; background: white; border: 2px solid #42a5f5; border-radius: 20px; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap;">
+                        style="display: inline-block !important; width: auto !important; padding: 8px 12px; background: white; border: 2px solid #42a5f5; border-radius: 20px; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap; margin: 4px;">
                     ${contactName}${newBadge}
                 </button>
             `;
@@ -1822,7 +1822,7 @@ async function loadSMSHistory() {
         html += `
                     <button onclick="filterSMSByContact(null)" 
                             class="contact-filter-btn"
-                            style="padding: 8px 12px; background: white; border: 2px solid #999; border-radius: 20px; cursor: pointer; white-space: nowrap;">
+                            style="display: inline-block !important; width: auto !important; padding: 8px 12px; background: white; border: 2px solid #999; border-radius: 20px; cursor: pointer; white-space: nowrap; margin: 4px;">
                         Vis alle
                     </button>
                 </div>
@@ -1849,6 +1849,8 @@ let smsFilterInterval = null;
 let currentSMSContact = null;
 
 function filterSMSByContact(contactName) {
+    console.log('filterSMSByContact called with:', contactName);
+    
     // Clear any existing polling
     if (smsFilterInterval) {
         clearInterval(smsFilterInterval);
@@ -1872,10 +1874,18 @@ function filterSMSByContact(contactName) {
     currentSMSContact = contactName;
     const messagesArea = document.getElementById('sms-messages-area');
     
+    if (!messagesArea) {
+        console.error('ERROR: sms-messages-area element not found!');
+        return;
+    }
+    
     if (!contactName) {
         messagesArea.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>';
         return;
     }
+    
+    console.log('Looking for contact data:', contactName);
+    console.log('Available contacts:', Object.keys(window.smsHistoryData || {}));
     
     const contact = window.smsHistoryData[contactName];
     if (!contact) {
@@ -1883,6 +1893,7 @@ function filterSMSByContact(contactName) {
         return;
     }
     
+    console.log('Found contact with', contact.messages.length, 'messages');
     displayContactMessages(contactName, contact);
     
     // Start polling for new messages every 5 seconds
@@ -1910,12 +1921,20 @@ function filterSMSByContact(contactName) {
 }
 
 function displayContactMessages(contactName, contact) {
+    console.log('displayContactMessages called for:', contactName);
     const messagesArea = document.getElementById('sms-messages-area');
+    
+    if (!messagesArea) {
+        console.error('ERROR: sms-messages-area not found in displayContactMessages!');
+        return;
+    }
     
     // Sort messages by timestamp, newest first
     const sortedMessages = [...contact.messages].sort((a, b) => 
         new Date(b.timestamp) - new Date(a.timestamp)
     );
+    
+    console.log('Displaying', sortedMessages.length, 'messages');
     
     let html = `<div style="display: flex; flex-direction: column; gap: 10px;">`;
     
