@@ -207,6 +207,38 @@ class DuckMessenger:
         conn.commit()
         conn.close()
     
+    def get_conversation_history(self, with_duck: str, limit: int = 5) -> List[Dict]:
+        """
+        Hent samtalehistorikk med en spesifikk and.
+        
+        Args:
+            with_duck: Navn på anden å hente samtale med
+            limit: Maks antall meldinger å hente
+            
+        Returns:
+            Liste med meldinger i kronologisk rekkefølge
+            [{'from_duck': 'seven', 'message': '...', 'timestamp': '...'}, ...]
+        """
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        
+        c.execute("""
+            SELECT from_duck, message, timestamp
+            FROM duck_messages
+            WHERE (from_duck = ? AND to_duck = ?) OR (from_duck = ? AND to_duck = ?)
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (with_duck, our_duck_name, our_duck_name, with_duck, limit))
+        
+        messages = [dict(row) for row in c.fetchall()]
+        conn.close()
+        
+        # Return in chronological order (oldest first)
+        return list(reversed(messages))
+    
     def get_duck_relation(self, duck_name: str) -> str:
         """
         Få naturlig relasjonsbeskrivelse for and.

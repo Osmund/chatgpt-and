@@ -113,6 +113,18 @@ def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manag
     services = get_services()
     memory_manager = services.get_memory_manager()
     
+    # Get recent conversation history (last 5 messages)
+    recent_messages = messenger.get_conversation_history(from_duck, limit=5)
+    
+    # Build conversation context
+    conversation_context = ""
+    if recent_messages:
+        conversation_context = "\n\nSiste meldinger i samtalen:\n"
+        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        for msg in recent_messages:
+            sender = "Du" if msg['from_duck'] == our_duck_name else msg['from_duck'].capitalize()
+            conversation_context += f"{sender}: {msg['message']}\n"
+    
     # Build context and generate response
     relation = messenger.get_duck_relation(from_duck)
     
@@ -121,11 +133,31 @@ def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manag
     if fed and food_item_name:
         fed_context = f"\n\n🍕 VIKTIG MAT-KONTEKST:\n{relation} ga deg akkurat MAT ({food_item_name})! Dette er MAT TIL DEG som and.\nDu ble matet og er glad!\nTakk dem for maten! F.eks: 'Takk for maten! Nam nam! 🦆' eller 'Åh, kjeks! Takk søster! 😋'"
     
+    # Get some recent memories to share
+    memories = memory_manager.search_memories("", limit=3)
+    memory_hints = ""
+    if memories and len(memories) > 0:
+        memory_hints = "\n\nTing du kan dele fra dagen:\n"
+        for mem, _ in memories[:3]:
+            if hasattr(mem, 'text') and mem.text and len(mem.text) > 20:
+                memory_hints += f"- {mem.text[:100]}\n"
+    
     prompt = f"""Du fikk nettopp en melding fra {relation}:
-"{message_text}"
+"{message_text}"{conversation_context}
 
-Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
-Hold det kort og personlig (maks 160 tegn).{fed_context}"""
+VIKTIG: Se på samtalehistorikken! Hvis dere bare sender tomme "takk for maten" eller generiske "håper du har det bra" frem og tilbake uten substans, IKKE SVAR. Skriv "NO_RESPONSE" i stedet.
+
+Svar KUN hvis:
+1. De spurte et spesifikt spørsmål du kan svare på
+2. Du har noe NYTT og INTERESSANT å dele (en opplevelse, noe du så, noe som skjedde)
+3. Du fikk mat og vil takke (men kort!)
+
+Hvis du svarer, del gjerne:
+- Noe morsomt/interessant du opplevde i dag
+- Noe du lærte eller tenkte på
+- Et spørsmål om DERES dag{memory_hints}{fed_context}
+
+Skriv et kort, hyggelig svar (maks 160 tegn) ELLER skriv "NO_RESPONSE" hvis samtalen er tom."""
     
     messages_context = [{"role": "user", "content": prompt}]
     response_tuple = chatgpt_query(
@@ -137,6 +169,12 @@ Hold det kort og personlig (maks 160 tegn).{fed_context}"""
     
     if response_tuple:
         response = response_tuple[0] if isinstance(response_tuple, tuple) else response_tuple
+        
+        # Check if AI decided not to respond
+        if "NO_RESPONSE" in response or response.strip() == "NO_RESPONSE":
+            print(f"🤐 AI besluttet å ikke svare {from_duck} (samtalen mangler substans)", flush=True)
+            return
+        
         # Log and send response
         messenger.log_message(
             from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
