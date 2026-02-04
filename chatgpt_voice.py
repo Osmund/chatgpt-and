@@ -105,6 +105,60 @@ def register_with_relay():
         print(f"⚠️ SMS relay registration failed: {e}", flush=True)
 
 
+def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager):
+    """Generate and send response to duck message (called after delay)"""
+    from duck_services import get_services
+    from duck_ai import chatgpt_query
+    
+    services = get_services()
+    memory_manager = services.get_memory_manager()
+    
+    # Build context and generate response
+    relation = messenger.get_duck_relation(from_duck)
+    prompt = f"""Du fikk nettopp en melding fra {relation}:
+"{message_text}"
+
+Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
+Hold det kort og personlig (maks 160 tegn)."""
+    
+    messages_context = [{"role": "user", "content": prompt}]
+    response_tuple = chatgpt_query(
+        messages_context,
+        api_key=os.getenv('OPENAI_API_KEY'),
+        model="gpt-4o",
+        enable_tools=False  # Disable tools for auto-response to avoid recursion
+    )
+    
+    if response_tuple:
+        response = response_tuple[0] if isinstance(response_tuple, tuple) else response_tuple
+        # Log and send response
+        messenger.log_message(
+            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+            to_duck=from_duck,
+            message=response,
+            direction='sent',
+            initiated=False,
+            tokens_used=len(response.split())
+        )
+        
+        sms_manager.send_duck_message(from_duck, response)
+        print(f"🦆📤 Sent response to {from_duck}: {response[:50]}...", flush=True)
+        
+        # Write response announcement to file for main loop to speak
+        with open('/tmp/duck_response_announcement.txt', 'w', encoding='utf-8') as f:
+            f.write(json.dumps({
+                'response': response,
+                'to_duck': from_duck
+            }))
+        
+        # Save to memory
+        memory_manager.save_message(
+            user_text=message_text,
+            ai_response=response,
+            user_name=from_duck
+        )
+
+
 def sms_polling_loop():
     """Poll relay for new SMS messages and duck-to-duck messages every 10 seconds"""
     import sys
@@ -126,6 +180,9 @@ def sms_polling_loop():
     sms_manager = SMSManager()
     messenger = DuckMessenger()
     
+    # Køy for ventende duck message svar (lagrer når vi skal svare)
+    pending_duck_responses = []  # [(respond_at_time, from_duck, message_text, media_url), ...]
+    
     # URL encode the number for SMS polling
     import urllib.parse
     encoded_number = urllib.parse.quote(twilio_number, safe='')
@@ -133,6 +190,19 @@ def sms_polling_loop():
     
     while True:
         time.sleep(10)  # Poll every 10 seconds
+        
+        # Sjekk om det er tid til å svare på ventende duck messages
+        current_time = datetime.now()
+        responses_to_send = [item for item in pending_duck_responses if item[0] <= current_time]
+        pending_duck_responses = [item for item in pending_duck_responses if item[0] > current_time]
+        
+        for respond_at, from_duck, message_text, media_url in responses_to_send:
+            try:
+                print(f"⏰ Tid til å svare til {from_duck}!", flush=True)
+                # Generate and send response
+                _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager)
+            except Exception as e:
+                print(f"⚠️ Error sending delayed duck response: {e}", flush=True)
         
         # 1. Poll for SMS messages
         try:
@@ -291,12 +361,30 @@ def sms_polling_loop():
                     
                     print(f"   From {from_duck}: {message_text[:50]}...", flush=True)
                     
-                    # Check for loop
+                    # ALLTID logg mottatte meldinger først (uansett loop)
+                    messenger.log_message(
+                        from_duck=from_duck,
+                        to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                        message=message_text,
+                        direction='received',
+                        initiated=False,
+                        tokens_used=len(message_text.split())
+                    )
+                    print(f"✅ Logged incoming message from {from_duck}", flush=True)
+                    
+                    # Check for loop BEFORE scheduling response
                     if messenger.detect_loop(from_duck, message_text):
-                        print(f"⚠️ Loop detektert med {from_duck}, hopper over", flush=True)
+                        print(f"⚠️ Loop detektert med {from_duck}, hopper over SVAR (melding er logget)", flush=True)
                         continue
                     
-                    # Format announcement
+                    # Random delay før svar (30 sek til 4 min) - legg til i køy
+                    import random
+                    delay_seconds = random.randint(30, 240)  # 30 sek til 4 min
+                    respond_at = datetime.now() + timedelta(seconds=delay_seconds)
+                    pending_duck_responses.append((respond_at, from_duck, message_text, media_url))
+                    print(f"⏱️ Planlagt svar til {from_duck} om {delay_seconds} sekunder (kl {respond_at.strftime('%H:%M:%S')})", flush=True)
+                    
+                    # Format announcement for immediate playback
                     announcement = messenger.format_incoming_announcement(from_duck, message_text)
                     
                     print(f"🦆💬 Message from {from_duck}: {message_text[:50]}...", flush=True)
@@ -309,63 +397,6 @@ def sms_polling_loop():
                             'message': message_text,
                             'media_url': media_url
                         }))
-                    
-                    # Log as received message
-                    messenger.log_message(
-                        from_duck=from_duck,
-                        to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
-                        message=message_text,
-                        direction='received',
-                        initiated=False,
-                        tokens_used=len(message_text.split())
-                    )
-                    
-                    # Generate AI response
-                    services = get_services()
-                    memory_manager = services.get_memory_manager()
-                    
-                    # Save as message in memory
-                    user_query = f"[Duck message from {from_duck}]: {message_text}"
-                    
-                    # Build context and generate response
-                    from duck_ai import chatgpt_query
-                    
-                    relation = messenger.get_duck_relation(from_duck)
-                    prompt = f"""Du fikk nettopp en melding fra {relation}:
-"{message_text}"
-
-Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
-Hold det kort og personlig (maks 160 tegn)."""
-                    
-                    messages_context = [{"role": "user", "content": prompt}]
-                    response_tuple = chatgpt_query(
-                        messages_context,
-                        api_key=os.getenv('OPENAI_API_KEY'),
-                        model="gpt-4o",
-                        enable_tools=False  # Disable tools for auto-response to avoid recursion
-                    )
-                    
-                    if response_tuple:
-                        response = response_tuple[0] if isinstance(response_tuple, tuple) else response_tuple
-                        # Log and send response
-                        messenger.log_message(
-                            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
-                            to_duck=from_duck,
-                            message=response,
-                            direction='sent',
-                            initiated=False,
-                            tokens_used=len(response.split())
-                        )
-                        
-                        sms_manager.send_duck_message(from_duck, response)
-                        print(f"🦆📤 Sent response to {from_duck}: {response[:50]}...", flush=True)
-                        
-                        # Save to memory
-                        memory_manager.save_message(
-                            user_text=message_text,
-                            ai_response=response,
-                            user_name=from_duck
-                        )
         except Exception as e:
             print(f"⚠️ Duck message polling error: {e}", flush=True)
 
@@ -962,6 +993,22 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error reading duck message: {e}", flush=True)
             
+            # Sjekk duck-to-duck response announcements
+            duck_response_file = '/tmp/duck_response_announcement.txt'
+            if os.path.exists(duck_response_file):
+                try:
+                    with open(duck_response_file, 'r', encoding='utf-8') as f:
+                        data = json.loads(f.read())
+                    os.remove(duck_response_file)
+                    
+                    response = data.get('response')
+                    if response:
+                        print(f"🦆📤 [SLEEP MODE] Duck response: {response[:50]}...", flush=True)
+                        speak(response, speech_config, beak)
+                        pulse_blue()  # Sett RGB tilbake til sleep mode
+                except Exception as e:
+                    print(f"⚠️ Error reading duck response: {e}", flush=True)
+            
             # Sjekk sang-annonseringer (når Anda synger av kjedsomhet)
             song_announcement_file = '/tmp/duck_song_announcement.txt'
             if os.path.exists(song_announcement_file):
@@ -1148,6 +1195,21 @@ def main():
                 # Duck-to-duck message announcement
                 announcement = external_message.replace('__DUCK_MESSAGE__', '', 1)
                 speak(announcement, speech_config, beak)
+                
+                # Sjekk om det er en respons-annonsering
+                duck_response_file = '/tmp/duck_response_announcement.txt'
+                time.sleep(1)
+                if os.path.exists(duck_response_file):
+                    try:
+                        with open(duck_response_file, 'r', encoding='utf-8') as f:
+                            data = json.loads(f.read())
+                        response = data.get('response')
+                        if response:
+                            time.sleep(0.5)
+                            speak(response, speech_config, beak)
+                        os.remove(duck_response_file)
+                    except Exception as e:
+                        print(f"⚠️ Error reading duck response: {e}", flush=True)
                 continue  # Gå tilbake til wake word etter duck message
             elif external_message.startswith('__HUNGER_ANNOUNCEMENT__'):
                 # Hunger announcement

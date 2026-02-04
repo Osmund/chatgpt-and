@@ -30,8 +30,8 @@ class DuckMessenger:
     COOLDOWN_HOURS = 2             # Timer mellom initiering
     BOREDOM_THRESHOLD = 4.5        # Kedsomhet for auto-initering
     SIMILARITY_THRESHOLD = 0.9     # Loop detection threshold
-    MAX_RAPID_MESSAGES = 10        # Max meldinger før rapid check
-    RAPID_TIME_WINDOW = 3          # Minutter for rapid detection
+    MAX_RAPID_MESSAGES = 5         # Max meldinger før rapid check (matcher Seven)
+    RAPID_TIME_WINDOW = 10         # Minutter for rapid detection (matcher Seven)
     
     # Relasjon-mapping for naturlig tale
     # Seven er Samanthas lillesøster (rampete og frekk, men aldri ufin)
@@ -143,6 +143,7 @@ class DuckMessenger:
     def detect_loop(self, from_duck: str, new_message: str) -> bool:
         """
         Detekter om vi er i en loop med samme and.
+        Sjekker kun meldinger FRA from_duck TIL oss (ikke våre egne svar).
         
         Returns:
             True hvis loop detektert
@@ -151,14 +152,18 @@ class DuckMessenger:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
-        # Hent siste meldinger med denne anden
+        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        
+        # Hent siste meldinger FRA from_duck TIL oss (ikke våre egne svar)
+        # Ekskluder meldinger fra siste 5 sekunder (for å unngå å sammenligne med seg selv)
+        cutoff_time = (datetime.now() - timedelta(seconds=5)).isoformat()
         c.execute("""
             SELECT message, timestamp
             FROM duck_messages
-            WHERE (from_duck = ? OR to_duck = ?)
+            WHERE from_duck = ? AND to_duck = ? AND timestamp < ?
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (from_duck, from_duck, self.MAX_RAPID_MESSAGES + 1))
+        """, (from_duck, our_duck_name, cutoff_time, self.MAX_RAPID_MESSAGES + 1))
         
         recent = c.fetchall()
         conn.close()

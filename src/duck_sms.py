@@ -964,12 +964,6 @@ Hold det kort (under 160 tegn er best)."""
             if response.status_code == 200:
                 data = response.json()
                 messages = data.get('messages', [])
-                
-                if messages:
-                    print(f"🦆📬 Received {len(messages)} duck message(s)", flush=True)
-                    for msg in messages:
-                        print(f"   From {msg['from_duck']}: {msg['message'][:50]}...", flush=True)
-                
                 return messages
             else:
                 print(f"⚠️ Failed to poll duck messages: {response.status_code}", flush=True)
