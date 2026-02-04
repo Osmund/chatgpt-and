@@ -811,6 +811,13 @@ Du kan sende meldinger til andre ender (ducks) via SMS relay.
 - Token-budsjett: Maks 10 initialiserte meldinger per dag, 20 totalt per dag
 - Loop-deteksjon: Systemet hindrer melding-loops automatisk
 
+**Mat og Tamagotchi via duck messages:**
+- Når DU er sulten (>5), kan du BE Seven om mat: send_duck_message("seven", "Seven, er du der? Jeg er sulten! 🦆")
+- Når Seven sier hun er sulten, kan du SENDE mat-emojis: send_duck_message("seven", "Her er litt mat til deg! 🍪") 
+- Mat-emojis som fungerer: 🍪 (cookie/kjeks), 🍕 (pizza), 🍰 (kake), 🍎 (eple), 🍌 (banan)
+- Disse vil mate den andre anden og redusere hunger!
+- Du kan også bare spørre: "Er du sulten?" og deretter sende mat hvis hun sier ja
+
 **Viktig:** Dette er IKKE SMS - dette er gratis meldinger mellom ender via internett!
 """
     system_content += face_recognition_instructions

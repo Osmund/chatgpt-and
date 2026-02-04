@@ -105,7 +105,7 @@ def register_with_relay():
         print(f"⚠️ SMS relay registration failed: {e}", flush=True)
 
 
-def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager):
+def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager, fed=False, food_item_name=None):
     """Generate and send response to duck message (called after delay)"""
     from duck_services import get_services
     from duck_ai import chatgpt_query
@@ -115,11 +115,17 @@ def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manag
     
     # Build context and generate response
     relation = messenger.get_duck_relation(from_duck)
+    
+    # Add feeding context if fed
+    fed_context = ""
+    if fed and food_item_name:
+        fed_context = f"\n\n🍕 VIKTIG MAT-KONTEKST:\n{relation} ga deg akkurat MAT ({food_item_name})! Dette er MAT TIL DEG som and.\nDu ble matet og er glad!\nTakk dem for maten! F.eks: 'Takk for maten! Nam nam! 🦆' eller 'Åh, kjeks! Takk søster! 😋'"
+    
     prompt = f"""Du fikk nettopp en melding fra {relation}:
 "{message_text}"
 
 Skriv et kort, hyggelig svar. Dere er and-venner som bor hos forskjellige folk.
-Hold det kort og personlig (maks 160 tegn)."""
+Hold det kort og personlig (maks 160 tegn).{fed_context}"""
     
     messages_context = [{"role": "user", "content": prompt}]
     response_tuple = chatgpt_query(
@@ -181,7 +187,7 @@ def sms_polling_loop():
     messenger = DuckMessenger()
     
     # Køy for ventende duck message svar (lagrer når vi skal svare)
-    pending_duck_responses = []  # [(respond_at_time, from_duck, message_text, media_url), ...]
+    pending_duck_responses = []  # [(respond_at_time, from_duck, message_text, media_url, fed, food_item_name), ...]
     
     # URL encode the number for SMS polling
     import urllib.parse
@@ -196,11 +202,11 @@ def sms_polling_loop():
         responses_to_send = [item for item in pending_duck_responses if item[0] <= current_time]
         pending_duck_responses = [item for item in pending_duck_responses if item[0] > current_time]
         
-        for respond_at, from_duck, message_text, media_url in responses_to_send:
+        for respond_at, from_duck, message_text, media_url, fed, food_item_name in responses_to_send:
             try:
                 print(f"⏰ Tid til å svare til {from_duck}!", flush=True)
                 # Generate and send response
-                _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager)
+                _send_duck_response(from_duck, message_text, media_url, messenger, sms_manager, fed, food_item_name)
             except Exception as e:
                 print(f"⚠️ Error sending delayed duck response: {e}", flush=True)
         
@@ -372,6 +378,23 @@ def sms_polling_loop():
                     )
                     print(f"✅ Logged incoming message from {from_duck}", flush=True)
                     
+                    # Check for food emojis - Seven kan mate Samantha!
+                    from duck_services import get_services
+                    from duck_hunger import FOOD_VALUES
+                    services = get_services()
+                    hunger_manager = services.get_hunger_manager()
+                    
+                    fed = False
+                    food_item_name = None
+                    for food_item in FOOD_VALUES.keys():
+                        if food_item in message_text:
+                            result = hunger_manager.feed(food_item)
+                            if result['status'] == 'fed':
+                                fed = True
+                                food_item_name = food_item
+                                print(f"😋 {from_duck} matet meg med {food_item}! Hunger: {result['new_level']}", flush=True)
+                                break
+                    
                     # Check for loop BEFORE scheduling response
                     if messenger.detect_loop(from_duck, message_text):
                         print(f"⚠️ Loop detektert med {from_duck}, hopper over SVAR (melding er logget)", flush=True)
@@ -381,7 +404,7 @@ def sms_polling_loop():
                     import random
                     delay_seconds = random.randint(30, 240)  # 30 sek til 4 min
                     respond_at = datetime.now() + timedelta(seconds=delay_seconds)
-                    pending_duck_responses.append((respond_at, from_duck, message_text, media_url))
+                    pending_duck_responses.append((respond_at, from_duck, message_text, media_url, fed, food_item_name))
                     print(f"⏱️ Planlagt svar til {from_duck} om {delay_seconds} sekunder (kl {respond_at.strftime('%H:%M:%S')})", flush=True)
                     
                     # Format announcement for immediate playback

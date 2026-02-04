@@ -19,9 +19,15 @@ import os
 
 # Food values (halved to require more feeding, like a real Tamagotchi)
 FOOD_VALUES = {
-    '🍪': 2.5,   # Cookie (was 5)
-    '🍕': 5,     # Pizza (was 10)
+    '🍪': 2.5,   # Cookie
+    '🍰': 2.5,   # Cake
+    '🍎': 2.5,   # Apple
+    '🍌': 2.5,   # Banana
+    '🍕': 5,     # Pizza
     'cookie': 2.5,
+    'cake': 2.5,
+    'apple': 2.5,
+    'banana': 2.5,
     'pizza': 5
 }
 
