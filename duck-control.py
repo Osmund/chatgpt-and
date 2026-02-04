@@ -1717,8 +1717,26 @@ class DuckControlHandler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = HTTPServer(('0.0.0.0', 3000), DuckControlHandler)
+    
+    # Socket timeout: 60 sekunder - hvor lenge serveren venter på data
+    server.timeout = 60
+    
+    # Keep-alive: 10 sekunder - hvor lenge idle connections holdes åpen
+    # Dette gjøres ved å sette socket options
+    import socket
+    server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    
+    # TCP keepalive settings (Linux-spesifikke)
+    if hasattr(socket, 'TCP_KEEPIDLE'):
+        server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)  # Start keepalive etter 10s idle
+    if hasattr(socket, 'TCP_KEEPINTVL'):
+        server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)   # Send probe hver 5s
+    if hasattr(socket, 'TCP_KEEPCNT'):
+        server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # Max 3 probes før disconnect
+    
     print("🦆 Duck Control Panel kjører på http://0.0.0.0:3000")
     print("   Tilgjengelig på: http://oduckberry:3000")
+    print(f"   Socket timeout: {server.timeout}s, Keep-alive: 10s")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
