@@ -7,6 +7,7 @@ REFAKTORERT: Bruker eksterne templates (HTML/CSS/JS)
 """
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 import subprocess
 import json
 import os
@@ -28,13 +29,19 @@ TEMPLATE_DIR = Path(__file__).parent / 'templates'
 services = get_services()
 api_handlers = DuckAPIHandlers(services)
 
+# Template cache - leses fra disk én gang, holdes i minne
+_template_cache = {}
 
 def load_template(filename):
-    """Last template-fil fra templates/ mappen"""
+    """Last template-fil fra templates/ mappen (cachet i minne)"""
+    if filename in _template_cache:
+        return _template_cache[filename]
     filepath = TEMPLATE_DIR / filename
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
-            return f.read()
+            content = f.read()
+            _template_cache[filename] = content
+            return content
     except FileNotFoundError:
         print(f"❌ Template ikke funnet: {filepath}")
         return ""
@@ -696,6 +703,66 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/system/stats':
             response = api_handlers.handle_system_stats()
             self.send_json_response(response, 200)
+        
+        elif self.path == '/poll':
+            # Batch-endpoint: returnerer all polling-data i ett kall
+            poll_data = {}
+            
+            # Duck status
+            try:
+                poll_data['duck_status'] = api_handlers.handle_duck_status()
+            except Exception as e:
+                poll_data['duck_status'] = {'running': False, 'error': str(e)}
+            
+            # Boredom
+            try:
+                poll_data['boredom'] = api_handlers.handle_boredom_status()
+            except Exception as e:
+                poll_data['boredom'] = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'OK'}
+            
+            # Hunger
+            try:
+                hunger_manager = services.get_hunger_manager()
+                status = hunger_manager.get_status()
+                level = status.get('level', 0)
+                if level < 3:
+                    emoji, color, status_text = '😊', '#4ade80', 'Mett'
+                elif level < 5:
+                    emoji, color, status_text = '🙂', '#a3e635', 'OK'
+                elif level < 7:
+                    emoji, color, status_text = '😐', '#fbbf24', 'Litt sulten'
+                elif level < 9:
+                    emoji, color, status_text = '😟', '#fb923c', 'Sulten'
+                else:
+                    emoji, color, status_text = '😩', '#ef4444', 'VELDIG SULTEN!'
+                poll_data['hunger'] = {
+                    'level': level, 'emoji': emoji, 'color': color, 'status': status_text,
+                    'meals_today': status.get('meals_today', 0),
+                    'next_meal_time': status.get('next_meal_time', '12:00')
+                }
+            except Exception as e:
+                poll_data['hunger'] = {'level': 0, 'emoji': '😊', 'color': '#4ade80', 'status': 'Mett'}
+            
+            # Sleep mode
+            try:
+                from src.duck_sleep import get_sleep_status
+                poll_data['sleep'] = get_sleep_status()
+            except Exception as e:
+                poll_data['sleep'] = {'enabled': False, 'is_sleeping': False}
+            
+            # Memory stats
+            try:
+                poll_data['memory'] = api_handlers.handle_memory_stats()
+            except Exception as e:
+                poll_data['memory'] = {'status': 'error'}
+            
+            # System stats
+            try:
+                poll_data['system'] = api_handlers.handle_system_stats()
+            except Exception as e:
+                poll_data['system'] = {}
+            
+            self.send_json_response(poll_data, 200)
         
         else:
             self.send_response(404)
@@ -1832,8 +1899,12 @@ class DuckControlHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"{self.address_string()} - {format % args}", flush=True)
 
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """Multi-threaded HTTP server - håndterer requests parallelt"""
+    daemon_threads = True
+
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', 3000), DuckControlHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', 3000), DuckControlHandler)
     
     # Socket timeout: 60 sekunder - hvor lenge serveren venter på data
     server.timeout = 60
@@ -1851,7 +1922,7 @@ if __name__ == '__main__':
     if hasattr(socket, 'TCP_KEEPCNT'):
         server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # Max 3 probes før disconnect
     
-    print("🦆 Duck Control Panel kjører på http://0.0.0.0:3000")
+    print("🦆 Duck Control Panel kjører på http://0.0.0.0:3000 (threaded)")
     print("   Tilgjengelig på: http://oduckberry:3000")
     print(f"   Socket timeout: {server.timeout}s, Keep-alive: 10s")
     try:

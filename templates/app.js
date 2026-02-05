@@ -1342,9 +1342,127 @@ async function loadDuckName() {
 }
 
 // Load current settings on page load
+// === Batch polling - 1 request i stedet for 7 ===
+async function pollDashboard() {
+    try {
+        const response = await fetch('/poll');
+        const data = await response.json();
+        
+        // Duck status
+        if (data.duck_status) {
+            const statusEl = document.getElementById('status');
+            if (data.duck_status.running) {
+                statusEl.className = 'status-box status-running';
+                statusEl.innerHTML = '✅ Duck kjører';
+            } else {
+                statusEl.className = 'status-box status-stopped';
+                statusEl.innerHTML = '⏸️ Duck er stoppet';
+            }
+        }
+        
+        // Boredom
+        if (data.boredom) {
+            const b = data.boredom;
+            const bEmoji = document.getElementById('boredom-emoji');
+            const bLevel = document.getElementById('boredom-level');
+            const bStatus = document.getElementById('boredom-status');
+            const bBar = document.getElementById('boredom-bar');
+            if (bEmoji) bEmoji.textContent = b.emoji;
+            if (bLevel) bLevel.textContent = b.level;
+            if (bStatus) bStatus.textContent = b.status;
+            if (bBar) {
+                bBar.style.width = (b.level * 10) + '%';
+                bBar.style.background = b.color;
+            }
+        }
+        
+        // Hunger
+        if (data.hunger) {
+            const h = data.hunger;
+            const hEmoji = document.getElementById('hunger-emoji');
+            const hLevel = document.getElementById('hunger-level');
+            const hStatus = document.getElementById('hunger-status');
+            const hMeals = document.getElementById('meals-today');
+            const hNext = document.getElementById('next-meal');
+            const hBar = document.getElementById('hunger-bar');
+            if (hEmoji) hEmoji.textContent = h.emoji;
+            if (hLevel) hLevel.textContent = h.level;
+            if (hStatus) hStatus.textContent = h.status;
+            if (hMeals) hMeals.textContent = h.meals_today || 0;
+            if (hNext) hNext.textContent = h.next_meal_time || '12:00';
+            if (hBar) {
+                hBar.style.width = (h.level * 10) + '%';
+                hBar.style.background = h.color;
+            }
+        }
+        
+        // Sleep mode
+        if (data.sleep) {
+            const s = data.sleep;
+            const statusDiv = document.getElementById('sleep-mode-status');
+            const toggleBtn = document.getElementById('sleep-toggle-btn');
+            const countdownDiv = document.getElementById('sleep-countdown');
+            const endTimeSpan = document.getElementById('sleep-end-time');
+            const remainingSpan = document.getElementById('sleep-remaining');
+            if (statusDiv && toggleBtn && countdownDiv) {
+                if (s.is_sleeping) {
+                    statusDiv.textContent = '💤 Anda sover';
+                    statusDiv.style.color = '#1565c0';
+                    toggleBtn.textContent = '⏰ Våkn opp';
+                    toggleBtn.style.background = '#ff9800';
+                    countdownDiv.style.display = 'block';
+                    if (endTimeSpan) endTimeSpan.textContent = s.end_time_formatted || '';
+                    if (remainingSpan) remainingSpan.textContent = s.remaining_minutes || 0;
+                } else {
+                    statusDiv.textContent = '✅ Anda er våken';
+                    statusDiv.style.color = '#4caf50';
+                    toggleBtn.textContent = '💤 Aktiver søvn';
+                    toggleBtn.style.background = '#42a5f5';
+                    countdownDiv.style.display = 'none';
+                }
+            }
+        }
+        
+        // Memory stats
+        if (data.memory && data.memory.status === 'success' && data.memory.stats) {
+            const ms = data.memory.stats;
+            const mFacts = document.getElementById('memory-stats-facts');
+            const mMemories = document.getElementById('memory-stats-memories');
+            const mMessages = document.getElementById('memory-stats-messages');
+            if (mFacts) mFacts.textContent = ms.total_facts;
+            if (mMemories) mMemories.textContent = ms.total_memories;
+            if (mMessages) mMessages.textContent = ms.total_messages;
+        }
+        
+        // System stats
+        if (data.system) {
+            const sys = data.system;
+            const cpuTempEl = document.getElementById('cpu-temp');
+            const memoryEl = document.getElementById('memory-available');
+            if (cpuTempEl && sys.cpu_temp !== null && sys.cpu_temp !== undefined) {
+                const temp = sys.cpu_temp;
+                let color = '#4caf50';
+                if (temp > 70) color = '#ff9800';
+                if (temp > 80) color = '#f44336';
+                cpuTempEl.innerHTML = `<span style="color: ${color};">${temp.toFixed(1)}°C</span>`;
+            }
+            if (memoryEl && sys.memory) {
+                const mem = sys.memory;
+                const availableGB = (mem.available / 1024).toFixed(1);
+                const totalGB = (mem.total / 1024).toFixed(1);
+                let color = '#4caf50';
+                if (mem.used_percent > 80) color = '#ff9800';
+                if (mem.used_percent > 90) color = '#f44336';
+                memoryEl.innerHTML = `<span style="color: ${color};">${availableGB}GB / ${totalGB}GB</span>`;
+            }
+        }
+    } catch (error) {
+        console.error('Poll feil:', error);
+    }
+}
+
 window.onload = function() {
     loadDuckName();  // Last duck name først
-    updateStatus();
     loadCurrentUser();  // Last current user
     loadWakeWords();
     loadCurrentModel();
@@ -1356,34 +1474,19 @@ window.onload = function() {
     loadFanStatus();  // Lastes én gang
     getWiFiNetworks();
     loadSongs();  // Last sanger
-    loadMemoryStats();  // Last memory stats
     loadMaxContextFacts();  // Last max context facts setting
     loadMemorySettings();  // Last alle memory settings
-    loadBoredomStatus();  // Last kjedsomhetsnivå
-    loadHungerStatus();  // Last hunger nivå
     loadVisionStatus();  // Last Duck-Vision status
-    updateSleepModeStatus();  // Last sleep mode status
     loadSMSHistory();  // Last SMS historikk
     loadContacts();  // Last SMS kontakter
     loadDuckLocation();  // Last Andas lokasjon - lastes én gang
-    loadSystemStats();  // Last system stats (CPU temp, minne)
     loadPrinterStatus();  // Last printer status én gang
-    loadCurrentUser();  // Last current user - lastes én gang
     
-    // Oppdater status automatisk hvert 10. sekund
-    setInterval(updateStatus, 10000);
-    // loadCurrentUser lastes kun ved page load
-    // loadFanStatus lastes kun ved page load
-    setInterval(loadMemoryStats, 10000);  // Oppdater memory stats hvert 10. sekund
-    setInterval(loadBoredomStatus, 10000);  // Oppdater kjedsomhet hvert 10. sekund
-    setInterval(loadHungerStatus, 10000);  // Oppdater hunger hvert 10. sekund
-    // Vision status lastes kun ved page load, ikke kontinuerlig polling
-    setInterval(updateSleepModeStatus, 10000);  // Oppdater sleep mode hvert 10. sekund
-    setInterval(loadContacts, 10000);  // Oppdater kontakter hvert 10. sekund
-    // SMS history lastes ved page load, polling starter når kontakt velges
-    // loadDuckLocation lastes kun ved page load
-    // Printer status lastes kun ved page load
-    setInterval(loadSystemStats, 10000);  // Oppdater system stats hvert 10. sekund
+    // Første batch-poll (erstatter alle individuelle kall)
+    pollDashboard();
+    
+    // Én eneste poller hvert 10. sekund i stedet for 7 separate
+    setInterval(pollDashboard, 10000);
 };
 
 // Boredom Status
