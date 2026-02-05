@@ -714,10 +714,11 @@ class MemoryManager:
         """Beregn cosine similarity mellom to vektorer"""
         return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
     
-    def search_by_embedding(self, query: str, limit: int = 10, threshold: float = 0.25) -> List[ProfileFact]:
-        """Søk facts basert på semantic similarity"""
-        # Generer query embedding
-        query_embedding = self.generate_embedding(query)
+    def search_by_embedding(self, query: str, limit: int = 10, threshold: float = 0.25, query_embedding=None) -> List[ProfileFact]:
+        """Søk facts basert på semantic similarity. Aksepterer ferdig query_embedding for å unngå dobbelt API-kall."""
+        # Bruk ferdig embedding eller generer ny
+        if query_embedding is None:
+            query_embedding = self.generate_embedding(query)
         if query_embedding is None:
             # Fallback til keyword search
             return self.search_profile_facts(query, limit)
@@ -1241,7 +1242,7 @@ class MemoryManager:
         
         return scored_memories[:limit]
     
-    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None, boost_user: str = None) -> List[Memory]:
+    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None, boost_user: str = None, query_embedding=None, touch: bool = True) -> List[Memory]:
         """
         Søk i memories med embedding similarity (semantisk søk)
         
@@ -1251,12 +1252,15 @@ class MemoryManager:
             threshold: Minimum similarity score (0-1)
             user_name: Filter på bruker (optional, strict filtering)
             boost_user: Gi relevance boost til minner om denne personen (optional, soft preference)
+            query_embedding: Ferdig embedding (unngår ekstra API-kall)
+            touch: Oppdater last_accessed (sett False for sanntidssamtaler)
         
         Returns:
             List of Memory objects, sortert etter relevans
         """
-        # Generer embedding for query
-        query_embedding = self.generate_embedding(query)
+        # Bruk ferdig embedding eller generer ny
+        if query_embedding is None:
+            query_embedding = self.generate_embedding(query)
         if query_embedding is None:
             # Fallback til FTS search hvis embedding feiler
             return [m for m, _ in self.search_memories(query, limit)]
@@ -1311,9 +1315,10 @@ class MemoryManager:
         # Sorter etter justert similarity (høyest først)
         results.sort(key=lambda x: x[0], reverse=True)
         
-        # Touch the top memories (update last_accessed)
-        for similarity, memory, memory_id in results[:limit]:
-            self._touch_memory(memory_id)
+        # Touch the top memories (update last_accessed) - skip i sanntidssamtaler for ytelse
+        if touch:
+            for similarity, memory, memory_id in results[:limit]:
+                self._touch_memory(memory_id)
         
         # Returner top N memories
         return [memory for _, memory, _ in results[:limit]]
@@ -1479,19 +1484,22 @@ class MemoryManager:
         
         conn.close()
         
-        # 1. Søk etter relevante facts basert på query (EMBEDDING SEARCH)
-        searched_facts = self.search_by_embedding(query, limit=embedding_limit)
+        # 1. Generer embedding ÉN gang (brukes for både facts og memories)
+        query_embedding = self.generate_embedding(query)
         
-        # 2. Ekspander med relaterte facts
+        # 2. Søk etter relevante facts basert på query (EMBEDDING SEARCH)
+        searched_facts = self.search_by_embedding(query, limit=embedding_limit, query_embedding=query_embedding)
+        
+        # 3. Ekspander med relaterte facts
         expanded_facts = self._expand_related_facts(searched_facts)
         
-        # 3. Hvis vi fremdeles har få facts, legg til frekvente
+        # 4. Hvis vi fremdeles har få facts, legg til frekvente
         if len(expanded_facts) < expand_threshold:
             frequent_facts = self.get_top_facts_cached(limit=frequent_limit)
         else:
             frequent_facts = []
         
-        # 4. Kombiner og dedupliser
+        # 5. Kombiner og dedupliser
         seen_keys = set()
         combined_facts = []
         
@@ -1510,7 +1518,7 @@ class MemoryManager:
         # Begrens til max N facts totalt (konfigurerbart via kontrollpanel)
         profile_facts = combined_facts[:max_facts]
         
-        # 5. Relevant memories (EMBEDDING SEARCH - semantisk søk)
+        # 6. Relevant memories (gjenbruker samme embedding - spar 1 API-kall)
         # Søk i ALLE minner, men boost minner om personen vi snakker med
         conn = self._get_connection()  # Re-open connection
         relevant_memories_list = self.search_memories_by_embedding(
@@ -1518,16 +1526,18 @@ class MemoryManager:
             limit=MEMORY_LIMIT, 
             threshold=MEMORY_THRESHOLD, 
             user_name=None,  # Søk i alle minner
-            boost_user=user_name  # Men boost minner om denne personen
+            boost_user=user_name,  # Men boost minner om denne personen
+            query_embedding=query_embedding,  # Gjenbruk embedding (spar 1 API-kall)
+            touch=False  # Ikke oppdater last_accessed i sanntid (ytelse)
         )
         # Convert to same format as old search_memories (List[Tuple[Memory, float]])
         # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
         relevant_memories = [(m, 1.0) for m in relevant_memories_list]
         
-        # 6. Recent topics
+        # 7. Recent topics
         topic_stats = self.get_topic_stats(limit=5)
         
-        # 7. Recent conversation (siste N meldinger)
+        # 8. Recent conversation (siste N meldinger)
         c = conn.cursor()
         
         # Filter på user_name hvis oppgitt

@@ -22,6 +22,46 @@ from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_s
 from src.duck_web_search import web_search
 
 
+# ═══════════════════════════════════════════════════════════════
+# File cache med mtime-sjekk (unngår gjentatte fillesinger per tur)
+# ═══════════════════════════════════════════════════════════════
+_file_cache = {}  # {filepath: (mtime, data)}
+
+
+def _read_cached_json(filepath: str):
+    """Les JSON-fil med mtime-cache. Returnerer None hvis filen ikke finnes."""
+    try:
+        if not os.path.exists(filepath):
+            return None
+        mtime = os.path.getmtime(filepath)
+        cached = _file_cache.get(filepath)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        _file_cache[filepath] = (mtime, data)
+        return data
+    except Exception:
+        return None
+
+
+def _read_cached_text(filepath: str):
+    """Les tekstfil med mtime-cache. Returnerer None hvis filen ikke finnes."""
+    try:
+        if not os.path.exists(filepath):
+            return None
+        mtime = os.path.getmtime(filepath)
+        cached = _file_cache.get(filepath)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = f.read().strip()
+        _file_cache[filepath] = (mtime, data)
+        return data
+    except Exception:
+        return None
+
+
 def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
     """
     Hent dynamisk personlighetsprompt basert på læring fra samtaler.
@@ -379,31 +419,19 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
     Returns:
         str: Komplett system prompt
     """
-    # Les personlighet fra konfigurasjonsfil
+    # Les personlighet fra konfigurasjonsfil (mtime-cached)
     personality_prompt = None
+    personality = None
     try:
-        # Last personligheter fra JSON-fil
-        personalities = {}
-        if os.path.exists(PERSONALITIES_FILE):
-            with open(PERSONALITIES_FILE, 'r', encoding='utf-8') as f:
-                personalities = json.load(f)
-        
-        # Les hvilken personlighet som skal brukes
-        if os.path.exists(PERSONALITY_FILE):
-            with open(PERSONALITY_FILE, 'r', encoding='utf-8') as f:
-                personality = f.read().strip()
-                personality_prompt = personalities.get(personality, "")
+        personalities = _read_cached_json(PERSONALITIES_FILE) or {}
+        personality = _read_cached_text(PERSONALITY_FILE)
+        if personality:
+            personality_prompt = personalities.get(personality, "")
     except Exception as e:
         print(f"Feil ved lesing av personlighet: {e}", flush=True)
     
-    # Last messages.json for ending_phrases
-    messages_config_local = None
-    try:
-        if os.path.exists(MESSAGES_FILE):
-            with open(MESSAGES_FILE, 'r', encoding='utf-8') as f:
-                messages_config_local = json.load(f)
-    except Exception as e:
-        print(f"Feil ved lesing av messages.json: {e}", flush=True)
+    # Last messages.json for ending_phrases (mtime-cached)
+    messages_config_local = _read_cached_json(MESSAGES_FILE)
     
     # Hent nåværende dato og tid fra system
     now = datetime.now()
@@ -650,11 +678,10 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
         except Exception as e:
             print(f"⚠️ Kunne ikke bygge memory context: {e}", flush=True)
     
-    # Legg til Samanthas identitet fra konfigurasjonsfil
+    # Legg til Samanthas identitet fra konfigurasjonsfil (mtime-cached)
     try:
-        if os.path.exists(SAMANTHA_IDENTITY_FILE):
-            with open(SAMANTHA_IDENTITY_FILE, 'r', encoding='utf-8') as f:
-                identity = json.load(f)
+        identity = _read_cached_json(SAMANTHA_IDENTITY_FILE)
+        if identity:
             
             samantha_identity = f"""
 
