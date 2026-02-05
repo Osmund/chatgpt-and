@@ -376,16 +376,10 @@ class WiFiHandler(BaseHTTPRequestHandler):
                     if ping_result.returncode != 0:
                         print("ADVARSEL: Tilkoblet WiFi men ingen internett-tilgang", flush=True)
                     
-                    # Stopp monitor først (den vil prøve å stoppe hotspot om den ser WiFi)
-                    if os.path.exists('/tmp/hotspot_monitor.pid'):
-                        try:
-                            with open('/tmp/hotspot_monitor.pid', 'r') as f:
-                                monitor_pid = int(f.read().strip())
-                            subprocess.run(['kill', str(monitor_pid)], capture_output=True, timeout=2)
-                            os.remove('/tmp/hotspot_monitor.pid')
-                            print(f"Stoppet monitor (PID: {monitor_pid})", flush=True)
-                        except Exception as e:
-                            print(f"Kunne ikke stoppe monitor: {e}", flush=True)
+                    # Stopp monitor og hotspot via systemd
+                    print("Stopper hotspot-monitor og hotspot via systemd...", flush=True)
+                    subprocess.run(['sudo', 'systemctl', 'stop', 'hotspot-monitor.service'],
+                                 capture_output=True, timeout=5)
                     
                     # Stopp hotspot eksplisitt
                     print("Stopper hotspot...", flush=True)

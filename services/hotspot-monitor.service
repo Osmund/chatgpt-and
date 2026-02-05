@@ -1,0 +1,15 @@
+[Unit]
+Description=Hotspot WiFi Monitor - sjekker om WiFi kommer tilbake
+After=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /home/admog/Code/chatgpt-and/scripts/hotspot-monitor.sh
+Restart=no
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hotspot-monitor
+
+[Install]
+WantedBy=multi-user.target

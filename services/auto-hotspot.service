@@ -5,11 +5,12 @@ After=NetworkManager.service
 [Service]
 Type=oneshot
 User=root
-ExecStart=/home/admog/Code/chatgpt-and/scripts/auto-hotspot.sh
+ExecStart=/bin/bash /home/admog/Code/chatgpt-and/scripts/auto-hotspot.sh
+ExecStop=/bin/bash -c "systemctl stop wifi-portal.service hotspot-monitor.service 2>/dev/null; nmcli connection down Hotspot 2>/dev/null; /home/admog/Code/chatgpt-and/.venv/bin/python3 -c 'from rgb_duck import off; off()' 2>/dev/null"
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=60
+TimeoutStartSec=90
 
 [Install]
 WantedBy=multi-user.target

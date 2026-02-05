@@ -1,0 +1,19 @@
+[Unit]
+Description=WiFi Portal for Duck Hotspot
+After=NetworkManager.service
+ConditionPathExists=/home/admog/Code/chatgpt-and/wifi-portal.py
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/admog/Code/chatgpt-and
+ExecStart=/home/admog/Code/chatgpt-and/.venv/bin/python3 /home/admog/Code/chatgpt-and/wifi-portal.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wifi-portal
+
+[Install]
+# Startes av auto-hotspot, ikke ved boot
+WantedBy=multi-user.target
