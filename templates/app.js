@@ -490,28 +490,68 @@ async function rebootPi() {
         return;
     }
     
+    // Vis reboot-overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:Arial,sans-serif;';
+    overlay.innerHTML = `
+        <div style="font-size:60px;margin-bottom:20px;">🦆🔄</div>
+        <div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Anda restarter...</div>
+        <div style="font-size:16px;color:#aaa;">Siden oppdateres automatisk når Anda er tilbake</div>
+    `;
+    document.body.appendChild(overlay);
+    
     try {
-        const response = await fetch('/reboot', {
-            method: 'POST'
-        });
-        alert('Raspberry Pi restarter...');
+        await fetch('/reboot', { method: 'POST' });
     } catch (error) {
-        alert('Feil: ' + error.message);
+        // Forventet
     }
+    
+    // Poll til serveren er tilbake
+    setTimeout(async () => {
+        for (let i = 0; i < 30; i++) {
+            try {
+                const r = await fetch('/duck-status', { signal: AbortSignal.timeout(2000) });
+                if (r.ok) { location.reload(); return; }
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 5000));
+        }
+        overlay.innerHTML += '<div style="margin-top:20px;color:#ff9800;">Anda tar litt tid... prøv å refreshe manuelt.</div>';
+    }, 15000);
 }
 
 async function shutdownPi() {
-    if (!confirm('Er du sikker på at du vil skru av Raspberry Pi?')) {
+    if (!confirm('Er du sikker på at du vil skru av Raspberry Pi?\n\nAnda vil ta backup og stenge ned trygt.')) {
         return;
     }
     
+    // Vis shutdown-overlay umiddelbart
+    const overlay = document.createElement('div');
+    overlay.id = 'shutdown-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;font-family:Arial,sans-serif;';
+    overlay.innerHTML = `
+        <div style="font-size:60px;margin-bottom:20px;">🦆💤</div>
+        <div style="font-size:24px;font-weight:bold;margin-bottom:10px;">Anda skrur seg av...</div>
+        <div id="shutdown-step" style="font-size:16px;color:#aaa;margin-bottom:30px;">Tar backup av database...</div>
+        <div style="width:200px;height:6px;background:#333;border-radius:3px;overflow:hidden;">
+            <div id="shutdown-bar" style="width:10%;height:100%;background:#ff9800;border-radius:3px;transition:width 1s ease;"></div>
+        </div>
+        <div style="margin-top:40px;font-size:14px;color:#666;">Du kan koble fra strømmen når skjermen blir helt mørk</div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Animere fremdrift
+    const bar = document.getElementById('shutdown-bar');
+    const step = document.getElementById('shutdown-step');
+    
+    setTimeout(() => { bar.style.width = '30%'; step.textContent = 'Stopper tjenester...'; }, 3000);
+    setTimeout(() => { bar.style.width = '60%'; step.textContent = 'Rydder opp...'; }, 8000);
+    setTimeout(() => { bar.style.width = '90%'; step.textContent = 'Skrur av...'; }, 15000);
+    setTimeout(() => { bar.style.width = '100%'; step.textContent = '✓ Anda er av. Du kan koble fra strømmen.'; }, 25000);
+    
     try {
-        const response = await fetch('/shutdown', {
-            method: 'POST'
-        });
-        alert('Raspberry Pi skrur av...');
+        await fetch('/shutdown', { method: 'POST' });
     } catch (error) {
-        alert('Feil: ' + error.message);
+        // Forventet - serveren stopper
     }
 }
 
