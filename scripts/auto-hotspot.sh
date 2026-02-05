@@ -155,7 +155,7 @@ if is_hotspot_running; then
             portal_pid=$(cat "$PORTAL_PID_FILE")
             if ! ps -p "$portal_pid" > /dev/null 2>&1; then
                 log "Portal er død, starter på nytt..."
-                "$VENV_PYTHON" "$PORTAL_SCRIPT" &
+                sudo "$VENV_PYTHON" "$PORTAL_SCRIPT" >> "$LOG_FILE" 2>&1 &
                 PORTAL_PID=$!
                 echo $PORTAL_PID > "$PORTAL_PID_FILE"
                 log "WiFi-portal startet (PID: $PORTAL_PID)"
@@ -164,7 +164,7 @@ if is_hotspot_running; then
             fi
         else
             log "Portal ikke startet, starter nå..."
-            "$VENV_PYTHON" "$PORTAL_SCRIPT" &
+            sudo "$VENV_PYTHON" "$PORTAL_SCRIPT" >> "$LOG_FILE" 2>&1 &
             PORTAL_PID=$!
             echo $PORTAL_PID > "$PORTAL_PID_FILE"
             log "WiFi-portal startet (PID: $PORTAL_PID)"
@@ -289,11 +289,30 @@ if timeout 10 nmcli connection up "$HOTSPOT_NAME" 2>&1 | logger -t "$LOG_TAG"; t
         fi
     fi
     
-    # Start ny portal
-    "$VENV_PYTHON" "$PORTAL_SCRIPT" &
+    # Start ny portal (med sudo for å sikre port 80 tilgang)
+    sudo "$VENV_PYTHON" "$PORTAL_SCRIPT" >> "$LOG_FILE" 2>&1 &
     PORTAL_PID=$!
     echo $PORTAL_PID > "$PORTAL_PID_FILE"
     log "WiFi-portal startet (PID: $PORTAL_PID)"
+    
+    # Verifiser at portalen faktisk startet (vent litt og sjekk prosess)
+    sleep 2
+    if ps -p $PORTAL_PID > /dev/null 2>&1; then
+        log "✓ Portal prosess kjører"
+        
+        # Sjekk om port 80 eller 8080 lytter
+        if timeout 5 bash -c "while ! netstat -tln 2>/dev/null | grep -q ':80\|:8080'; do sleep 0.5; done"; then
+            PORTAL_PORT=$(netstat -tln 2>/dev/null | grep -E ':(80|8080) ' | head -1 | grep -oE ':[0-9]+' | tr -d ':')
+            log "✓ Portal lytter på port $PORTAL_PORT"
+            if [ "$PORTAL_PORT" != "80" ]; then
+                log "⚠️  Portal bruker port $PORTAL_PORT i stedet for 80"
+            fi
+        else
+            log "⚠️  Portal prosess kjører men lytter ikke på port 80/8080 ennå"
+        fi
+    else
+        log "✗ FEIL: Portal prosess crashet ved oppstart! Sjekk logs."
+    fi
     
     # Start monitor i bakgrunn som sjekker om WiFi kommer tilbake
     # Lagre PID for å kunne stoppe monitoren senere

@@ -392,8 +392,26 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/wifi-networks':
             # Hent tilgjengelige WiFi-nettverk
             try:
+                # Get active WiFi connection with channel info
+                active_result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'ACTIVE,SSID,CHAN', 'dev', 'wifi'],
+                    capture_output=True, text=True, timeout=5
+                )
+                
+                active_ssid = None
+                active_channel = None
+                if active_result.returncode == 0:
+                    for line in active_result.stdout.strip().split('\n'):
+                        if line.startswith('yes:'):
+                            # Format: yes:SSID:CHANNEL
+                            parts = line.split(':')
+                            if len(parts) >= 3:
+                                active_ssid = parts[1]
+                                active_channel = parts[2]
+                                break
+                
                 result = subprocess.run(
-                    ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+                    ['sudo', 'nmcli', '-t', '-f', 'SSID,SIGNAL,CHAN,SECURITY', 'dev', 'wifi', 'list'],
                     capture_output=True, text=True, timeout=10
                 )
                 
@@ -402,20 +420,119 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     for line in result.stdout.strip().split('\n'):
                         if line:
                             parts = line.split(':')
-                            if len(parts) >= 2:
+                            if len(parts) >= 3:
                                 ssid = parts[0]
                                 signal = parts[1] if len(parts) > 1 else '0'
+                                channel = parts[2] if len(parts) > 2 else ''
+                                
+                                # Determine frequency band from channel
+                                band = ''
+                                if channel:
+                                    try:
+                                        ch_num = int(channel)
+                                        if 1 <= ch_num <= 14:
+                                            band = '2.4GHz'
+                                        elif ch_num >= 36:
+                                            band = '5GHz'
+                                    except ValueError:
+                                        band = ''
+                                
                                 if ssid and ssid != '--':
+                                    # Match both SSID and channel to identify the exact active network
+                                    is_active = (ssid == active_ssid and channel == active_channel)
+                                    
                                     networks.append({
                                         'ssid': ssid,
-                                        'signal': signal + '%'
+                                        'signal': signal + '%',
+                                        'band': band,
+                                        'active': is_active
                                     })
                 
-                response = {'status': 'success', 'networks': networks}
+                response = {'status': 'success', 'networks': networks, 'active_ssid': active_ssid}
             except Exception as e:
                 response = {'status': 'error', 'networks': [], 'error': str(e)}
             
             self.send_json_response(response, 200)
+        
+        elif self.path == '/wifi-connect':
+            # Koble til WiFi-nettverk
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                ssid = data.get('ssid', '')
+                password = data.get('password', '')
+                
+                if not ssid:
+                    self.send_json_response({'success': False, 'error': 'SSID mangler'}, 400)
+                    return
+                
+                print(f"Kobler til WiFi: {ssid}", flush=True)
+                
+                # Send immediate response to avoid timeout
+                # Connection will continue in background
+                import threading
+                
+                def connect_in_background():
+                    try:
+                        # Rescan for å sikre nettverk er oppdatert
+                        subprocess.run(['nmcli', 'device', 'wifi', 'rescan'], 
+                                     capture_output=True, timeout=5)
+                        
+                        # Slett eksisterende connection hvis den finnes
+                        subprocess.run(
+                            ['sudo', 'nmcli', 'connection', 'delete', ssid],
+                            capture_output=True, timeout=5
+                        )
+                        
+                        # Bruk nmcli device wifi connect
+                        if password:
+                            result = subprocess.run(
+                                ['sudo', 'nmcli', 'device', 'wifi', 'connect', ssid, 'password', password],
+                                capture_output=True, text=True, timeout=30
+                            )
+                        else:
+                            result = subprocess.run(
+                                ['sudo', 'nmcli', 'device', 'wifi', 'connect', ssid],
+                                capture_output=True, text=True, timeout=30
+                            )
+                        
+                        if result.returncode == 0:
+                            # Vellykket tilkobling - sett autoconnect
+                            subprocess.run(
+                                ['sudo', 'nmcli', 'connection', 'modify', ssid, 
+                                 'connection.autoconnect', 'yes'],
+                                capture_output=True, timeout=5
+                            )
+                            subprocess.run(
+                                ['sudo', 'nmcli', 'connection', 'modify', ssid, 
+                                 'connection.autoconnect-priority', '10'],
+                                capture_output=True, timeout=5
+                            )
+                            print(f"✓ Koblet til {ssid} med autoconnect", flush=True)
+                        else:
+                            error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+                            print(f"✗ Tilkobling feilet: {error_msg}", flush=True)
+                    except Exception as e:
+                        print(f"✗ Background connection exception: {e}", flush=True)
+                
+                # Start connection in background
+                thread = threading.Thread(target=connect_in_background, daemon=True)
+                thread.start()
+                
+                # Send immediate success response
+                response = {
+                    'success': True, 
+                    'message': f'Tilkobling startet! Sjekk nettverkslisten om noen sekunder.'
+                }
+                self.send_json_response(response, 200)
+                
+            except Exception as e:
+                print(f"Exception ved WiFi-tilkobling: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({'success': False, 'error': str(e)}, 500)
         
         # ==================== MEMORY API ====================
         elif self.path == '/api/memory/stats':

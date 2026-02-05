@@ -481,11 +481,38 @@ if __name__ == '__main__':
     # Hotspot IP (sett i setup-hotspot.sh)
     HOTSPOT_IP = "192.168.50.1"
     
-    server = HTTPServer(('0.0.0.0', 80), WiFiHandler)
-    print(f"WiFi Setup Portal kjører på http://{HOTSPOT_IP}")
-    print("Koble til hotspot 'ChatGPT-Duck' (passord: kvakkkvakk)")
+    # Prøv port 80 først, fallback til 8080 hvis det feiler
+    port = 80
+    server = None
+    
+    for attempt_port in [80, 8080]:
+        try:
+            print(f"Prøver å starte WiFi portal på port {attempt_port}...", flush=True)
+            server = HTTPServer(('0.0.0.0', attempt_port), WiFiHandler)
+            port = attempt_port
+            print(f"✓ WiFi Setup Portal kjører på http://{HOTSPOT_IP}:{port if port != 80 else ''}", flush=True)
+            print("Koble til hotspot 'ChatGPT-Duck' (passord: kvakkkvakk)", flush=True)
+            break
+        except PermissionError:
+            print(f"✗ Ingen tilgang til port {attempt_port} (krever root)", flush=True)
+            if attempt_port == 8080:
+                print("FEIL: Kan ikke binde til noen porter!", flush=True)
+                exit(1)
+        except OSError as e:
+            if 'Address already in use' in str(e):
+                print(f"✗ Port {attempt_port} er allerede i bruk", flush=True)
+            else:
+                print(f"✗ Feil ved binding til port {attempt_port}: {e}", flush=True)
+            if attempt_port == 8080:
+                print("FEIL: Kunne ikke starte server!", flush=True)
+                exit(1)
+    
+    if server is None:
+        print("KRITISK FEIL: Kunne ikke opprette HTTP server", flush=True)
+        exit(1)
+    
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nAvslutter...")
+        print("\nAvslutter...", flush=True)
         server.shutdown()

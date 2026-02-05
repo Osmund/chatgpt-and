@@ -266,8 +266,22 @@ async function getWiFiNetworks() {
             if (data.networks.length === 0) {
                 listDiv.textContent = 'Ingen nettverk funnet';
             } else {
-                listDiv.innerHTML = '<ul>' + 
-                    data.networks.map(net => `<li>${net.ssid} (${net.signal})</li>`).join('') + 
+                listDiv.innerHTML = '<ul style="list-style: none; padding: 0;">' + 
+                    data.networks.map(net => {
+                        const bandBadge = net.band ? `<span style="margin-left: 8px; padding: 2px 6px; background: ${net.band === '5GHz' ? '#4caf50' : '#2196f3'}; color: white; border-radius: 3px; font-size: 0.85em; font-weight: bold;">${net.band}</span>` : '';
+                        const activeIndicator = net.active ? '<span style="margin-left: 8px; color: #4caf50; font-weight: bold;">✓ Tilkoblet</span>' : '';
+                        const bgColor = net.active ? '#e8f5e9' : '#f5f5f5';
+                        const hoverColor = net.active ? '#c8e6c9' : '#e0e0e0';
+                        const borderLeft = net.active ? 'border-left: 4px solid #4caf50;' : '';
+                        
+                        return `
+                        <li style="padding: 10px; margin: 5px 0; background: ${bgColor}; border-radius: 5px; cursor: pointer; transition: background 0.2s; ${borderLeft}"
+                            onclick="connectToWifi('${net.ssid.replace(/'/g, "\\'")}')"
+                            onmouseover="this.style.background='${hoverColor}'"
+                            onmouseout="this.style.background='${bgColor}'">
+                            📶 ${net.ssid} (${net.signal})${bandBadge}${activeIndicator}
+                        </li>
+                    `}).join('') + 
                     '</ul>';
             }
         } else {
@@ -275,6 +289,72 @@ async function getWiFiNetworks() {
         }
     } catch (error) {
         listDiv.textContent = 'Feil: ' + error.message;
+    }
+}
+
+async function connectToWifi(ssid) {
+    const password = prompt(`Skriv inn passord for "${ssid}"\n\n(La felt stå tomt for åpne nettverk):`);
+    
+    if (password === null) {
+        return; // User cancelled
+    }
+    
+    // Show connecting message immediately
+    const connectingMsg = `⏳ Kobler til "${ssid}"...\n\nDette kan ta 10-30 sekunder.\nAndas kontrollpanel kan bli utilgjengelig midlertidig hvis hun bytter nettverk.`;
+    
+    // Use a non-blocking alert alternative
+    const statusDiv = document.createElement('div');
+    statusDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); color: white; padding: 30px; border-radius: 10px; z-index: 10000; text-align: center; max-width: 400px;';
+    statusDiv.innerHTML = `<div style="font-size: 24px; margin-bottom: 15px;">⏳</div><div>${connectingMsg.replace(/\n/g, '<br>')}</div>`;
+    document.body.appendChild(statusDiv);
+    
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+        
+        const response = await fetch('/wifi-connect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ssid: ssid,
+                password: password
+            }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        document.body.removeChild(statusDiv);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Koblet til "${ssid}"!\n\n${data.message || 'Tilkobling vellykket'}`);
+            // Refresh network list after connection
+            setTimeout(() => getWiFiNetworks(), 2000);
+        } else {
+            alert(`❌ Kunne ikke koble til "${ssid}"\n\n${data.error || 'Ukjent feil'}`);
+        }
+    } catch (error) {
+        document.body.removeChild(statusDiv);
+        
+        if (error.name === 'AbortError') {
+            // Timeout - connection might still be in progress
+            alert(`⏱️ Tilkobling til "${ssid}" tok for lang tid.\n\nTilkoblingen kan fortsatt være i gang. Sjekk nettverkslisten om noen sekunder for å se om den lyktes.`);
+            setTimeout(() => getWiFiNetworks(), 5000);
+        } else {
+            alert('❌ Nettverksfeil: ' + error.message + '\n\nDette er normalt hvis Anda byttet nettverk. Prøv å refreshe siden om noen sekunder.');
+        }
+        
+        // Try to refresh network list anyway
+        setTimeout(() => {
+            try {
+                getWiFiNetworks();
+            } catch (e) {
+                console.log('Could not refresh network list:', e);
+            }
+        }, 5000);
     }
 }
 
