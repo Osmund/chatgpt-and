@@ -11,51 +11,40 @@
         <div class="duck-emoji">🦆</div>
         <h1 id="duck-title">ChatGPT Duck</h1>
         
-        <!-- Current User Display -->
-        <div id="current-user" style="text-align: center; margin: 15px 0; padding: 10px; background: #f0f0f0; border-radius: 8px; font-size: 1.1em;">
-            <span style="color: #666;">👤 Nåværende bruker:</span> 
-            <span id="user-name" style="font-weight: bold; color: #667eea;">...</span>
-            <span id="user-relation" style="color: #888; font-size: 0.9em;"></span>
-        </div>
-        
-        <!-- Duck Status -->
-        <div id="status" class="status-box status-unknown">
-            Henter status...
-        </div>
-        
-        <!-- Home Assistant Status -->
-        <div id="ha-status" style="text-align: center; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; font-size: 0.95em; border: 1px solid #ddd;">
-            <span style="color: #666;">🏠 Home Assistant:</span> 
-            <span id="ha-status-text" style="font-weight: bold;">...</span>
-        </div>
-        
-        <!-- Duck Location -->
-        <div id="duck-location" style="text-align: center; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; font-size: 0.95em; border: 1px solid #ddd;">
-            <span style="color: #666;">📍 Anda er i:</span> 
-            <span id="duck-location-text" style="font-weight: bold; color: #667eea;">...</span>
-        </div>
-        
-        <!-- Duck-Vision Status -->
-        <div id="vision-status" style="text-align: center; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; font-size: 0.95em; border: 1px solid #ddd;">
-            <span style="color: #666;">📷 Duck-Vision:</span> 
-            <span id="vision-status-text" style="font-weight: bold;">...</span>
-        </div>
-        
-        <!-- System Stats -->
-        <div id="system-stats" style="text-align: center; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; font-size: 0.95em; border: 1px solid #ddd;">
-            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-                <div>
-                    <span style="color: #666;">🌡️ CPU:</span> 
-                    <span id="cpu-temp" style="font-weight: bold;">...</span>
+        <!-- ===== DASHBOARD ===== -->
+        <div class="dashboard">
+            <div id="status" class="status-box status-unknown">Henter status...</div>
+            
+            <div class="dashboard-grid">
+                <div class="dash-card" id="current-user">
+                    <span class="dash-label">👤 Bruker</span>
+                    <span class="dash-value" id="user-name">...</span>
+                    <span class="dash-sub" id="user-relation"></span>
                 </div>
-                <div>
-                    <span style="color: #666;">🧠 Minne:</span> 
-                    <span id="memory-available" style="font-weight: bold;">...</span>
+                <div class="dash-card" id="ha-status">
+                    <span class="dash-label">🏠 Home Assistant</span>
+                    <span class="dash-value" id="ha-status-text">...</span>
+                </div>
+                <div class="dash-card" id="duck-location">
+                    <span class="dash-label">📍 Lokasjon</span>
+                    <span class="dash-value" id="duck-location-text">...</span>
+                </div>
+                <div class="dash-card" id="vision-status">
+                    <span class="dash-label">📷 Duck-Vision</span>
+                    <span class="dash-value" id="vision-status-text">...</span>
+                </div>
+                <div class="dash-card" id="system-stats">
+                    <span class="dash-label">🌡️ CPU</span>
+                    <span class="dash-value" id="cpu-temp">...</span>
+                </div>
+                <div class="dash-card" id="system-stats-mem">
+                    <span class="dash-label">🧠 Minne</span>
+                    <span class="dash-value" id="memory-available">...</span>
                 </div>
             </div>
         </div>
         
-        <!-- Tamagotchi Section -->
+        <!-- ===== TAMAGOTCHI ===== -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <span>🎮 Tamagotchi</span>
@@ -63,44 +52,38 @@
             </div>
             <div class="collapsible-content">
                 <div class="collapsible-body">
-                    <!-- Hunger Meter -->
-                    <div id="hunger-meter" style="text-align: center; margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #fff5e6 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ffb74d;">
-                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">🍕 Sultbarometer 🍪</div>
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                            <span id="hunger-emoji" style="font-size: 2em;">😊</span>
-                            <div style="flex: 1; max-width: 300px;">
-                                <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
-                                    <div id="hunger-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                    <!-- Hunger -->
+                    <div class="meter-card meter-hunger" id="hunger-meter">
+                        <div class="meter-title">🍕 Sultbarometer 🍪</div>
+                        <div class="meter-row">
+                            <span class="meter-emoji" id="hunger-emoji">😊</span>
+                            <div class="meter-bar-wrap">
+                                <div class="meter-bar-bg">
+                                    <div class="meter-bar" id="hunger-bar"></div>
                                 </div>
-                                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                                <div class="meter-info">
                                     <span id="hunger-level">0.0</span>/10 - <span id="hunger-status">Mett</span>
-                                    <br>
-                                    <span style="font-size: 0.8em;">Måltider i dag: <span id="meals-today">0</span> | Neste: <span id="next-meal">12:00</span></span>
+                                    <br><small>Måltider i dag: <span id="meals-today">0</span> | Neste: <span id="next-meal">12:00</span></small>
                                 </div>
                             </div>
                         </div>
-                        <!-- Feed buttons -->
-                        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 12px;">
-                            <button onclick="feedAnda('cookie')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
-                                🍪 Gi cookie
-                            </button>
-                            <button onclick="feedAnda('pizza')" style="padding: 8px 20px; font-size: 1.2em; background: linear-gradient(135deg, #ff9a56 0%, #ff6a00 100%); border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
-                                🍕 Gi pizza
-                            </button>
+                        <div class="feed-buttons">
+                            <button class="btn-feed btn-cookie" onclick="feedAnda('cookie')">🍪 Gi cookie</button>
+                            <button class="btn-feed btn-pizza" onclick="feedAnda('pizza')">🍕 Gi pizza</button>
                         </div>
-                        <div id="feed-status" style="font-size: 0.85em; color: #666; margin-top: 8px; min-height: 20px;"></div>
+                        <div class="feed-result" id="feed-status"></div>
                     </div>
                     
-                    <!-- Boredom Meter -->
-                    <div id="boredom-meter" style="text-align: center; margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 2px solid #ddd;">
-                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Kjedsomhetsbarometer</div>
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                            <span id="boredom-emoji" style="font-size: 2em;">😊</span>
-                            <div style="flex: 1; max-width: 300px;">
-                                <div style="background: #e0e0e0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
-                                    <div id="boredom-bar" style="background: #4ade80; height: 100%; width: 0%; transition: all 0.5s ease; border-radius: 10px;"></div>
+                    <!-- Boredom -->
+                    <div class="meter-card meter-boredom" id="boredom-meter">
+                        <div class="meter-title">Kjedsomhetsbarometer</div>
+                        <div class="meter-row">
+                            <span class="meter-emoji" id="boredom-emoji">😊</span>
+                            <div class="meter-bar-wrap">
+                                <div class="meter-bar-bg">
+                                    <div class="meter-bar" id="boredom-bar"></div>
                                 </div>
-                                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                                <div class="meter-info">
                                     <span id="boredom-level">0.0</span>/10 - <span id="boredom-status">Fornøyd</span>
                                 </div>
                             </div>
@@ -108,13 +91,11 @@
                     </div>
                     
                     <!-- Sleep Mode -->
-                    <div id="sleep-mode-panel" style="text-align: center; padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border: 2px solid #42a5f5;">
-                        <div style="font-size: 0.9em; color: #666; margin-bottom: 8px;">💤 Søvnmodus (Sleep Mode)</div>
-                        <div id="sleep-mode-status" style="font-weight: bold; margin-bottom: 10px; color: #1976d2;">
-                            Aktiv
-                        </div>
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-                            <select id="sleep-duration" style="padding: 8px; border-radius: 5px; border: 1px solid #42a5f5; font-size: 1em;">
+                    <div class="meter-card meter-sleep" id="sleep-mode-panel">
+                        <div class="meter-title">💤 Søvnmodus</div>
+                        <div class="sleep-status" id="sleep-mode-status">Aktiv</div>
+                        <div class="sleep-controls">
+                            <select id="sleep-duration" class="sleep-select">
                                 <option value="30">30 minutter</option>
                                 <option value="60" selected>1 time</option>
                                 <option value="90">1.5 timer</option>
@@ -122,357 +103,213 @@
                                 <option value="180">3 timer</option>
                                 <option value="240">4 timer</option>
                             </select>
-                            <button id="sleep-toggle-btn" onclick="toggleSleepMode()" style="padding: 10px 20px; background: #42a5f5; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1em;">
-                                💤 Aktiver
-                            </button>
+                            <button id="sleep-toggle-btn" class="btn-sleep" onclick="toggleSleepMode()">💤 Aktiver</button>
                         </div>
-                        <div id="sleep-countdown" style="margin-top: 10px; font-size: 0.9em; color: #1565c0; display: none;">
-                            Sovner til: <span id="sleep-end-time" style="font-weight: bold;"></span>
-                            (<span id="sleep-remaining" style="font-weight: bold;"></span> minutter igjen)
+                        <div class="sleep-countdown" id="sleep-countdown" style="display:none;">
+                            Sovner til: <strong id="sleep-end-time"></strong>
+                            (<strong id="sleep-remaining"></strong> minutter igjen)
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- 3D Printer Section -->
+        <!-- ===== SNAKK MED ANDA ===== -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>🖨️ 3D Printer</span>
+                <span>💬 Snakk med Anda</span>
                 <span class="arrow">▼</span>
             </div>
             <div class="collapsible-content">
                 <div class="collapsible-body">
-                    <div id="printer-panel" style="text-align: center; padding: 12px; background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-radius: 8px; border: 2px solid #ff9800;">
-                        <div id="printer-status-container">
-                            <div id="printer-loading" style="color: #888;">
-                                <span style="font-size: 1.5em;">⏳</span><br>
-                                Henter status...
-                            </div>
-                            <div id="printer-status" style="display: none;">
-                                <div style="font-size: 1.5em; margin: 10px 0;">
-                                    <span id="printer-emoji">🖨️</span>
-                                </div>
-                                <div style="font-weight: bold; margin: 8px 0; color: #e65100;">
-                                    <span id="printer-state-text">IDLE</span>
-                                </div>
-                                <div id="printer-progress-container" style="margin: 10px 0; display: none;">
-                                    <div style="font-size: 0.9em; color: #666; margin-bottom: 4px;">
-                                        <span id="printer-job-name">job.gcode</span>
-                                    </div>
-                                    <div style="background: #e0e0e0; border-radius: 10px; height: 24px; overflow: hidden; position: relative; margin: 8px 0;">
-                                        <div id="printer-progress-bar" style="background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%); height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                                            <span id="printer-progress-text" style="color: white; font-weight: bold; font-size: 0.9em; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);"></span>
-                                        </div>
-                                    </div>
-                                    <div style="font-size: 0.85em; color: #666;">
-                                        ⏱️ <span id="printer-time-remaining">...</span>
-                                    </div>
-                                </div>
-                                <div id="printer-temps" style="margin: 10px 0; font-size: 0.85em; color: #666; display: flex; justify-content: center; gap: 20px;">
-                                    <span>🌡️ Nozzle: <strong id="printer-temp-nozzle">0</strong>°C</span>
-                                    <span>🛏️ Bed: <strong id="printer-temp-bed">0</strong>°C</span>
-                                </div>
-                                <div id="printer-message" style="font-size: 0.9em; color: #888; margin-top: 8px; font-style: italic;"></div>
-                            </div>
-                            <div id="printer-error" style="display: none; color: #d32f2f;">
-                                ❌ <span id="printer-error-text"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- SMS History Section -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>📱 SMS Historikk</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body" style="max-height: 800px; overflow: hidden; padding: 0;">
-                    <div id="sms-history-container" style="height: 100%;">
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            Laster SMS...
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- SMS Contacts Section -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>📇 SMS Kontakter</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <div style="margin-bottom: 15px;">
-                        <button onclick="showAddContactForm()" style="padding: 8px 15px; background: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                            ➕ Legg til ny kontakt
-                        </button>
+                    <!-- Start conversation -->
+                    <button class="btn-start" onclick="startConversation()" style="margin-bottom:15px;">🎤 Start samtale nå</button>
+                    
+                    <!-- Wake Words -->
+                    <div id="wake-words-list" class="info" style="background:#e8f5e9; border-left-color:#4caf50; margin-bottom:20px;">
+                        <p style="margin:0; color:#2e7d32;">Laster wake words...</p>
                     </div>
                     
-                    <!-- Add Contact Form (hidden by default) -->
-                    <div id="add-contact-form" style="display: none; padding: 15px; background: #f5f5f5; border-radius: 8px; margin-bottom: 15px;">
-                        <h4 id="contact-form-title" style="margin-top: 0;">Ny kontakt</h4>
-                        <input type="hidden" id="edit-contact-id" value="">
-                        <input type="text" id="new-contact-name" placeholder="Navn" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        <input type="tel" id="new-contact-phone" placeholder="Telefonnummer (+47...)" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        <input type="text" id="new-contact-relation" placeholder="Relasjon (f.eks. venn, familie)" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        <input type="number" id="new-contact-priority" placeholder="Prioritet (1-10, lavere = viktigere)" min="1" max="10" value="5" style="width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                        <div style="display: flex; gap: 10px;">
-                            <button onclick="saveContact()" style="padding: 8px 15px; background: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer;">Lagre</button>
-                            <button onclick="cancelAddContact()" style="padding: 8px 15px; background: #999; color: white; border: none; border-radius: 5px; cursor: pointer;">Avbryt</button>
+                    <!-- Send message -->
+                    <div class="message-card">
+                        <h3>✉️ Send melding til Anda</h3>
+                        <div class="form-group">
+                            <label>Velg modus:</label>
+                            <select id="message-mode">
+                                <option value="speak">🔊 Bare si det (TTS)</option>
+                                <option value="ai">🤖 Send til AI (ChatGPT)</option>
+                            </select>
+                        </div>
+                        <textarea id="speak-text" rows="4" placeholder="Skriv din melding her..." class="message-textarea"></textarea>
+                        <button class="btn-send-msg" onclick="sendMessage()">📤 Send melding</button>
+                        <div id="ai-response" class="ai-response" style="display:none;">
+                            <strong>🤖 AI Svar:</strong>
+                            <div id="response-text"></div>
                         </div>
                     </div>
                     
-                    <!-- Contact List -->
-                    <div id="contacts-list" style="display: flex; flex-direction: column; gap: 10px;">
-                        <div style="text-align: center; color: #666; padding: 20px;">Laster kontakter...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Control Panel Section -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>🎛️ Kontrollpanel</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <button class="btn-start" onclick="controlDuck('start')">▶️ Start Duck</button>
-                    <button class="btn-stop" onclick="controlDuck('stop')">⏹️ Stopp Duck</button>
-                    <button class="btn-restart" onclick="controlDuck('restart')">🔄 Restart Duck</button>
-                    <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
-                    <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
-                    <button class="btn-wifi" onclick="switchToHotspot()">📡 Bytt WiFi-nettverk</button>
-                    <button class="btn-backup" onclick="createBackup()">💾 Ta Backup</button>
-                    <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
-                    <button class="btn-shutdown" onclick="shutdownPi()">🔌 Skru av Pi</button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Backup Status Panel -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>💾 Backup Status</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <div id="backup-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
-                        <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Siste backup:</div>
-                        <div id="latest-backup" style="font-weight: bold; color: #667eea;">Laster...</div>
-                    </div>
-                    <div id="backup-list" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 0.9em;">
-                        Laster backups...
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div id="log-output" style="display: none; margin: 20px 0; padding: 20px; background: #1e1e1e; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333; max-height: 400px; overflow-y: auto;">
-            <div id="log-content" style="font-family: 'Courier New', monospace; font-size: 12px; color: #00ff00; line-height: 1.4; white-space: pre-wrap; word-break: break-all;">
-                Laster logger...
-            </div>
-        </div>
-        
-        <!-- User Management Panel -->
-        <div id="user-panel" style="display: none; margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid #667eea;">
-            <h3 style="margin-top: 0; color: #667eea;">👥 Brukeradministrasjon</h3>
-            
-            <div style="margin: 15px 0;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Bytt til eksisterende bruker:</label>
-                <select id="user-select" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; font-size: 1em;">
-                    <option value="">Laster brukere...</option>
-                </select>
-                <button onclick="switchToUser()" style="width: 100%; margin-top: 10px; padding: 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: bold;">
-                    🔄 Bytt bruker
-                </button>
-            </div>
-            
-            <div style="margin: 20px 0; padding-top: 20px; border-top: 2px solid #ddd;">
-                <h4 style="margin-top: 0;">📋 Registrerte brukere:</h4>
-                <div id="users-list" style="max-height: 200px; overflow-y: auto;">
-                    Laster brukere...
-                </div>
-            </div>
-        </div>
-        
-        <!-- Grunninnstillinger -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>🎛️ Grunninnstillinger</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <div class="speak-section">
-                        <h3>🤖 AI Modell</h3>
-                        <select id="model-select" onchange="changeModel()">
-                            <option value="gpt-4-turbo-2024-04-09">GPT-4.1 Mini ⭐ (Anbefalt)</option>
-                            <option value="gpt-4">GPT-4</option>
-                            <option value="gpt-4-turbo">GPT-4.1 Turbo</option>
-                            <option value="gpt-4o-mini">GPT-4o Mini (Billig)</option>
-                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                            <option value="gpt-5-turbo">GPT-5.2</option>
-                        </select>
-                        <span id="model-status"></span>
-                        <div style="font-size: 11px; color: #666; margin-top: 5px;">
-                            Rediger AVAILABLE_MODELS i duck_config.py for å endre tilgjengelige modeller
-                        </div>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🎭 Personlighet</h3>
-                        <select id="personality-select" onchange="changePersonality()">
-                            <option value="normal">Normal 🦆</option>
-                            <option value="frekk">Frekk & Sarkastisk 😏</option>
-                            <option value="vennlig">Vennlig & Entusiastisk 😊</option>
-                            <option value="akademisk">Akademisk & Detaljert 🎓</option>
-                            <option value="filosof">Filosofisk & Reflekterende 🤔</option>
-                            <option value="barnlig">Barnlig & Leken 🎉</option>
-                            <option value="senior">Senior & Sur 👴</option>
-                        </select>
-                        <span id="personality-status"></span>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🎤 Stemme</h3>
-                        <select id="voice-select" onchange="changeVoice()">
-                            <option value="nb-NO-FinnNeural">Finn (Mann) 👨</option>
-                            <option value="nb-NO-IselinNeural" selected>Iselin (Kvinne) 👩</option>
-                            <option value="nb-NO-PernilleNeural">Pernille (Kvinne) 👩</option>
-                        </select>
-                        <span id="voice-status"></span>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🦆 Nebbet</h3>
-                        <select id="beak-select" onchange="changeBeak()">
-                            <option value="on">Nebbet beveger seg 👄</option>
-                            <option value="off">Nebbet av 🔇</option>
-                        </select>
-                        <span id="beak-status"></span>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🎚️ Talehastighet</h3>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span>🐌 Sakte</span>
-                            <input type="range" id="speed-slider" min="0" max="100" value="50" 
-                                   oninput="updateSpeedLabel()" onchange="changeSpeed()" 
-                                   style="flex: 1;">
-                            <span>🐇 Raskt</span>
-                        </div>
-                        <div style="text-align: center; margin-top: 10px; font-weight: bold;" id="speed-label">Normal hastighet</div>
-                        <span id="speed-status"></span>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🔊 Volum</h3>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span>🔉 Lavt</span>
-                            <input type="range" id="volume-slider" min="0" max="100" value="50" 
-                                   oninput="updateVolumeValue()" onchange="changeVolume()" 
-                                   style="flex: 1;">
-                            <span>🔊 Høyt</span>
-                        </div>
-                        <div style="text-align: center; margin-top: 10px;">
-                            <span id="volume-value" style="font-weight: bold;">50%</span>
-                            <span id="volume-status"></span>
-                        </div>
-                    </div>
-                    
-                    <div class="speak-section">
-                        <h3>🎤 Wake Word Sensitivity</h3>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span>🔇 Lav</span>
-                            <input type="range" id="sensitivity-slider" min="0" max="100" value="90" 
-                                   oninput="updateSensitivityValue()" onchange="changeSensitivity()" 
-                                   style="flex: 1;">
-                            <span>🔊 Høy</span>
-                        </div>
-                        <div style="text-align: center; margin-top: 10px;">
-                            <span id="sensitivity-value" style="font-weight: bold;">0.90</span>
-                            <span id="sensitivity-status"></span>
-                        </div>
-                        <div style="font-size: 11px; color: #666; margin-top: 5px; text-align: center;">
-                            ⚠️ Krever restart av Anda for å tre i kraft
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Kommunikasjon -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>💬 Kommunikasjon</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <div class="speak-section">
-                        <h3>🎙️ Wake Words</h3>
-                        <div id="wake-words-list" class="info" style="background: #e8f5e9; border-left-color: #4caf50;">
-                            <p style="margin: 0; color: #2e7d32;">Laster wake words...</p>
-                        </div>
-                    </div>
-        
-        <div class="speak-section">
-            <h3>🦆💬 Start samtale</h3>
-            <button class="btn-start" onclick="startConversation()">🎤 Start samtale nå</button>
-        </div>
-        
-        <div class="speak-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-            <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">� Send melding til anda</h3>
-            <div style="margin-bottom: 15px;">
-                <label style="color: white; font-weight: bold; display: block; margin-bottom: 8px;">Velg modus:</label>
-                <select id="message-mode" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; background: white; cursor: pointer; box-sizing: border-box;">
-                    <option value="speak">🔊 Bare si det (TTS)</option>
-                    <option value="ai">🤖 Send til AI (ChatGPT)</option>
-                </select>
-            </div>
-            <textarea id="speak-text" rows="6" placeholder="Skriv din melding her..." style="width: 100%; padding: 15px; border-radius: 10px; border: 2px solid white; font-size: 16px; resize: vertical; min-height: 120px; font-family: Arial, sans-serif; box-sizing: border-box;"></textarea>
-            <button class="btn-send" onclick="sendMessage()" style="width: 100%; margin-top: 15px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #667eea; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">📤 Send melding</button>
-                        <div id="ai-response" style="margin-top: 20px; padding: 20px; background-color: rgba(255,255,255,0.95); border-radius: 10px; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                            <strong style="color: #667eea; font-size: 16px;">🤖 AI Svar:</strong>
-                            <div id="response-text" style="margin-top: 10px; color: #333; line-height: 1.6;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Musikk -->
-        <div class="collapsible">
-            <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                <span>🎵 Musikk</span>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <div class="collapsible-body">
-                    <div class="speak-section" style="background: linear-gradient(135deg, #e91e63 0%, #9c27b0 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎵 La anda synge!</h3>
-                        <select id="song-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid white; font-size: 16px; background: white; margin-bottom: 15px; box-sizing: border-box;">
+                    <!-- Music -->
+                    <div class="music-card">
+                        <h3>🎵 La Anda synge!</h3>
+                        <select id="song-select">
                             <option value="">Velg en sang...</option>
                         </select>
-                        <button class="btn-start" onclick="playSong()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 18px; font-weight: bold; background: white; color: #e91e63; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='#f0f0f0'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='white'; this.style.transform='scale(1)'">🎤 Syng!</button>
-                        <button class="btn-stop" onclick="stopSong()" style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; border-radius: 10px; cursor: pointer; transition: all 0.3s; box-sizing: border-box;" onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='scale(1.02)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='scale(1)'">⏹ Stopp syng</button>
-                        <div id="song-status" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.9); border-radius: 8px; display: none; color: #333;"></div>
+                        <div class="music-buttons">
+                            <button class="btn-start" onclick="playSong()">🎤 Syng!</button>
+                            <button class="btn-stop" onclick="stopSong()">⏹ Stopp</button>
+                        </div>
+                        <div id="song-status" class="song-result" style="display:none;"></div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Personlighet -->
+        <!-- ===== SMS ===== -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>📱 SMS</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="tab-bar">
+                        <button class="tab-btn tab-active" onclick="switchSmsTab('history', this)">📱 Historikk</button>
+                        <button class="tab-btn" onclick="switchSmsTab('contacts', this)">📇 Kontakter</button>
+                    </div>
+                    
+                    <div id="sms-tab-history" class="tab-content tab-visible">
+                        <div id="sms-history-container" style="max-height:600px; overflow:hidden;">
+                            <div class="loading-text">Laster SMS...</div>
+                        </div>
+                    </div>
+                    
+                    <div id="sms-tab-contacts" class="tab-content">
+                        <button class="btn-add-contact" onclick="showAddContactForm()">➕ Legg til ny kontakt</button>
+                        
+                        <div id="add-contact-form" style="display:none;" class="contact-form">
+                            <h4 id="contact-form-title">Ny kontakt</h4>
+                            <input type="hidden" id="edit-contact-id" value="">
+                            <input type="text" id="new-contact-name" placeholder="Navn">
+                            <input type="tel" id="new-contact-phone" placeholder="Telefonnummer (+47...)">
+                            <input type="text" id="new-contact-relation" placeholder="Relasjon (f.eks. venn, familie)">
+                            <input type="number" id="new-contact-priority" placeholder="Prioritet (1-10)" min="1" max="10" value="5">
+                            <div class="form-actions">
+                                <button class="btn-save" onclick="saveContact()">Lagre</button>
+                                <button class="btn-cancel" onclick="cancelAddContact()">Avbryt</button>
+                            </div>
+                        </div>
+                        
+                        <div id="contacts-list" class="contacts-grid">
+                            <div class="loading-text">Laster kontakter...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ===== INNSTILLINGER ===== -->
+        <div class="collapsible">
+            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                <span>🎛️ Innstillinger</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="collapsible-body">
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🔊 Stemme & Lyd</h3>
+                        
+                        <div class="setting-row">
+                            <label>🎤 Stemme</label>
+                            <select id="voice-select" onchange="changeVoice()">
+                                <option value="nb-NO-FinnNeural">Finn (Mann) 👨</option>
+                                <option value="nb-NO-IselinNeural" selected>Iselin (Kvinne) 👩</option>
+                                <option value="nb-NO-PernilleNeural">Pernille (Kvinne) 👩</option>
+                            </select>
+                            <span id="voice-status" class="status-indicator"></span>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label>🎚️ Hastighet</label>
+                            <div class="slider-row">
+                                <span class="slider-label-left">🐌</span>
+                                <input type="range" id="speed-slider" min="0" max="100" value="50"
+                                       oninput="updateSpeedLabel()" onchange="changeSpeed()">
+                                <span class="slider-label-right">🐇</span>
+                            </div>
+                            <div class="slider-value" id="speed-label">Normal hastighet</div>
+                            <span id="speed-status" class="status-indicator"></span>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label>🔊 Volum</label>
+                            <div class="slider-row">
+                                <span class="slider-label-left">🔉</span>
+                                <input type="range" id="volume-slider" min="0" max="100" value="50"
+                                       oninput="updateVolumeValue()" onchange="changeVolume()">
+                                <span class="slider-label-right">🔊</span>
+                            </div>
+                            <div class="slider-value"><span id="volume-value">50%</span></div>
+                            <span id="volume-status" class="status-indicator"></span>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label>🦆 Nebb</label>
+                            <select id="beak-select" onchange="changeBeak()">
+                                <option value="on">Nebbet beveger seg 👄</option>
+                                <option value="off">Nebbet av 🔇</option>
+                            </select>
+                            <span id="beak-status" class="status-indicator"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🤖 AI & Oppførsel</h3>
+                        
+                        <div class="setting-row">
+                            <label>🧠 AI Modell</label>
+                            <select id="model-select" onchange="changeModel()">
+                                <option value="gpt-4-turbo-2024-04-09">GPT-4.1 Mini ⭐</option>
+                                <option value="gpt-4">GPT-4</option>
+                                <option value="gpt-4-turbo">GPT-4.1 Turbo</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                <option value="gpt-5-turbo">GPT-5.2</option>
+                            </select>
+                            <span id="model-status" class="status-indicator"></span>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label>🎭 Personlighet</label>
+                            <select id="personality-select" onchange="changePersonality()">
+                                <option value="normal">Normal 🦆</option>
+                                <option value="frekk">Frekk & Sarkastisk 😏</option>
+                                <option value="vennlig">Vennlig & Entusiastisk 😊</option>
+                                <option value="akademisk">Akademisk & Detaljert 🎓</option>
+                                <option value="filosof">Filosofisk & Reflekterende 🤔</option>
+                                <option value="barnlig">Barnlig & Leken 🎉</option>
+                                <option value="senior">Senior & Sur 👴</option>
+                            </select>
+                            <span id="personality-status" class="status-indicator"></span>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label>🎤 Wake Word Sensitivity</label>
+                            <div class="slider-row">
+                                <span class="slider-label-left">🔇</span>
+                                <input type="range" id="sensitivity-slider" min="0" max="100" value="90"
+                                       oninput="updateSensitivityValue()" onchange="changeSensitivity()">
+                                <span class="slider-label-right">🔊</span>
+                            </div>
+                            <div class="slider-value"><span id="sensitivity-value">0.90</span></div>
+                            <span id="sensitivity-status" class="status-indicator"></span>
+                            <div class="setting-hint">⚠️ Krever restart av Anda</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ===== PERSONLIGHET ===== -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <span>🎭 Andas Personlighet</span>
@@ -480,140 +317,34 @@
             </div>
             <div class="collapsible-content">
                 <div class="collapsible-body">
-                    <div class="speak-section" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🎭 Juster Andas Personlighet</h3>
-                        
-                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 20px; margin-bottom: 15px;">
-                            <div id="personality-stats" style="font-size: 13px; color: #666; margin-bottom: 15px;">
-                                <span id="confidence-text">Confidence: --% | </span>
-                                <span id="analyzed-text">Analysert: -- samtaler | </span>
-                                <span id="last-analyzed-text">Sist: --</span>
-                            </div>
-                            
-                            <!-- Humor -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    💬 Humor <span id="humor-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="humor-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('humor', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Lite humor ← → Mye humor</div>
-                            </div>
-                            
-                            <!-- Verbosity -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    📝 Verbosity <span id="verbosity-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="verbosity-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('verbosity', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Korte svar ← → Lange svar</div>
-                            </div>
-                            
-                            <!-- Formality -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    👔 Formality <span id="formality-value" style="color: #ff6b6b;">3.0</span>/10
-                                </label>
-                                <input type="range" id="formality-slider" min="0" max="10" step="0.5" value="3" 
-                                       oninput="updateSlider('formality', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Uformell ← → Formell</div>
-                            </div>
-                            
-                            <!-- Enthusiasm -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🎉 Enthusiasm <span id="enthusiasm-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="enthusiasm-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('enthusiasm', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Rolig ← → Entusiastisk</div>
-                            </div>
-                            
-                            <!-- Technical -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🔧 Technical <span id="technical-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="technical-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('technical', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Enkel ← → Teknisk dyp</div>
-                            </div>
-                            
-                            <!-- Empathy -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    ❤️ Empathy <span id="empathy-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="empathy-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('empathy', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Kald/rasjonell ← → Varm/forstående</div>
-                            </div>
-                            
-                            <!-- Directness -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🎯 Directness <span id="directness-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="directness-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('directness', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Diplomatisk ← → Direkte</div>
-                            </div>
-                            
-                            <!-- Creativity -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🧠 Creativity <span id="creativity-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="creativity-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('creativity', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Faktabasert ← → Kreativ</div>
-                            </div>
-                            
-                            <!-- Boundary -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🧭 Boundary <span id="boundary-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="boundary-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('boundary', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Følger ordre ← → Utfordrer</div>
-                            </div>
-                            
-                            <!-- Proactivity -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">
-                                    🚀 Proactivity <span id="proactivity-value" style="color: #ff6b6b;">5.0</span>/10
-                                </label>
-                                <input type="range" id="proactivity-slider" min="0" max="10" step="0.5" value="5" 
-                                       oninput="updateSlider('proactivity', this.value)"
-                                       style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
-                                <div style="font-size: 12px; color: #666; margin-top: 3px;">Bare svarer ← → Foreslår aktivt</div>
-                            </div>
-                            
-                            <button onclick="savePersonality()" 
-                                    style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background: #ff6b6b; color: white; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;"
-                                    onmouseover="this.style.background='#ee5a6f'" 
-                                    onmouseout="this.style.background='#ff6b6b'">
-                                💾 Lagre Personlighet
-                            </button>
-                            <div id="personality-status" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                    <div class="personality-card">
+                        <div class="personality-stats" id="personality-stats">
+                            <span id="confidence-text">Confidence: --% | </span>
+                            <span id="analyzed-text">Analysert: -- samtaler | </span>
+                            <span id="last-analyzed-text">Sist: --</span>
                         </div>
+                        
+                        <div class="personality-sliders">
+                            <div class="p-slider"><label>💬 Humor <span id="humor-value" class="p-val">5.0</span>/10</label><input type="range" id="humor-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('humor', this.value)"><div class="p-hint">Lite humor ← → Mye humor</div></div>
+                            <div class="p-slider"><label>📝 Verbosity <span id="verbosity-value" class="p-val">5.0</span>/10</label><input type="range" id="verbosity-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('verbosity', this.value)"><div class="p-hint">Korte svar ← → Lange svar</div></div>
+                            <div class="p-slider"><label>👔 Formality <span id="formality-value" class="p-val">3.0</span>/10</label><input type="range" id="formality-slider" min="0" max="10" step="0.5" value="3" oninput="updateSlider('formality', this.value)"><div class="p-hint">Uformell ← → Formell</div></div>
+                            <div class="p-slider"><label>🎉 Enthusiasm <span id="enthusiasm-value" class="p-val">5.0</span>/10</label><input type="range" id="enthusiasm-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('enthusiasm', this.value)"><div class="p-hint">Rolig ← → Entusiastisk</div></div>
+                            <div class="p-slider"><label>🔧 Technical <span id="technical-value" class="p-val">5.0</span>/10</label><input type="range" id="technical-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('technical', this.value)"><div class="p-hint">Enkel ← → Teknisk dyp</div></div>
+                            <div class="p-slider"><label>❤️ Empathy <span id="empathy-value" class="p-val">5.0</span>/10</label><input type="range" id="empathy-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('empathy', this.value)"><div class="p-hint">Kald/rasjonell ← → Varm/forstående</div></div>
+                            <div class="p-slider"><label>🎯 Directness <span id="directness-value" class="p-val">5.0</span>/10</label><input type="range" id="directness-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('directness', this.value)"><div class="p-hint">Diplomatisk ← → Direkte</div></div>
+                            <div class="p-slider"><label>🧠 Creativity <span id="creativity-value" class="p-val">5.0</span>/10</label><input type="range" id="creativity-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('creativity', this.value)"><div class="p-hint">Faktabasert ← → Kreativ</div></div>
+                            <div class="p-slider"><label>🧭 Boundary <span id="boundary-value" class="p-val">5.0</span>/10</label><input type="range" id="boundary-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('boundary', this.value)"><div class="p-hint">Følger ordre ← → Utfordrer</div></div>
+                            <div class="p-slider"><label>🚀 Proactivity <span id="proactivity-value" class="p-val">5.0</span>/10</label><input type="range" id="proactivity-slider" min="0" max="10" step="0.5" value="5" oninput="updateSlider('proactivity', this.value)"><div class="p-hint">Bare svarer ← → Foreslår aktivt</div></div>
+                        </div>
+                        
+                        <button class="btn-save-personality" onclick="savePersonality()">💾 Lagre Personlighet</button>
+                        <div id="personality-save-status" class="save-status" style="display:none;"></div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Minne -->
+        <!-- ===== MINNE ===== -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <span>🧠 Andas Minne</span>
@@ -621,167 +352,85 @@
             </div>
             <div class="collapsible-content">
                 <div class="collapsible-body">
-                    <div class="speak-section" style="background: linear-gradient(135deg, #00bcd4 0%, #009688 100%); padding: 25px; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);">
-                        <h3 style="color: white; margin-bottom: 20px; font-size: 20px;">🧠 Andas Minne</h3>
+                    <div class="memory-card">
+                        <div class="memory-section" id="quick-facts">
+                            <h4>⚡ Nøkkelfakta</h4>
+                            <div id="quick-facts-content"><p>Laster...</p></div>
+                        </div>
                         
-                        <!-- Quick Facts -->
-                        <div id="quick-facts" style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; color: #00bcd4;">⚡ Nøkkelfakta</h4>
-                            <div id="quick-facts-content" style="font-size: 14px; color: #333;">
-                                <p style="margin: 5px 0;">Laster...</p>
+                        <div class="memory-stats-grid">
+                            <div class="memory-stat">
+                                <div class="stat-number" id="memory-stats-facts">-</div>
+                                <div class="stat-label">Fakta</div>
+                            </div>
+                            <div class="memory-stat">
+                                <div class="stat-number stat-teal" id="memory-stats-memories">-</div>
+                                <div class="stat-label">Minner</div>
+                            </div>
+                            <div class="memory-stat">
+                                <div class="stat-number stat-green" id="memory-stats-messages">-</div>
+                                <div class="stat-label">Meldinger</div>
                             </div>
                         </div>
                         
-                        <!-- Memory Stats -->
-                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="font-size: 24px; font-weight: bold; color: #00bcd4;" id="memory-stats-facts">-</div>
-                                    <div style="font-size: 12px; color: #666;">Fakta</div>
-                                </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="font-size: 24px; font-weight: bold; color: #009688;" id="memory-stats-memories">-</div>
-                                    <div style="font-size: 12px; color: #666;">Minner</div>
-                                </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="font-size: 24px; font-weight: bold; color: #4caf50;" id="memory-stats-messages">-</div>
-                                    <div style="font-size: 12px; color: #666;">Meldinger</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Embedding Status -->
-                            <div id="embedding-status" style="padding: 10px; background: #e3f2fd; border-radius: 8px; text-align: center; font-size: 13px; color: #1976d2;">
-                                <span id="embedding-status-text">Laster...</span>
-                            </div>
+                        <div class="embedding-status" id="embedding-status">
+                            <span id="embedding-status-text">Laster...</span>
                         </div>
                         
-                        <!-- Worker Status -->
-                        <div id="worker-status" style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; color: #009688;">🤖 Memory Worker</h4>
-                            <div id="worker-status-content" style="font-size: 14px; color: #333;">
-                                <p style="margin: 5px 0;">Laster...</p>
-                            </div>
+                        <div class="memory-section" id="worker-status">
+                            <h4>🤖 Memory Worker</h4>
+                            <div id="worker-status-content"><p>Laster...</p></div>
                         </div>
                         
-                        <button class="btn-start" onclick="toggleMemoryView()" style="width: 100%; margin-bottom: 10px; padding: 15px; font-size: 16px; font-weight: bold; background: white; color: #00bcd4; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
+                        <button class="btn-toggle-memory" onclick="toggleMemoryView()">
                             <span id="memory-toggle-text">👁️ Vis detaljert minne</span>
                         </button>
                         
-                        <!-- Memory Settings -->
-                        <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 15px 0; color: #00bcd4;">⚙️ Minneinnstillinger</h4>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <h5 style="margin: 5px 0; font-size: 14px;">🧠 Max Kontekst Fakta</h5>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px;">1</span>
-                                    <input type="range" id="max-facts-slider" min="1" max="200" value="100" 
-                                           oninput="updateMaxFactsLabel()" onchange="changeMaxFacts()" 
-                                           style="flex: 1;">
-                                    <span style="font-size: 12px;">200</span>
+                        <details class="memory-settings">
+                            <summary>⚙️ Minneinnstillinger</summary>
+                            <div class="memory-settings-body">
+                                <div class="mem-setting">
+                                    <label>🧠 Max Kontekst Fakta</label>
+                                    <div class="slider-row"><span class="slider-label-left">1</span><input type="range" id="max-facts-slider" min="1" max="200" value="100" oninput="updateMaxFactsLabel()" onchange="changeMaxFacts()"><span class="slider-label-right">200</span></div>
+                                    <div class="slider-value"><span id="max-facts-label">100 fakta</span> <span id="max-facts-status"></span></div>
                                 </div>
-                                <div style="text-align: center; margin-top: 5px;">
-                                    <span id="max-facts-label" style="font-weight: bold; font-size: 13px;">100 fakta</span>
-                                    <span id="max-facts-status" style="font-size: 12px;"></span>
+                                <div class="mem-setting">
+                                    <label>🔍 Embedding Søk Limit</label>
+                                    <div class="slider-row"><span class="slider-label-left">10</span><input type="range" id="embedding-limit-slider" min="10" max="100" value="30" oninput="updateEmbeddingLimitLabel()" onchange="changeEmbeddingLimit()"><span class="slider-label-right">100</span></div>
+                                    <div class="slider-value"><span id="embedding-limit-value">30</span> facts <span id="embedding-limit-status"></span></div>
                                 </div>
-                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
-                                    Totalt antall fakta i kontekst
+                                <div class="mem-setting">
+                                    <label>💭 Minnegrense</label>
+                                    <div class="slider-row"><span class="slider-label-left">1</span><input type="range" id="memory-limit-slider" min="1" max="20" value="8" oninput="updateMemoryLimitLabel()" onchange="changeMemoryLimit()"><span class="slider-label-right">20</span></div>
+                                    <div class="slider-value"><span id="memory-limit-value">8</span> minner <span id="memory-limit-status"></span></div>
                                 </div>
-                            </div>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <h5 style="margin: 5px 0; font-size: 14px;">🔍 Embedding Søk Limit</h5>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px;">10</span>
-                                    <input type="range" id="embedding-limit-slider" min="10" max="100" value="30" 
-                                           oninput="updateEmbeddingLimitLabel()" onchange="changeEmbeddingLimit()" 
-                                           style="flex: 1;">
-                                    <span style="font-size: 12px;">100</span>
-                                </div>
-                                <div style="text-align: center; margin-top: 5px;">
-                                    <span id="embedding-limit-value" style="font-weight: bold; font-size: 13px;">30</span> facts
-                                    <span id="embedding-limit-status" style="font-size: 12px;"></span>
-                                </div>
-                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
-                                    Hvor mange facts embedding-søk returnerer
+                                <div class="mem-setting">
+                                    <label>🎯 Minne Threshold</label>
+                                    <div class="slider-row"><span class="slider-label-left">0.2</span><input type="range" id="memory-threshold-slider" min="20" max="80" value="35" oninput="updateMemoryThresholdLabel()" onchange="changeMemoryThreshold()"><span class="slider-label-right">0.8</span></div>
+                                    <div class="slider-value"><span id="memory-threshold-value">0.35</span> <span id="memory-threshold-status"></span></div>
                                 </div>
                             </div>
-                            
-                            <div style="margin-bottom: 20px;">
-                                <h5 style="margin: 5px 0; font-size: 14px;">💭 Minnegrense</h5>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px;">1</span>
-                                    <input type="range" id="memory-limit-slider" min="1" max="20" value="8" 
-                                           oninput="updateMemoryLimitLabel()" onchange="changeMemoryLimit()" 
-                                           style="flex: 1;">
-                                    <span style="font-size: 12px;">20</span>
-                                </div>
-                                <div style="text-align: center; margin-top: 5px;">
-                                    <span id="memory-limit-value" style="font-weight: bold; font-size: 13px;">8</span> minner
-                                    <span id="memory-limit-status" style="font-size: 12px;"></span>
-                                </div>
-                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
-                                    Antall episodiske minner i kontekst
-                                </div>
-                            </div>
-                            
-                            <div style="margin-bottom: 0;">
-                                <h5 style="margin: 5px 0; font-size: 14px;">🎯 Minne Threshold</h5>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px;">0.2</span>
-                                    <input type="range" id="memory-threshold-slider" min="20" max="80" value="35" 
-                                           oninput="updateMemoryThresholdLabel()" onchange="changeMemoryThreshold()" 
-                                           style="flex: 1;">
-                                    <span style="font-size: 12px;">0.8</span>
-                                </div>
-                                <div style="text-align: center; margin-top: 5px;">
-                                    <span id="memory-threshold-value" style="font-weight: bold; font-size: 13px;">0.35</span>
-                                    <span id="memory-threshold-status" style="font-size: 12px;"></span>
-                                </div>
-                                <div style="font-size: 11px; color: #666; margin-top: 3px; text-align: center;">
-                                    Similarity threshold (lavere = mer inkluderende)
-                                </div>
-                            </div>
-                        </div>
+                        </details>
                         
-                        <div id="memory-view" style="display: none; margin-top: 15px;">
-                            <!-- Recent Updates Timeline -->
-                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                                <h4 style="margin: 0 0 10px 0; color: #ff9800;">📅 Siste Oppdateringer</h4>
-                                <div id="recent-updates-list" style="font-size: 13px; max-height: 200px; overflow-y: auto;">
-                                    Laster...
-                                </div>
+                        <div id="memory-view" style="display:none;">
+                            <div class="memory-section">
+                                <h4>📅 Siste Oppdateringer</h4>
+                                <div id="recent-updates-list" class="scroll-list">Laster...</div>
                             </div>
-                            
-                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                                <h4 style="margin: 0 0 15px 0; color: #00bcd4;">📋 Profile Fakta</h4>
-                                <input type="text" id="facts-search" placeholder="🔍 Søk i fakta..." style="width: 100%; padding: 10px; border: 2px solid #00bcd4; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" oninput="filterFacts()">
-                                
-                                <!-- Category View Toggle -->
-                                <div style="margin-bottom: 10px; text-align: center;">
-                                    <button onclick="toggleFactsView()" id="facts-view-toggle" style="padding: 8px 16px; background: #00bcd4; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                                        📁 Vis etter kategori
-                                    </button>
-                                </div>
-                                
-                                <div id="memory-facts-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
-                                    Laster...
-                                </div>
+                            <div class="memory-section">
+                                <h4>📋 Profile Fakta</h4>
+                                <input type="text" id="facts-search" placeholder="🔍 Søk i fakta..." oninput="filterFacts()" class="search-input">
+                                <div class="view-toggle-row"><button onclick="toggleFactsView()" id="facts-view-toggle" class="btn-small">📁 Vis etter kategori</button></div>
+                                <div id="memory-facts-list" class="scroll-list">Laster...</div>
                             </div>
-                            
-                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                                <h4 style="margin: 0 0 15px 0; color: #009688;">💭 Episodiske Minner</h4>
-                                <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." style="width: 100%; padding: 10px; border: 2px solid #009688; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box;" oninput="filterMemories()">
-                                <div id="memory-memories-list" style="max-height: 300px; overflow-y: auto; font-size: 14px;">
-                                    Laster...
-                                </div>
+                            <div class="memory-section">
+                                <h4>💭 Episodiske Minner</h4>
+                                <input type="text" id="memory-search" placeholder="🔍 Søk i minner..." oninput="filterMemories()" class="search-input">
+                                <div id="memory-memories-list" class="scroll-list">Laster...</div>
                             </div>
-                            
-                            <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 15px;">
-                                <h4 style="margin: 0 0 15px 0; color: #4caf50;">📊 Populære Emner</h4>
-                                <div id="memory-topics-list" style="font-size: 14px;">
-                                    Laster...
-                                </div>
+                            <div class="memory-section">
+                                <h4>📊 Populære Emner</h4>
+                                <div id="memory-topics-list">Laster...</div>
                             </div>
                         </div>
                     </div>
@@ -789,7 +438,7 @@
             </div>
         </div>
         
-        <!-- System -->
+        <!-- ===== SYSTEM ===== -->
         <div class="collapsible">
             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                 <span>⚙️ System</span>
@@ -797,31 +446,117 @@
             </div>
             <div class="collapsible-content">
                 <div class="collapsible-body">
-                    <div class="speak-section">
-            <h3>🌀 Viftekontroll</h3>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button class="btn" onclick="setFanMode('auto')" style="flex: 1;">🤖 Auto</button>
-                <button class="btn" onclick="setFanMode('on')" style="flex: 1;">✅ På</button>
-                <button class="btn" onclick="setFanMode('off')" style="flex: 1;">⏸️ Av</button>
-            </div>
-            <div id="fan-status" style="text-align: center; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; font-weight: bold;">
-                <div id="fan-mode">Modus: Laster...</div>
-                <div id="fan-temp" style="font-size: 24px; margin: 10px 0;">🌡️ --°C</div>
-                <div id="fan-running">Status: Laster...</div>
-            </div>
+                    <!-- Service Control -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🦆 Tjenestekontroll</h3>
+                        <div class="btn-grid-3">
+                            <button class="btn-start" onclick="controlDuck('start')">▶️ Start</button>
+                            <button class="btn-stop" onclick="controlDuck('stop')">⏹️ Stopp</button>
+                            <button class="btn-restart" onclick="controlDuck('restart')">🔄 Restart</button>
+                        </div>
+                        <div class="btn-grid-2" style="margin-top:8px;">
+                            <button class="btn-user" onclick="toggleUserPanel()">👥 Bytt Bruker</button>
+                            <button class="btn-logs" onclick="toggleLogs()">📋 Vis Logger</button>
+                        </div>
                     </div>
                     
-                    <div class="speak-section">
-                        <h3>📊 Status og tester</h3>
-                        <button class="btn" onclick="getStatus()">🔍 Sjekk status</button>
-                        <button class="btn" onclick="testBeak()">🧪 Test nebbet</button>
+                    <!-- User Management Panel -->
+                    <div id="user-panel" class="user-panel" style="display:none;">
+                        <h3>👥 Brukeradministrasjon</h3>
+                        <div class="form-group">
+                            <label>Bytt til eksisterende bruker:</label>
+                            <select id="user-select"><option value="">Laster brukere...</option></select>
+                            <button class="btn-switch-user" onclick="switchToUser()">🔄 Bytt bruker</button>
+                        </div>
+                        <div class="user-list-section">
+                            <h4>📋 Registrerte brukere:</h4>
+                            <div id="users-list" class="scroll-list-sm">Laster brukere...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Log Output -->
+                    <div id="log-output" class="log-output" style="display:none;">
+                        <div id="log-content" class="log-content">Laster logger...</div>
+                    </div>
+                    
+                    <!-- 3D Printer -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🖨️ 3D Printer</h3>
+                        <div id="printer-panel" class="printer-panel">
+                            <div id="printer-status-container">
+                                <div id="printer-loading" class="loading-text"><span style="font-size:1.5em;">⏳</span><br>Henter status...</div>
+                                <div id="printer-status" style="display:none;">
+                                    <div class="printer-emoji-row"><span id="printer-emoji">🖨️</span></div>
+                                    <div class="printer-state"><span id="printer-state-text">IDLE</span></div>
+                                    <div id="printer-progress-container" style="display:none;">
+                                        <div class="printer-job"><span id="printer-job-name">job.gcode</span></div>
+                                        <div class="meter-bar-bg" style="height:24px; margin:8px 0;">
+                                            <div id="printer-progress-bar" class="printer-progress-fill"><span id="printer-progress-text" class="printer-progress-label"></span></div>
+                                        </div>
+                                        <div class="printer-time">⏱️ <span id="printer-time-remaining">...</span></div>
+                                    </div>
+                                    <div id="printer-temps" class="printer-temps">
+                                        <span>🌡️ Nozzle: <strong id="printer-temp-nozzle">0</strong>°C</span>
+                                        <span>🛏️ Bed: <strong id="printer-temp-bed">0</strong>°C</span>
+                                    </div>
+                                    <div id="printer-message" class="printer-message"></div>
+                                </div>
+                                <div id="printer-error" style="display:none; color:#d32f2f;">❌ <span id="printer-error-text"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Fan Control -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🌀 Viftekontroll</h3>
+                        <div class="btn-grid-3">
+                            <button class="btn" onclick="setFanMode('auto')">🤖 Auto</button>
+                            <button class="btn" onclick="setFanMode('on')">✅ På</button>
+                            <button class="btn" onclick="setFanMode('off')">⏸️ Av</button>
+                        </div>
+                        <div id="fan-status" class="fan-status">
+                            <div id="fan-mode">Modus: Laster...</div>
+                            <div id="fan-temp" class="fan-temp">🌡️ --°C</div>
+                            <div id="fan-running">Status: Laster...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Backup -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">💾 Backup</h3>
+                        <button class="btn-backup" onclick="createBackup()" style="margin-bottom:10px;">💾 Ta Backup</button>
+                        <div id="backup-status" class="backup-info">
+                            <div class="backup-label">Siste backup:</div>
+                            <div id="latest-backup" class="backup-value">Laster...</div>
+                        </div>
+                        <div id="backup-list" class="scroll-list-sm">Laster backups...</div>
+                    </div>
+                    
+                    <!-- WiFi -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🌐 WiFi & Nettverk</h3>
+                        <button class="btn-wifi" onclick="switchToHotspot()" style="margin-bottom:10px;">📡 Bytt WiFi-nettverk</button>
+                        <div id="wifi-list" class="wifi-list">Laster...</div>
+                        <button class="btn" onclick="getWiFiNetworks()" style="margin-top:8px;">🔄 Oppdater</button>
+                    </div>
+                    
+                    <!-- Test -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🔧 Test & Status</h3>
+                        <div class="btn-grid-2">
+                            <button class="btn" onclick="getStatus()">🔍 Sjekk status</button>
+                            <button class="btn" onclick="testBeak()">🧪 Test nebbet</button>
+                        </div>
                         <div id="test-result"></div>
                     </div>
                     
-                    <div class="status-section">
-                        <h3>🌐 WiFi nettverk</h3>
-                        <div id="wifi-list">Laster...</div>
-                        <button class="btn" onclick="getWiFiNetworks()">🔄 Oppdater liste</button>
+                    <!-- Danger Zone -->
+                    <div class="danger-zone">
+                        <h3 class="settings-group-title" style="color:#d32f2f;">⚠️ Strømstyring</h3>
+                        <div class="btn-grid-2">
+                            <button class="btn-reboot" onclick="rebootPi()">🔄 Restart Pi</button>
+                            <button class="btn-shutdown" onclick="shutdownPi()">🔌 Skru av Pi</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -830,317 +565,135 @@
     </div>
     
     <script>
-        // Toggle collapsible sections
         function toggleCollapsible(header) {
             header.classList.toggle('active');
-            const content = header.nextElementSibling;
-            content.classList.toggle('active');
+            header.nextElementSibling.classList.toggle('active');
+        }
+        
+        function switchSmsTab(tab, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('tab-visible'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-active'));
+            document.getElementById('sms-tab-' + tab).classList.add('tab-visible');
+            btn.classList.add('tab-active');
         }
         
         function updateVolumeValue() {
-            const slider = document.getElementById('volume-slider');
-            document.getElementById('volume-value').textContent = slider.value + '%';
+            document.getElementById('volume-value').textContent = document.getElementById('volume-slider').value + '%';
         }
 
         function updateSpeedLabel() {
-            const slider = document.getElementById('speed-slider');
-            const label = document.getElementById('speed-label');
-            const value = parseInt(slider.value);
-            
-            if (value < 25) {
-                label.textContent = 'Veldig sakte 🐌';
-            } else if (value < 45) {
-                label.textContent = 'Litt sakte';
-            } else if (value < 55) {
-                label.textContent = 'Normal hastighet';
-            } else if (value < 75) {
-                label.textContent = 'Litt raskere';
-            } else {
-                label.textContent = 'Rask 🐇';
-            }
+            const v = parseInt(document.getElementById('speed-slider').value);
+            const l = document.getElementById('speed-label');
+            l.textContent = v < 25 ? 'Veldig sakte 🐌' : v < 45 ? 'Litt sakte' : v < 55 ? 'Normal hastighet' : v < 75 ? 'Litt raskere' : 'Rask 🐇';
         }
 
         async function changeSpeed() {
-            const slider = document.getElementById('speed-slider');
-            const statusElement = document.getElementById('speed-status');
-            
+            const s = document.getElementById('speed-status');
             try {
-                const response = await fetch('/change-speed', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ speed: slider.value })
-                });
-                const data = await response.json();
-                
-                if (data.success === true) {
-                    statusElement.textContent = ' ✓';
-                    setTimeout(() => statusElement.textContent = '', 2000);
-                } else {
-                    statusElement.textContent = ' ✗ Feil';
-                }
-            } catch (error) {
-                statusElement.textContent = ' ✗ Feil: ' + error.message;
-            }
+                const r = await fetch('/change-speed', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({speed:document.getElementById('speed-slider').value})});
+                const d = await r.json();
+                if(d.success){s.textContent=' ✓';setTimeout(()=>s.textContent='',2000);}else s.textContent=' ✗';
+            }catch(e){s.textContent=' ✗';}
         }
 
         async function loadCurrentSpeed() {
-            try {
-                const response = await fetch('/current-speed');
-                const data = await response.json();
-                const slider = document.getElementById('speed-slider');
-                slider.value = data.speed;
-                updateSpeedLabel();
-            } catch (error) {
-                console.error('Kunne ikke laste talehastighet:', error);
-            }
+            try{const r=await fetch('/current-speed');const d=await r.json();document.getElementById('speed-slider').value=d.speed;updateSpeedLabel();}catch(e){}
         }
 
         async function changeVolume() {
-            const slider = document.getElementById('volume-slider');
-            const statusElement = document.getElementById('volume-status');
+            const s = document.getElementById('volume-status');
             updateVolumeValue();
-            
             try {
-                const response = await fetch('/change-volume', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ volume: slider.value })
-                });
-                const data = await response.json();
-                
-                if (data.success === true) {
-                    statusElement.textContent = ' ✓';
-                    setTimeout(() => statusElement.textContent = '', 2000);
-                } else {
-                    statusElement.textContent = ' ✗ Feil';
-                }
-            } catch (error) {
-                statusElement.textContent = ' ✗ Feil: ' + error.message;
-            }
+                const r = await fetch('/change-volume', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({volume:document.getElementById('volume-slider').value})});
+                const d = await r.json();
+                if(d.success){s.textContent=' ✓';setTimeout(()=>s.textContent='',2000);}else s.textContent=' ✗';
+            }catch(e){s.textContent=' ✗';}
         }
 
         async function loadCurrentVolume() {
-            try {
-                const response = await fetch('/current-volume');
-                const data = await response.json();
-                const slider = document.getElementById('volume-slider');
-                slider.value = data.volume;
-                updateVolumeValue();
-            } catch (error) {
-                console.error('Kunne ikke laste volum:', error);
-            }
+            try{const r=await fetch('/current-volume');const d=await r.json();document.getElementById('volume-slider').value=d.volume;updateVolumeValue();}catch(e){}
         }
 
         function updateSensitivityValue() {
-            const slider = document.getElementById('sensitivity-slider');
-            const value = parseInt(slider.value) / 100;
-            document.getElementById('sensitivity-value').textContent = value.toFixed(2);
+            document.getElementById('sensitivity-value').textContent = (parseInt(document.getElementById('sensitivity-slider').value)/100).toFixed(2);
         }
 
         async function changeSensitivity() {
-            const slider = document.getElementById('sensitivity-slider');
-            const statusElement = document.getElementById('sensitivity-status');
-            const sensitivity = parseInt(slider.value) / 100;
+            const sensitivity = parseInt(document.getElementById('sensitivity-slider').value)/100;
+            const s = document.getElementById('sensitivity-status');
             updateSensitivityValue();
-            
-            try {
-                const response = await fetch('/api/wake-word/sensitivity', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensitivity: sensitivity })
-                });
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    statusElement.textContent = ' ✓';
-                    setTimeout(() => statusElement.textContent = '', 2000);
-                } else {
-                    statusElement.textContent = ' ✗ Feil';
-                }
-            } catch (error) {
-                statusElement.textContent = ' ✗ Feil: ' + error.message;
-            }
+            try{const r=await fetch('/api/wake-word/sensitivity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sensitivity})});const d=await r.json();if(d.status==='success'){s.textContent=' ✓';setTimeout(()=>s.textContent='',2000);}else s.textContent=' ✗';}catch(e){s.textContent=' ✗';}
         }
 
         async function loadSensitivity() {
-            try {
-                const response = await fetch('/api/wake-word/sensitivity');
-                const data = await response.json();
-                const slider = document.getElementById('sensitivity-slider');
-                slider.value = Math.round(data.sensitivity * 100);
-                updateSensitivityValue();
-            } catch (error) {
-                console.error('Kunne ikke laste sensitivity:', error);
-            }
+            try{const r=await fetch('/api/wake-word/sensitivity');const d=await r.json();document.getElementById('sensitivity-slider').value=Math.round(d.sensitivity*100);updateSensitivityValue();}catch(e){}
         }
 
         async function setFanMode(mode) {
-            try {
-                const response = await fetch('/set-fan-mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: mode })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    loadFanStatus();
-                }
-            } catch (error) {
-                console.error('Kunne ikke endre viftemodus:', error);
-            }
+            try{const r=await fetch('/set-fan-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});const d=await r.json();if(d.success)loadFanStatus();}catch(e){}
         }
 
         async function loadFanStatus() {
             try {
-                const response = await fetch('/fan-status');
-                const data = await response.json();
-                
-                const modeText = {
-                    'auto': '🤖 Automatisk',
-                    'on': '✅ Alltid på',
-                    'off': '⏸️ Alltid av'
-                };
-                
-                document.getElementById('fan-mode').textContent = 'Modus: ' + (modeText[data.mode] || data.mode);
-                document.getElementById('fan-temp').innerHTML = `🌡️ ${data.temp}°C`;
-                
-                const runningIcon = data.running ? '🌀' : '⏸️';
-                const runningText = data.running ? 'Vifte går' : 'Vifte står';
-                document.getElementById('fan-running').innerHTML = `${runningIcon} ${runningText}`;
-                
-                // Fargekoding av temperatur
-                const tempElement = document.getElementById('fan-temp');
-                if (data.temp >= 60) {
-                    tempElement.style.color = '#ff4444';
-                } else if (data.temp >= 55) {
-                    tempElement.style.color = '#ffaa00';
-                } else {
-                    tempElement.style.color = '#44ff44';
-                }
-            } catch (error) {
-                console.error('Kunne ikke laste viftestatus:', error);
-            }
+                const r = await fetch('/fan-status'); const d = await r.json();
+                const mt={'auto':'🤖 Automatisk','on':'✅ Alltid på','off':'⏸️ Alltid av'};
+                document.getElementById('fan-mode').textContent='Modus: '+(mt[d.mode]||d.mode);
+                document.getElementById('fan-temp').innerHTML=`🌡️ ${d.temp}°C`;
+                document.getElementById('fan-running').innerHTML=`${d.running?'🌀 Vifte går':'⏸️ Vifte står'}`;
+                const t=document.getElementById('fan-temp');
+                t.style.color=d.temp>=60?'#ff4444':d.temp>=55?'#ffaa00':'#44ff44';
+            } catch(e) {}
         }
 
         async function checkHAStatus() {
             try {
-                const response = await fetch('/ha-status');
-                const data = await response.json();
-                
-                const statusElement = document.getElementById('ha-status-text');
-                const containerElement = document.getElementById('ha-status');
-                
-                if (data.available) {
-                    statusElement.textContent = '✅ Tilkoblet';
-                    statusElement.style.color = '#28a745';
-                    containerElement.style.borderColor = '#28a745';
-                    containerElement.style.background = '#d4edda';
-                } else {
-                    statusElement.textContent = `❌ Ikke tilgjengelig (${data.error})`;
-                    statusElement.style.color = '#dc3545';
-                    containerElement.style.borderColor = '#dc3545';
-                    containerElement.style.background = '#f8d7da';
-                }
-            } catch (error) {
-                console.error('Kunne ikke sjekke HA-status:', error);
-                const statusElement = document.getElementById('ha-status-text');
-                statusElement.textContent = '⚠️ Ukjent';
-                statusElement.style.color = '#ffc107';
-            }
+                const r = await fetch('/ha-status'); const d = await r.json();
+                const el = document.getElementById('ha-status-text');
+                const card = document.getElementById('ha-status');
+                if(d.available){el.textContent='✅ Tilkoblet';el.style.color='#28a745';card.style.borderColor='#28a745';card.style.background='#d4edda';}
+                else{el.textContent='❌ Feil';el.style.color='#dc3545';card.style.borderColor='#dc3545';card.style.background='#f8d7da';}
+            } catch(e){document.getElementById('ha-status-text').textContent='⚠️ Ukjent';}
         }
         
-        // Personality functions
-        function updateSlider(dimension, value) {
-            document.getElementById(dimension + '-value').textContent = parseFloat(value).toFixed(1);
-        }
+        function updateSlider(dim,val){document.getElementById(dim+'-value').textContent=parseFloat(val).toFixed(1);}
 
         async function loadPersonality() {
             try {
-                const response = await fetch('/api/personality');
-                const data = await response.json();
-                
-                // Update sliders and values
-                const dimensions = ['humor', 'verbosity', 'formality', 'enthusiasm', 'technical', 
-                                   'empathy', 'directness', 'creativity', 'boundary', 'proactivity'];
-                
-                dimensions.forEach(dim => {
-                    const slider = document.getElementById(dim + '-slider');
-                    const value = data[dim + '_level'] || 5.0;
-                    slider.value = value;
-                    document.getElementById(dim + '-value').textContent = value.toFixed(1);
+                const r=await fetch('/api/personality');const d=await r.json();
+                ['humor','verbosity','formality','enthusiasm','technical','empathy','directness','creativity','boundary','proactivity'].forEach(dim=>{
+                    const v=d[dim+'_level']||5.0;document.getElementById(dim+'-slider').value=v;document.getElementById(dim+'-value').textContent=v.toFixed(1);
                 });
-                
-                // Update stats
-                document.getElementById('confidence-text').textContent = 
-                    `Confidence: ${(data.confidence_score || 0).toFixed(0)}% | `;
-                document.getElementById('analyzed-text').textContent = 
-                    `Analysert: ${data.conversations_analyzed || 0} samtaler | `;
-                document.getElementById('last-analyzed-text').textContent = 
-                    `Sist: ${data.last_analyzed || '--'}`;
-                
-            } catch (error) {
-                console.error('Kunne ikke laste personlighet:', error);
-            }
+                document.getElementById('confidence-text').textContent=`Confidence: ${(d.confidence_score||0).toFixed(0)}% | `;
+                document.getElementById('analyzed-text').textContent=`Analysert: ${d.conversations_analyzed||0} samtaler | `;
+                document.getElementById('last-analyzed-text').textContent=`Sist: ${d.last_analyzed||'--'}`;
+            } catch(e){}
         }
 
         async function savePersonality() {
-            const statusElement = document.getElementById('personality-status');
-            statusElement.style.display = 'block';
-            statusElement.style.background = 'rgba(255, 235, 59, 0.9)';
-            statusElement.style.color = '#333';
-            statusElement.textContent = '⏳ Lagrer og restarter service...';
-            
+            const s=document.getElementById('personality-save-status');s.style.display='block';s.style.background='#fff3cd';s.style.color='#333';s.textContent='⏳ Lagrer...';
             try {
-                const data = {
-                    humor_level: parseFloat(document.getElementById('humor-slider').value),
-                    verbosity_level: parseFloat(document.getElementById('verbosity-slider').value),
-                    formality_level: parseFloat(document.getElementById('formality-slider').value),
-                    enthusiasm_level: parseFloat(document.getElementById('enthusiasm-slider').value),
-                    technical_depth: parseFloat(document.getElementById('technical-slider').value),
-                    empathy_level: parseFloat(document.getElementById('empathy-slider').value),
-                    directness_level: parseFloat(document.getElementById('directness-slider').value),
-                    creativity_level: parseFloat(document.getElementById('creativity-slider').value),
-                    boundary_level: parseFloat(document.getElementById('boundary-slider').value),
-                    proactivity_level: parseFloat(document.getElementById('proactivity-slider').value)
+                const data={
+                    humor_level:parseFloat(document.getElementById('humor-slider').value),
+                    verbosity_level:parseFloat(document.getElementById('verbosity-slider').value),
+                    formality_level:parseFloat(document.getElementById('formality-slider').value),
+                    enthusiasm_level:parseFloat(document.getElementById('enthusiasm-slider').value),
+                    technical_depth:parseFloat(document.getElementById('technical-slider').value),
+                    empathy_level:parseFloat(document.getElementById('empathy-slider').value),
+                    directness_level:parseFloat(document.getElementById('directness-slider').value),
+                    creativity_level:parseFloat(document.getElementById('creativity-slider').value),
+                    boundary_level:parseFloat(document.getElementById('boundary-slider').value),
+                    proactivity_level:parseFloat(document.getElementById('proactivity-slider').value)
                 };
-                
-                const response = await fetch('/api/personality/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    statusElement.style.background = 'rgba(76, 175, 80, 0.9)';
-                    statusElement.style.color = 'white';
-                    statusElement.textContent = '✓ ' + (result.message || 'Personlighet oppdatert!');
-                    setTimeout(() => {
-                        statusElement.style.display = 'none';
-                    }, 3000);
-                } else {
-                    statusElement.style.background = 'rgba(244, 67, 54, 0.9)';
-                    statusElement.style.color = 'white';
-                    statusElement.textContent = '✗ Feil: ' + (result.message || 'Ukjent feil');
-                }
-            } catch (error) {
-                statusElement.style.background = 'rgba(244, 67, 54, 0.9)';
-                statusElement.style.color = 'white';
-                statusElement.textContent = '✗ Feil: ' + error.message;
-            }
+                const r=await fetch('/api/personality/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+                const result=await r.json();
+                if(result.success){s.style.background='#d4edda';s.style.color='#155724';s.textContent='✓ '+(result.message||'Oppdatert!');setTimeout(()=>s.style.display='none',3000);}
+                else{s.style.background='#f8d7da';s.style.color='#721c24';s.textContent='✗ '+(result.message||'Feil');}
+            }catch(e){s.style.background='#f8d7da';s.style.color='#721c24';s.textContent='✗ '+e.message;}
         }
 
-        // Load personality on page load
-        window.addEventListener('load', () => {
-            loadPersonality();
-            loadSensitivity();
-        });
-        
-        // Sjekk HA-status ved oppstart og hver 30. sekund
+        window.addEventListener('load',()=>{loadPersonality();loadSensitivity();});
         checkHAStatus();
-        setInterval(checkHAStatus, 30000);
+        setInterval(checkHAStatus,30000);
     </script>
     <script src="app.js"></script>
 </body>
