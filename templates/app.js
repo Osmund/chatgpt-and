@@ -1579,6 +1579,9 @@ async function loadVisionStatus() {
         if (data.connected) {
             statusText.textContent = '✅ Tilkoblet';
             statusText.style.color = '#10b981';  // grønn
+        } else if (data.status === 'host-reachable') {
+            statusText.textContent = '🟡 Pi 5 på, Vision av';
+            statusText.style.color = '#f59e0b';  // gul
         } else {
             statusText.textContent = '❌ Ikke tilkoblet';
             statusText.style.color = '#ef4444';  // rød

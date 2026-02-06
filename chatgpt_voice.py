@@ -20,7 +20,7 @@ import azure.cognitiveservices.speech as speechsdk
 
 # Duck moduler
 from scripts.hardware.duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
-from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow
+from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow, blink_yellow
 from src.duck_config import MESSAGES_FILE
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
@@ -54,6 +54,13 @@ def is_hotspot_active():
         return 'Hotspot' in result.stdout
     except Exception:
         return False
+
+def set_idle_led():
+    """Sett LED til riktig idle-farge: gul blinkende hvis hotspot, ellers blå."""
+    if is_hotspot_active():
+        blink_yellow()
+    else:
+        set_blue()
 
 
 def cleanup():
@@ -496,13 +503,17 @@ def boredom_timer_loop():
                         
                         print(f"🎵 Anda kjeder seg (level {new_level:.1f}) - synger {random_song}", flush=True)
                         
-                        # Skriv annonsering til fil
-                        announcement = f"Jeg kjeder meg litt, så jeg skal synge {random_song}!"
+                        # Annonser kjedsomhet + sang i én melding
+                        if ' - ' in random_song:
+                            artist, song_title = random_song.split(' - ', 1)
+                            announcement = f"Jeg kjeder meg litt, så nå skal jeg synge {song_title} av {artist}!"
+                        else:
+                            announcement = f"Jeg kjeder meg litt, så jeg skal synge {random_song}!"
                         with open('/tmp/duck_song_announcement.txt', 'w', encoding='utf-8') as f:
                             f.write(announcement)
                         
-                        # Spill sangen
-                        play_song(song_folder, beak, speech_config)
+                        # Spill sangen uten ekstra annonsering
+                        play_song(song_folder, beak, speech_config, announce=False)
                         
                         # Reduser kjedsomhet etter sang
                         sms_manager.reduce_boredom(amount=2.0)
@@ -927,8 +938,8 @@ def main():
             
             if announcement:
                 print(f"📡 Hotspot-modus: Spiller forhåndsinnspilt melding", flush=True)
-                # Sett LED til gul for hotspot-modus
-                set_yellow()
+                # Sett LED til gul blinkende for hotspot-modus
+                blink_yellow()
                 hotspot_active = True
                 time.sleep(0.5)
                 
@@ -954,7 +965,7 @@ def main():
             print(f"⚠️ Error reading hotspot announcement at startup: {e}", flush=True)
     
     # Hvis ikke hotspot-modus, si normal greeting
-    if not hotspot_active:
+    if not hotspot_active and not is_hotspot_active():
         if ip_address and ip_address != "127.0.0.1":
             greeting = messages_config['startup_messages']['with_network'].replace('{ip}', ip_address.replace('.', ' punkt '))
             print(f"Oppstartshilsen med IP: {ip_address}", flush=True)
@@ -973,18 +984,17 @@ def main():
                 print(f"Oppstartshilsen mislyktes (forsøk {greeting_attempt + 1}/3): {e}", flush=True)
                 if greeting_attempt < 2:  # Ikke vent etter siste forsøk
                     time.sleep(5)  # Vent 5 sekunder før neste forsøk
+    elif is_hotspot_active() and not hotspot_active:
+        print("📡 Hotspot aktiv - hopper over TTS-hilsen (krever internett)", flush=True)
+        greeting_success = True  # Ikke blokkér oppstart
     
     if not greeting_success:
         print("Oppstartshilsen/hotspot-melding kunne ikke sies etter 3 forsøk - fortsetter uten hilsen", flush=True)
     
-    # Sett LED basert på hotspot status (kun hvis ikke allerede satt)
-    if not hotspot_active:
-        if is_hotspot_active():
-            set_yellow()
-            print("📡 Hotspot er aktivt - LED er gul", flush=True)
-        else:
-            set_blue()
-    # Hvis hotspot_active=True er LED allerede gul fra hotspot-meldingen
+    # Sett idle LED basert på hotspot-status
+    set_idle_led()
+    if is_hotspot_active():
+        print("📡 Hotspot er aktivt - LED blinker gult", flush=True)
     
     # Vent litt ekstra for å la nebbet fullføre bevegelsene
     time.sleep(0.5)
@@ -1137,7 +1147,7 @@ def main():
             # Reset flag når ikke i sleep mode
             if sleep_led_active:
                 stop_blink()
-                set_blue()  # Tilbake til blå LED (klar for wake word)
+                set_idle_led()  # Gul blinkende hvis hotspot, ellers blå
                 sleep_led_active = False
                 print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
         
@@ -1148,10 +1158,15 @@ def main():
                 with open(song_request_file, 'r', encoding='utf-8') as f:
                     song_folder = f.read().strip()
                 os.remove(song_request_file)
+                # Sjekk om AI allerede har annonsert sangen
+                no_announce_file = '/tmp/duck_song_no_announce.txt'
+                should_announce = not os.path.exists(no_announce_file)
+                if os.path.exists(no_announce_file):
+                    os.remove(no_announce_file)
                 if song_folder and os.path.exists(song_folder):
-                    print(f"🎵 Playing song from request: {song_folder}", flush=True)
+                    print(f"🎵 Playing song from request: {song_folder} (announce={should_announce})", flush=True)
                     from src.duck_music import play_song
-                    play_song(song_folder, beak, speech_config)
+                    play_song(song_folder, beak, speech_config, announce=should_announce)
                     # Etter sangen, fortsett normal loop
             except Exception as e:
                 print(f"⚠️ Error playing song: {e}", flush=True)
@@ -1315,7 +1330,7 @@ def main():
             vision_recognized = False
             if vision_service and vision_service.is_connected():
                 try:
-                    found, name, confidence = vision_service.check_person(timeout=5.0)
+                    found, name, confidence = vision_service.check_person(timeout=2.0)
                     
                     if found and name:
                         # Map face recognition name to memory system name
@@ -1527,7 +1542,7 @@ def main():
                 print("Feil:", e)
                 speak("Beklager, det oppstod en feil.", speech_config, beak)
             
-            set_blue()  # Blå LED = klar for neste input
+            set_idle_led()  # Gul blinkende hvis hotspot, ellers blå
 
 
 if __name__ == "__main__":

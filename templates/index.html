@@ -382,10 +382,6 @@
                             <div id="worker-status-content"><p>Laster...</p></div>
                         </div>
                         
-                        <button class="btn-toggle-memory" onclick="toggleMemoryView()">
-                            <span id="memory-toggle-text">👁️ Vis detaljert minne</span>
-                        </button>
-                        
                         <details class="memory-settings">
                             <summary>⚙️ Minneinnstillinger</summary>
                             <div class="memory-settings-body">
@@ -412,7 +408,9 @@
                             </div>
                         </details>
                         
-                        <div id="memory-view" style="display:none;">
+                        <details class="memory-settings" id="memory-details">
+                            <summary>👁️ Detaljert minne</summary>
+                            <div id="memory-view">
                             <div class="memory-section">
                                 <h4>📅 Siste Oppdateringer</h4>
                                 <div id="recent-updates-list" class="scroll-list">Laster...</div>
@@ -432,7 +430,7 @@
                                 <h4>📊 Populære Emner</h4>
                                 <div id="memory-topics-list">Laster...</div>
                             </div>
-                        </div>
+                        </details>
                     </div>
                 </div>
             </div>

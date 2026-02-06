@@ -1806,11 +1806,14 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             
             # Spill sangen
             if song_folder and os.path.exists(song_folder):
-                # Skriv sangsti til samme fil som kontrollpanelet bruker
+                # Skriv sangsti til fil - med markør at AI allerede har annonsert
                 try:
                     with open('/tmp/duck_song_request.txt', 'w', encoding='utf-8') as f:
                         f.write(song_folder)
-                    print(f"✅ Sang queued for playback: {song_folder}", flush=True)
+                    # Markør-fil: AI har allerede annonsert sangen
+                    with open('/tmp/duck_song_no_announce.txt', 'w') as f:
+                        f.write('1')
+                    print(f"✅ Sang queued for playback (no announce): {song_folder}", flush=True)
                 except Exception as e:
                     result = f"Kunne ikke queue sangen: {e}"
         elif function_name == "check_face_recognition":

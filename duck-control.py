@@ -1177,6 +1177,15 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             def shutdown_in_background():
                 import time
                 time.sleep(3)  # Gi nettleseren tid til å vise feedback
+                
+                # Planlegg system-shutdown FØRST (1 minutt fra nå som sikkerhetsnett)
+                print("  Scheduling system shutdown as safety net...", flush=True)
+                subprocess.Popen(
+                    ['sudo', 'shutdown', '-h', '+1'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                
                 print("  Running graceful shutdown...", flush=True)
                 shutdown_script = '/home/admog/Code/chatgpt-and/scripts/graceful-shutdown.sh'
                 if os.path.exists(shutdown_script):
@@ -1184,13 +1193,15 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                         subprocess.run(['bash', shutdown_script], timeout=30)
                     except subprocess.TimeoutExpired:
                         print("⚠️  Graceful shutdown timed out", flush=True)
-                print("  Initiating system shutdown...", flush=True)
+                
+                # Alt er ryddet opp - kjør shutdown umiddelbart nå
+                print("  Initiating system shutdown NOW...", flush=True)
                 subprocess.Popen(
                     ['sudo', 'shutdown', '-h', 'now'],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
-            threading.Thread(target=shutdown_in_background, daemon=True).start()
+            threading.Thread(target=shutdown_in_background, daemon=False).start()
         
         elif self.path == '/reboot':
             # Send response FØRST, reboot i bakgrunnen

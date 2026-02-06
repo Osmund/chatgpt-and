@@ -21,9 +21,9 @@ sudo systemctl stop chatgpt-duck.service
 echo "  Stopping duck-memory-worker.service..."
 sudo systemctl stop duck-memory-worker.service
 
-# Stop control panel
-echo "  Stopping duck-control.service..."
-sudo systemctl stop duck-control.service
+# NOTE: duck-control.service stoppes IKKE her.
+# Denne scripten kalles fra duck-control, så den må fortsette å kjøre
+# til sudo shutdown -h now tar over.
 
 # Stop fan control (if running)
 if systemctl is-active --quiet fan-control.service; then

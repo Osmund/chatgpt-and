@@ -17,7 +17,7 @@ from src.duck_config import (
 from src.duck_audio import find_hifiberry_output
 
 
-def play_song(song_path, beak, speech_config):
+def play_song(song_path, beak, speech_config, announce=True):
     """
     Spiller av en sang med synkronisert nebb-bevegelse og LED-effekter.
     
@@ -25,6 +25,7 @@ def play_song(song_path, beak, speech_config):
         song_path: Sti til sangmappe med duck_mix.wav og vocals_duck.wav
         beak: Beak objekt for nebb-kontroll
         speech_config: Azure speech config for annonsering
+        announce: Om sangen skal annonseres med TTS før avspilling (default: True)
     """
     from src.duck_audio import speak  # Import her for å unngå circular import
     
@@ -48,15 +49,18 @@ def play_song(song_path, beak, speech_config):
     # Format: "Artist - Sangtittel"
     song_folder_name = os.path.basename(song_path)
     
-    # Annonser sangen før avspilling
-    if ' - ' in song_folder_name:
-        artist, song_title = song_folder_name.split(' - ', 1)
-        announcement = f"Nå skal jeg synge {song_title} av {artist}!"
+    # Annonser sangen før avspilling (hopp over hvis allerede annonsert, f.eks. av AI)
+    if announce:
+        if ' - ' in song_folder_name:
+            artist, song_title = song_folder_name.split(' - ', 1)
+            announcement = f"Nå skal jeg synge {song_title} av {artist}!"
+        else:
+            announcement = f"Nå skal jeg synge {song_folder_name}!"
+        
+        print(f"Annonserer sang: {announcement}", flush=True)
+        speak(announcement, speech_config, beak)
     else:
-        announcement = f"Nå skal jeg synge {song_folder_name}!"
-    
-    print(f"Annonserer sang: {announcement}", flush=True)
-    speak(announcement, speech_config, beak)
+        print(f"Hopper over annonsering (allerede annonsert)", flush=True)
     
     # Litt pause før sang starter
     time.sleep(0.5)

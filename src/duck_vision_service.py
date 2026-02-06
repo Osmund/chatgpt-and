@@ -4,8 +4,6 @@ Håndterer MQTT kommunikasjon med Duck-Vision kamera på Pi 5
 """
 import logging
 from typing import Optional, Callable
-from queue import Queue, Empty
-import threading
 from src.duck_vision_integration import DuckVisionHandler
 
 logger = logging.getLogger(__name__)
@@ -15,6 +13,12 @@ class DuckVisionService:
     """
     Service for MQTT kommunikasjon med Duck-Vision kamera.
     Integreres i ServiceManager for å håndtere face recognition og object detection.
+    
+    Delegerer all MQTT-kommunikasjon til DuckVisionHandler som håndterer:
+    - Auto-reconnect ved nettverksproblemer
+    - LWT (Last Will and Testament) for pålitelig status
+    - threading.Event for effektiv synkron venting
+    - QoS 1 for kommandoer
     """
     
     def __init__(self, broker_host: str = "oDuckberry-vision.local", broker_port: int = 1883):
@@ -28,17 +32,11 @@ class DuckVisionService:
         self.broker_host = broker_host
         self.broker_port = broker_port
         self.vision_handler: Optional[DuckVisionHandler] = None
-        self.connected = False
         
         # Callbacks
         self.on_face_detected_callback = None
         self.on_unknown_face_callback = None
         self.on_learning_progress_callback = None
-        
-        # Queue for object detection results (for AI tool)
-        self.object_detection_queue = Queue(maxsize=1)
-        self.face_detection_queue = Queue(maxsize=1)
-        self._detection_timeout = 3.0  # seconds
         
         logger.info(f"DuckVisionService initialized (broker: {broker_host}:{broker_port})")
     
@@ -75,11 +73,10 @@ class DuckVisionService:
             
             # Connect to MQTT broker
             if self.vision_handler.connect():
-                self.connected = True
-                logger.info("✓ Duck-Vision service started successfully")
+                logger.info("Duck-Vision service started successfully")
                 return True
             else:
-                logger.warning("⚠️ Duck-Vision service could not connect to MQTT broker")
+                logger.warning("Duck-Vision service could not connect to MQTT broker")
                 return False
                 
         except Exception as e:
@@ -91,77 +88,23 @@ class DuckVisionService:
         if self.vision_handler:
             try:
                 self.vision_handler.disconnect()
-                self.connected = False
                 logger.info("Duck-Vision service stopped")
             except Exception as e:
                 logger.error(f"Error stopping Duck-Vision service: {e}")
     
     def _on_object_detected_internal(self, object_name: str, confidence: float):
-        """
-        Internal callback for object detection.
-        Puts result in queue for AI tool to consume.
-        """
-        result = {
-            'type': 'object',
-            'object_name': object_name,
-            'confidence': confidence
-        }
-        
-        # Put in queue (overwrite old result if queue is full)
-        try:
-            self.object_detection_queue.get_nowait()  # Clear old result
-        except Empty:
-            pass
-        
-        self.object_detection_queue.put(result)
+        """Internal callback for object detection - logged for debugging."""
         logger.debug(f"Object detected: {object_name} ({confidence:.2%})")
     
     def _on_face_detected_internal(self, person_name: Optional[str], confidence: float):
-        """
-        Internal callback for face detection.
-        Puts result in queue for AI tool to consume.
-        """
-        result = {
-            'type': 'face',
-            'person_name': person_name,
-            'is_known': person_name is not None,
-            'confidence': confidence
-        }
-        
-        # Put in face queue
-        try:
-            self.face_detection_queue.get_nowait()
-        except Empty:
-            pass
-        
-        self.face_detection_queue.put(result)
+        """Internal callback for face detection - forwards to external callback."""
         logger.debug(f"Face detected: {person_name or 'unknown'} ({confidence:.2%})")
-        
-        # Call external callback
         if person_name and self.on_face_detected_callback:
             self.on_face_detected_callback(person_name, confidence)
     
     def _on_unknown_face_internal(self):
-        """
-        Internal callback for unknown face detection.
-        """
-        result = {
-            'type': 'face',
-            'person_name': None,
-            'is_known': False,
-            'confidence': 0.0
-        }
-        
-        # Put in face queue
-        try:
-            self.face_detection_queue.get_nowait()
-        except Empty:
-            pass
-        
-        self.face_detection_queue.put(result)
+        """Internal callback for unknown face detection - forwards to external callback."""
         logger.debug("Unknown face detected")
-        
-        # Call external callback
         if self.on_unknown_face_callback:
             self.on_unknown_face_callback()
     
@@ -213,89 +156,58 @@ class DuckVisionService:
         logger.info(f"Duck-Vision OpenAI response length: {len(result) if result else 0} chars")
         return result
     
-    def request_object_detection(self) -> Optional[dict]:
+    def request_object_detection(self):
         """
-        Request object detection from Duck-Vision and wait for result.
-        Used by AI tool 'look_around()'.
-        
-        Returns:
-            dict: {'object_name': str, 'confidence': float} or None if timeout
+        Request object detection from Duck-Vision (async).
+        Results arrive via the handler's callback.
         """
         if not self.is_connected():
             logger.warning("Duck-Vision not connected, cannot request object detection")
-            return None
+            return
         
-        # Clear queue
-        try:
-            self.object_detection_queue.get_nowait()
-        except Empty:
-            pass
-        
-        # Send command to Duck-Vision
         self.vision_handler.request_object_detection()
         logger.debug("Requested object detection from Duck-Vision")
-        
-        # Wait for result
-        try:
-            result = self.object_detection_queue.get(timeout=self._detection_timeout)
-            logger.info(f"Got object detection result: {result['object_name']}")
-            return result
-        except Empty:
-            logger.warning(f"Object detection timed out after {self._detection_timeout}s")
-            return None
     
     def learn_person(self, name: str, num_samples: int = 5):
-        """
-        Tell Duck-Vision to learn a new person
-        
-        Args:
-            name: Name of the person to learn
-            num_samples: Number of images to capture (3-10 recommended, default 5)
-        """
-        if self.vision_handler and self.connected:
-            self.vision_handler.learn_person(name, num_samples)
-            logger.info(f"Requested Duck-Vision to learn person: {name} with {num_samples} samples")
-        else:
+        """Tell Duck-Vision to learn a new person"""
+        if not self.is_connected():
             logger.warning("Duck-Vision not connected, cannot learn person")
+            return
+        self.vision_handler.learn_person(name, num_samples)
+        logger.info(f"Requested Duck-Vision to learn: {name} ({num_samples} samples)")
     
     def check_person(self, timeout: float = 3.0):
         """
-        Tell Duck-Vision to check who is in front of the camera (synkron).
+        Check who is in front of the camera (synkron).
         Returns tuple: (found, name, confidence)
         """
-        if self.vision_handler and self.connected:
-            result = self.vision_handler.check_person(timeout=timeout)
-            logger.info(f"Duck-Vision check_person result: {result}")
-            return result
-        else:
+        if not self.is_connected():
             logger.warning("Duck-Vision not connected, cannot check person")
             return (False, None, 0.0)
+        result = self.vision_handler.check_person(timeout=timeout)
+        logger.info(f"check_person result: {result}")
+        return result
     
     def forget_person(self, name: str):
-        """
-        Tell Duck-Vision to forget a person
-        
-        Args:
-            name: Name of the person to forget
-        """
-        if self.vision_handler and self.connected:
-            self.vision_handler.forget_person(name)
-            logger.info(f"Requested Duck-Vision to forget person: {name}")
-        else:
+        """Tell Duck-Vision to forget a person"""
+        if not self.is_connected():
             logger.warning("Duck-Vision not connected, cannot forget person")
+            return
+        self.vision_handler.forget_person(name)
+        logger.info(f"Requested Duck-Vision to forget: {name}")
     
     def list_known_people(self):
         """Tell Duck-Vision to list all known people"""
-        if self.vision_handler and self.connected:
-            self.vision_handler.list_known_people()
-            logger.info("Requested list of known people from Duck-Vision")
-        else:
+        if not self.is_connected():
             logger.warning("Duck-Vision not connected, cannot list people")
+            return
+        self.vision_handler.list_known_people()
+        logger.info("Requested list of known people")
     
     def is_connected(self) -> bool:
-        """Check if Duck-Vision service is connected"""
-        if not self.vision_handler:
-            return False
-        
-        # Use DuckVisionHandler's connected flag (set by MQTT on_connect callback)
-        return self.vision_handler.connected
+        """Check if Duck-Vision on Pi 5 is actually online and reachable"""
+        return bool(
+            self.vision_handler 
+            and self.vision_handler.connected 
+            and self.vision_handler.publisher_online
+        )

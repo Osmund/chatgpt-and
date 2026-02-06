@@ -175,49 +175,77 @@ class DuckAPIHandlers:
             return {'level': 0, 'error': str(e)}
     
     def handle_vision_status(self) -> Dict[str, Any]:
-        """Get Duck-Vision connection status by checking active MQTT clients"""
+        """Get Duck-Vision connection status.
+        
+        Uses multiple methods:
+        1. Check retained MQTT status topic (duck/samantha/status) - set by LWT
+        2. Check Mosquitto logs for duck-vision-publisher (Pi 5 camera client)
+        3. Ping Pi 5 host as fallback
+        """
         try:
-            # Check Mosquitto logs for active samantha-vision-client
+            # Method 1: Check retained status message via mosquitto_sub (instant)
+            try:
+                status_result = subprocess.run(
+                    ['mosquitto_sub', '-t', 'duck/vision/status', '-C', '1', '-W', '2'],
+                    capture_output=True, text=True, timeout=3
+                )
+                if status_result.returncode == 0 and status_result.stdout.strip():
+                    import json as _json
+                    status_data = _json.loads(status_result.stdout.strip())
+                    if status_data.get("status") == "online":
+                        return {
+                            'connected': True,
+                            'status': 'connected',
+                            'message': 'Duck-Vision tilkoblet'
+                        }
+            except (subprocess.TimeoutExpired, Exception):
+                pass
+            
+            # Method 2: Check Mosquitto logs for duck-vision-publisher (Pi 5 client)
             result = subprocess.run(
                 ['sudo', 'tail', '-100', '/var/log/mosquitto/mosquitto.log'],
                 capture_output=True, text=True, timeout=2
             )
             
             if result.returncode == 0:
-                # Look for recent samantha-vision-client connection (within last 50 lines)
-                lines = result.stdout.strip().split('\n')[-50:]
+                lines = result.stdout.strip().split('\n')
+                pi5_connected = False
                 
-                # Check if samantha-vision-client is connected and not immediately disconnected
-                connected_recently = False
-                for i, line in enumerate(lines):
-                    if 'samantha-vision-client' in line and 'connected from 127.0.0.1' in line:
-                        # Check if next few lines show it's still connected (no immediate "closed")
-                        disconnect_found = False
-                        for j in range(i+1, min(i+3, len(lines))):
-                            if 'samantha-vision-client' in lines[j] and 'closed' in lines[j]:
-                                disconnect_found = True
-                                break
-                        if not disconnect_found:
-                            connected_recently = True
+                for line in lines:
+                    if 'duck-vision-publisher' in line:
+                        if 'connected' in line and 'disconnecting' not in line:
+                            pi5_connected = True
+                        elif 'closed' in line or 'disconnecting' in line or 'exceeded timeout' in line:
+                            pi5_connected = False
                 
-                if connected_recently:
+                if pi5_connected:
                     return {
                         'connected': True,
                         'status': 'connected',
                         'message': 'Duck-Vision tilkoblet'
                     }
-                else:
+            
+            # Method 3: Try to reach Pi 5 host directly
+            try:
+                ping_result = subprocess.run(
+                    ['ping', '-c', '1', '-W', '1', 'oDuckberry-vision.local'],
+                    capture_output=True, text=True, timeout=3
+                )
+                if ping_result.returncode == 0:
                     return {
                         'connected': False,
-                        'status': 'disconnected',
-                        'message': 'Duck-Vision ikke tilkoblet'
+                        'status': 'host-reachable',
+                        'message': 'Pi 5 er på, men Duck-Vision kjører ikke'
                     }
-            else:
-                return {
-                    'connected': False,
-                    'status': 'unknown',
-                    'message': 'Kunne ikke lese Mosquitto logs'
-                }
+            except (subprocess.TimeoutExpired, Exception):
+                pass
+            
+            return {
+                'connected': False,
+                'status': 'disconnected',
+                'message': 'Duck-Vision ikke tilkoblet'
+            }
+            
         except Exception as e:
             return {
                 'connected': False,
