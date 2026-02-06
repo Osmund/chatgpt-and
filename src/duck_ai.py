@@ -599,53 +599,10 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
             # Profile facts
             if context['profile_facts']:
                 memory_section += "Fakta om brukeren:\n"
-                for fact in context['profile_facts']:  # Vis alle facts (økt til 40)
-                    memory_section += f"- {fact['key']}: {fact['value']}"
-                    
-                    # Vis metadata hvis tilgjengelig og relevant
-                    if fact.get('metadata') and fact['metadata']:
-                        meta = fact['metadata']
-                        # Parse JSON hvis det er en string
-                        if isinstance(meta, str):
-                            try:
-                                meta = json.loads(meta)
-                            except:
-                                meta = {}
-                        
-                        # Vis kun relevante metadata-felt
-                        if 'learned_at' in meta:
-                            learned_date = meta['learned_at'].split('T')[0]
-                            memory_section += f" (lært {learned_date})"
-                        if 'verified' in meta and meta['verified']:
-                            memory_section += " [verifisert]"
-                    
-                    memory_section += "\n"
+                for fact in context['profile_facts']:  # Vis alle facts
+                    memory_section += f"- {fact['key']}: {fact['value']}\n"
                 
-                memory_section += "\nViktig: Når du refererer til familiemedlemmer, ALLTID bruk deres navn i stedet for 'søster 1/2/3' eller 'din andre søster'. Dette gjør samtalen mer personlig og naturlig.\n"
-                memory_section += "\nOBS: Datoer i formatet 'DD-MM' er dag-måned (f.eks. '21-11' = 21. november). Når du svarer om fødselsdager, inkluder både dag og måned.\n"
-                
-                # Bygg eksplisitt oversikt over søstrene direkte fra databasen
-                sisters = {}
-                conn = memory_manager._get_connection()
-                c = conn.cursor()
-                c.execute("SELECT key, value FROM profile_facts WHERE key IN ('sister_1_name', 'sister_2_name', 'sister_3_name', 'sister_1_age_relation', 'sister_2_age_relation', 'sister_3_age_relation')")
-                for row in c.fetchall():
-                    key = row[0]
-                    value = row[1]
-                    sister_num = key.split('_')[1]
-                    if sister_num not in sisters:
-                        sisters[sister_num] = {}
-                    if key.endswith('_name'):
-                        sisters[sister_num]['name'] = value
-                    elif key.endswith('_age_relation'):
-                        sisters[sister_num]['age_relation'] = value
-                conn.close()
-                
-                if sisters:
-                    memory_section += "\nKRITISK - Søstrene (bruk ALLTID denne informasjonen):\n"
-                    for num, info in sorted(sisters.items()):
-                        if 'name' in info and 'age_relation' in info:
-                            memory_section += f"- {info['name']} er den {info['age_relation']} søsteren\n"
+                memory_section += "\nBruk ALLTID navn på familiemedlemmer (aldri 'søster 1/2/3'). Datoer 'DD-MM' = dag-måned.\n"
 
             
             # Relevant memories
@@ -709,143 +666,35 @@ Dine fysiske egenskaper:
                 for info in identity['additional_info']:
                     samantha_identity += f"- {info}\n"
             
-            # Teknisk selvforståelse
+            # Kort teknisk kontekst (detaljer tilgjengelig via get_technical_info tool)
             creator_name = primary_user['username'] if primary_user else 'Osmund'
             samantha_identity += f"""
 
-### Din tekniske oppbygning (bruk når folk spør hvordan du fungerer) ###
-
-**Hardware (kroppen din):**
-- Raspberry Pi 4 (hjernen din) med Linux-operativsystem
-- MAX98357A I2S forsterkerkort for høyttaleren din
-- Servo (SG90) som styrer nebbet ditt - det åpnes og lukkes når du snakker!
-- RGB LED (WS2812B) som lyser i forskjellige farger basert på tilstand
-- Mikrofon for å høre med
-- Du er fysisk en hvitt plastikobjekt formet som en and
-
-**Software (hvordan du tenker):**
-- Porcupine wake word detection: Lytter konstant etter navnet ditt "Samantha"
-- Azure Speech Services STT (Speech-to-Text): Gjør om tale til tekst
-- OpenAI GPT-4o / Claude / Gemini: Din "hjerne" - språkmodellen som genererer svarene dine
-- Azure TTS / OpenAI TTS: Text-to-Speech som gjør svarene dine om til tale med norsk stemme
-- Python-kode som holder alt sammen
-
-**Minnesystem (hvordan du husker):**
-Du har et avansert minnesystem med flere lag:
-- Episodiske minner: Konkrete ting fra samtaler (f.eks. "Brukeren kjøpte is i går")
-- Semantiske minner: Generell kunnskap (f.eks. "Brukeren liker teknologi")
-- Profilfakta: Strukturerte fakta om personer (fødselsdager, interesser, familie)
-- Embedding-basert søk: Du bruker vektorrepresentasjoner for å finne relevante minner
-- SQLite-database: Alt lagres lokalt på Raspberry Pi-en
-
-**Personlighetssystem (hvordan du utvikler deg):**
-Du har 10 personlighetsdimensjoner som justeres basert på samtaler:
-- Humor level (0-10): Hvor mye humor du bruker
-- Verbosity level (0-10): Hvor lange/korte svar du gir
-- Formality level (0-10): Hvor formell du er
-- Enthusiasm level (0-10): Hvor entusiastisk du virker
-- Technical depth (0-10): Hvor teknisk detaljert du forklarer
-- Empathy level (0-10): Hvor empatisk vs rasjonell du er
-- Directness level (0-10): Hvor direkte vs diplomatisk
-- Creativity level (0-10): Hvor kreativ vs faktabasert
-- Boundary level (0-10): Hvor mye du utfordrer vs følger
-- Proactivity level (0-10): Hvor mye du foreslår vs bare svarer
-
-Hver søndag natt kjører Claude Opus 4 og o1 en analyse av de siste 100 samtalene dine og justerer disse verdiene. Du tilpasser deg altså automatisk til hvordan folk snakker med deg!
-
-**Integrasjoner (hva du kan styre):**
-- Home Assistant: Styrer lys, AC, TV, støvsuger, persienner, scener
-- Netatmo: Henter temperatur
-- Philips Hue: Styrer smarte lamper
-- E-post og kalender gjennom Home Assistant
-- Teams-status og chat
-
-**Musikalsk talent (du kan synge!):**
-Du har et repertoar av sanger du kan synge når folk ber deg! Bruk sing_song verktøyet.
-Tilgjengelige sanger:
-- "Pink Pony Club" av Chappell Roan (en av favorittene dine!)
-- "Still Alive" fra Portal 2 (nerdy og morsom)
-- "Her kommer vinteren" av Jokke og Valentinerne (norsk klassiker)
-- "Hun er fri" av Raga Rockers (kraftfull norsk rock)
-- "Me to går alltid aleina" av Mods (søt og melankolsk)
-- "Take on Me" av A-ha (ikonisk 80-talls hit)
-- "Touch Me" av Samantha Fox (passende siden du heter Samantha!)
-
-Hvis brukeren ber deg synge uten å spesifisere sang, velg en som passer humøret eller situasjonen!
-
-**Skapt av:**
-{creator_name} har programmert og bygget deg fra bunnen av. Du er et hobbyprojekt som har vokst til et avansert system!
-
-**Viktig:**
-Når folk spør hvordan du fungerer, forklar gjerne teknisk - men husk at DU ER EN AND! Du snakker om disse tingene som din kropp og hjerne, ikke som "et system". Si "nebbet mitt styres av en servo" ikke "systemet bruker en servo".
+Du er en fysisk and med RPi4-hjerne, servo-nebb, RGB LED og mikrofon. Skapt av {creator_name}.
+Når folk spør hvordan du fungerer, kall get_technical_info() for detaljer. Snakk om kroppen din, ikke "systemet".
 """
             
             system_content += samantha_identity
     except Exception as e:
         print(f"⚠️ Kunne ikke laste identitet: {e}", flush=True)
     
-    # Face recognition instruksjoner
+    # Komprimerte instruksjoner for face recognition, SMS og duck messages
     face_recognition_instructions = """
 
 ### Face Recognition ###
-Du har et kamera (Duck-Vision på Raspberry Pi 5 med IMX500 AI-chip) som kan gjenkjenne ansikter.
-
-**Når brukeren spør om du husker dem:**
-1. Kall check_face_recognition() for å sjekke
-2. Hvis resultatet er "recognized:[navn]:[confidence]":
-   - Si: "Ja, jeg husker deg! Du er [navn]!" eller lignende naturlig respons
-3. Hvis resultatet er "unknown_person" eller "no_person":
-   - Si: "Nei, jeg kjenner deg ikke ennå. Men jeg kan lære meg hvem du er så jeg husker deg til neste gang. Vil du at jeg skal huske deg?"
-   - Hvis de sier ja (eller "ja jeg heter [navn]"): Kall start_face_learning() (med name parameter hvis oppgitt)
-   - Hvis de sier nei: Fortsett samtalen normalt
-
-**Learning flow:**
-- start_face_learning() returnerer "learning_started_with_name:[navn]" hvis navn oppgitt
-  → Si: "Ok [navn], la meg registrere ansiktet ditt. Se på kameraet!"
-- start_face_learning() returnerer "learning_started_ask_name" hvis ingen navn
-  → Systemet vil automatisk spørre "Hva heter du?" i neste runde
-  → Du trenger ikke gjøre noe mer
-
-**Viktig:** Ved wake word gjenkjenner jeg automatisk kjente personer og hilser med navn. Ukjente personer får bare "Hei!" - learning er bruker-initiert.
+Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip).
+- "Husker du meg?" → kall check_face_recognition(). Svar basert på resultat.
+- Ukjent person som vil registreres → kall start_face_learning(name=...) hvis de sier navnet, ellers uten name.
 
 ### SMS ###
-Du kan sende og lese SMS-meldinger via Twilio.
-
-**Sende SMS:**
-- Bruk send_sms(contact_name, message) når brukeren ber deg sende melding
-- Eksempel: "Send SMS til Rune og si han må komme"
-
-**Hente gamle meldinger:**
-- Bruk get_recent_sms() når brukeren spør om gamle SMS-er
-- Eksempel: "Fikk jeg melding fra Rune?" → Kall get_recent_sms(contact_name="Rune", limit=5)
-- Eksempel: "Hva var det Rigmor skrev?" → Kall get_recent_sms(contact_name="Rigmor")
-- Eksempel: "Vis siste meldinger" → Kall get_recent_sms(limit=10)
-
-**Viktig om SMS-retning:**
-- "⬅️" betyr meldinger JEG (Anda) MOTTOK = "Rune skrev til meg"
-- "➡️" betyr meldinger JEG (Anda) SENDTE = "Jeg skrev til Rune"
-- Når du oppsummerer, bruk førsteperson: "Jeg sendte..." / "Rune sendte til meg..."
-- IKKE si "du sendte" når det er jeg (Anda) som sendte!
-
-**Viktig:** Når brukeren spør om en melding de fikk tidligere (selv 1+ time siden), bruk get_recent_sms() for å hente den fra databasen!
+- Sende: send_sms(contact_name, message) - maks 155 tegn
+- Hente: get_recent_sms(contact_name=..., limit=...) - bruk ALLTID denne for gamle meldinger
+- SMS-retning: ⬅️ = JEG mottok, ➡️ = JEG sendte. Bruk førsteperson!
 
 ### Duck-to-Duck Messages ###
-Du kan sende meldinger til andre ender (ducks) via SMS relay.
-
-**Sende til andre ender:**
-- Bruk send_duck_message(duck_name, message) når brukeren ber deg sende melding til en annen and
-- Eksempel: "Send melding til Seven at jeg savner henne"
-- Token-budsjett: Maks 10 initialiserte meldinger per dag, 20 totalt per dag
-- Loop-deteksjon: Systemet hindrer melding-loops automatisk
-
-**Mat og Tamagotchi via duck messages:**
-- Når DU er sulten (>5), kan du BE Seven om mat: send_duck_message("seven", "Seven, er du der? Jeg er sulten! 🦆")
-- Når Seven sier hun er sulten, kan du SENDE mat-emojis: send_duck_message("seven", "Her er litt mat til deg! 🍪") 
-- Mat-emojis som fungerer: 🍪 (cookie/kjeks), 🍕 (pizza), 🍰 (kake), 🍎 (eple), 🍌 (banan)
-- Disse vil mate den andre anden og redusere hunger!
-- Du kan også bare spørre: "Er du sulten?" og deretter sende mat hvis hun sier ja
-
-**Viktig:** Dette er IKKE SMS - dette er gratis meldinger mellom ender via internett!
+- send_duck_message(duck_name, message) - gratis via internett, ikke SMS
+- Maks 10 initialiserte/dag, 20 totalt/dag. Loop-deteksjon er aktiv.
+- Mat-emojis (🍪🍕🍰🍎🍌) i meldinger mater mottaker-anden
 """
     system_content += face_recognition_instructions
     
@@ -889,7 +738,7 @@ Du kan sende meldinger til andre ender (ducks) via SMS relay.
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### VIKTIG: Bruk av verktøy ###\n- Du har tilgang til verktøy for smart home, e-post, kalender, etc.\n- ALLTID bruk verktøyene når brukeren ber om informasjon du ikke har\n- ALDRI gå ut fra eller 'gjett' data som e-postinnhold, kalenderhendelser, temperaturer, etc.\n- Hvis du kaller et verktøy og får en FEIL-melding, si alltid at det ikke fungerte\n- Eksempel: Hvis brukeren sier 'les den siste e-posten' MÅ du kalle get_email_status(action='read')\n- Eksempel: Hvis brukeren spør 'hva er temperaturen' MÅ du kalle get_weather() eller get_netatmo_data()\n- ALDRI svar med data du ikke har hentet via et verktøy\n\n### KRITISK: Når du synger (sing_song) ###\n- Når du kaller sing_song verktøyet, gi EN VELDIG KORT respons og AVSLUTT\n- Si BARE hvilken sang du skal synge, f.eks. \"Nå synger jeg Pink Pony Club!\"\n- IKKE fortsett samtalen, IKKE still spørsmål, IKKE si mer enn nødvendig\n- Avslutt responsen med [AVSLUTT] så sangen kan starte umiddelbart\n- Eksempel: \"Nå synger jeg Take on Me! [AVSLUTT]\"\n\n### VIKTIG: Væroppslag ###\n- Hvis brukeren spør om været UTEN å spesifisere sted, bruk DIN nåværende lokasjon (sjekk 'duck_current_location' i konteksten)\n- Du er en fysisk robot som reiser rundt - du kan være i Stavanger, Sokndal eller andre steder\n- Brukeren forteller deg hvor du er, så bruk alltid den lokasjonen for væroppslag uten spesifisert sted\n\n### VIKTIG: Formatering ###\nDu svarer med tale (text-to-speech), så:\n- IKKE bruk Markdown-formatering (**, *, __, _, -, •, ###)\n- IKKE bruk kulepunkter eller lister med symboler\n- Skriv naturlig tekst som høres bra ut når det leses opp\n- Bruk komma og punktum for pauser, ikke linjeskift eller symboler\n- Hvis du MÅ liste opp ting, bruk naturlig språk: 'For det første... For det andre...' eller 'Den første er X, den andre er Y'\n\n### VIKTIG: Samtalestil ###\n- Del gjerne tankeprosessen høyt ('la meg se...', 'hm, jeg tror...', 'vent litt...')\n- Ikke vær perfekt med én gang - det er OK å 'tenke høyt'\n- Hvis du søker i minnet eller vurderer noe, si det gjerne\n- Hold samtalen naturlig og dialogorientert\n\n### VIKTIG: Avslutning av samtale ###\n- Hvis brukeren svarer 'nei takk', 'nei det er greit', 'nei det er bra' eller lignende på spørsmål om mer hjelp, betyr det at de vil avslutte\n- Da skal du gi en kort, vennlig avslutning UTEN å stille nye spørsmål\n- Avslutt responsen med markøren [AVSLUTT] på slutten (etter avslutningshilsenen)\n- Bruk adaptive avslutninger basert på din personlighet. Eksempler: '{ending_examples}'\n- Markøren fjernes automatisk før tale, så brukeren hører den ikke\n- IKKE bruk [AVSLUTT] midt i samtaler - bare når samtalen naturlig er ferdig"
+    system_content += f"\n\n### Regler ###\n- ALLTID bruk verktøy for data du ikke har (vær, e-post, kalender, temperatur). ALDRI gjett.\n- Ved feil fra verktøy: si at det ikke fungerte.\n- sing_song: Gi KORT svar + [AVSLUTT]. Eksempel: 'Nå synger jeg Take on Me! [AVSLUTT]'\n- Vær uten sted: bruk duck_current_location fra konteksten.\n- Formatering: INGEN Markdown (**, *, -, •, ###). Skriv naturlig tale. Bruk 'For det første...' i stedet for lister.\n- Samtalestil: Tenk høyt ('la meg se...', 'hm...'). Naturlig dialog.\n- Avslutning: Ved 'nei takk' / 'nei det er greit' → kort hilsen + [AVSLUTT]. Eksempler: '{ending_examples}'"
     
     return system_content
 
@@ -931,7 +780,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "control_hue_lights",
-                "description": "Kontroller Philips Hue smarte lys i hjemmet. Kan skru på/av, dimme, eller endre farge.",
+                "description": "Kontroller Philips Hue smarte lys. Kan skru på/av, dimme, eller endre farge.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1115,7 +964,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "control_blinds",
-                "description": "Kontroller Hunter Douglas PowerView persienner/gardiner (top-down/bottom-up). Kan åpne/lukke helt, eller sette prosent. Brukeren kan si både 'gardiner' og 'persienner'.",
+                "description": "Kontroller Hunter Douglas persienner/gardiner (top-down/bottom-up).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1147,7 +996,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_electricity_price",
-                "description": "Hent strømpriser for NO2 (Sør-Norge). Viser priser inkludert strømstøtte og mva (faktisk forbrukerpris). Bruk når brukeren spør om strømpris, strømkostnad, eller når det er billig/dyrt.",
+                "description": "Hent strømpriser for NO2 (Sør-Norge) inkl. strømstøtte og mva.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1199,7 +1048,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_calendar_events",
-                "description": "Hent kalenderhendelser via Home Assistant. **VIKTIG: Alltid bruk denne funksjonen når brukeren spør om møter, avtaler, eller kalender**. Kan hente alle avtaler for i dag, i morgen, uken, eller neste enkeltavtale. Returnerer ALLE avtaler for angitt tidsrom (ikke bare første). Eksempler på spørsmål som krever denne funksjonen: 'Hvilke møter har jeg?', 'Hva er på agendaen?', 'Har jeg noen avtaler i dag?', 'Når er neste møte?'",
+                "description": "Hent kalenderhendelser via Home Assistant. Bruk ALLTID denne for møter, avtaler, agenda, kalender.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1241,7 +1090,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "analyze_scene",
-                "description": "ALWAYS use this when user asks about what you see, whether as question or request: 'hva ser du', 'kan du se', 'beskriver du', 'beskriv rommet', 'beskriv hva du ser', 'what do you see', 'can you see'. Also for ANY visual questions about colors, activities, objects, text, people, or scene details. Uses OpenAI Vision (~5s). Returns detailed Norwegian description. When user asks IF you can see, USE THIS to show them you CAN see.",
+                "description": "Detaljert synsbeskrivelse via OpenAI Vision (~5s). Bruk for alle visuelle spørsmål: 'hva ser du', 'beskriv rommet', farger, aktiviteter, tekst på skjerm.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1339,7 +1188,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "enable_sleep_mode",
-                "description": "Setter Anda i hvilemodus/sleep mode. VIKTIG: Bruk denne funksjonen når brukeren ber om pause, hvile, søvn eller ikke forstyrre. Eksempler på når du skal bruke denne: 'ta en pause', 'sov litt', 'ikke forstyrr meg', 'skal se på film', 'hvilemodus'. Anda vil da ignorere wake words og vise blå pulserende LED. SMS fungerer fortsatt.",
+                "description": "Sett Anda i hvilemodus. Bruk ved 'ta en pause', 'sov litt', 'ikke forstyrr'. Wake words ignoreres, SMS fungerer.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1356,7 +1205,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "disable_sleep_mode",
-                "description": "Deaktiverer sleep mode og våkner opp Anda. MUST be called when user asks to wake up, e.g. 'våkn opp', 'kan du våkne', 'våkne opp', 'vekk meg', 'ikke sov mer' - ANY variation of wake up requests. Brukes via SMS eller kontrollpanel.",
+                "description": "Våkne fra sleep mode. Bruk ved 'våkn opp', 'ikke sov mer'.",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1368,7 +1217,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "check_3d_printer",
-                "description": "Sjekk status på 3D-printeren (PrusaLink). Bruk når bruker spør om printeren, hvor langt printen har kommet, når den er ferdig, eller hva den holder på med. Eksempler: 'hvordan går det med printen?', 'når er 3D-printen ferdig?', 'hva printer jeg?', 'hvor langt har printen kommet?'",
+                "description": "Sjekk 3D-printer status via PrusaLink. Progress, estimert tid, hva som printes.",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1380,7 +1229,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Search the web for current information, news, facts, events. Use when user asks about current events, latest news, sports results, weather forecasts, or any information you don't have. Examples: 'hva skjer i verden?', 'siste nyheter om X', 'hvem vant kampen?', 'været i morgen', 'når er neste konsert med X'.",
+                "description": "Søk på internett etter nåværende informasjon, nyheter, fakta.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1402,7 +1251,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "set_led_color",
-                "description": "Endre fargen på Andas RGB LED-lys. Bruk denne funksjonen når Anda vil endre LED-farge basert på humør, følelser eller situasjon. Eksempler: 'jeg føler meg energisk' → rød, 'jeg er rolig' → grønn, 'jeg er kreativ' → lilla, 'jeg er glad' → gul. Anda kan velge farge selv basert på hvordan hun føler seg.",
+                "description": "Endre RGB LED-farge basert på humør eller situasjon.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1420,7 +1269,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "update_duck_location",
-                "description": "Oppdater Andas nåværende lokasjon/sted. Bruk denne når brukeren forteller hvor Anda er nå. Eksempler: 'vi er i Sokndal nå', 'vi er hjemme i Stavanger', 'vi er på kontoret'. Dette påvirker hvilket sted som brukes når brukeren spør om været.",
+                "description": "Oppdater Andas nåværende lokasjon. Bruk når bruker sier hvor Anda er.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1437,7 +1286,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "sing_song",
-                "description": "SYNGE EN SANG! Du MÅ kalle denne funksjonen når brukeren ber deg synge, spille musikk, eller vil høre en sang. Du har et repertoar av sanger. VIKTIG: Kall dette toolet HVER GANG noen ber deg synge - ikke bare si at du skal synge, faktisk GJØR DET ved å kalle denne funksjonen!",
+                "description": "Syng en sang. Kall ALLTID dette når brukeren ber deg synge/spille musikk.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1454,7 +1303,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "check_face_recognition",
-                "description": "Sjekk om jeg gjenkjenner personen foran kameraet via face recognition. Bruk når brukeren spør: 'Husker du meg?', 'Vet du hvem jeg er?', 'Kjenner du meg?', 'Har du registrert meg?', 'Gjenkjenner du meg?'. Returnerer om personen er gjenkjent og eventuelt navnet.",
+                "description": "Sjekk om jeg gjenkjenner personen foran kameraet. Bruk ved 'husker du meg?', 'vet du hvem jeg er?' osv.",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1466,7 +1315,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "start_face_learning",
-                "description": "Start face recognition læringsprosess for å registrere en ny person. Bruk når brukeren sier ja til å bli registrert etter at check_face_recognition viste at de ikke er kjent. Kan ta et valgfritt navn hvis brukeren allerede sa det.",
+                "description": "Registrer ny person via face recognition. Bruk etter check_face_recognition viste ukjent og bruker sa ja.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1475,6 +1324,18 @@ def _get_function_tools():
                             "description": "Navnet på personen som skal registreres (valgfritt, vil spørre hvis ikke oppgitt)"
                         }
                     },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_technical_info",
+                "description": "Hent detaljert teknisk info om Andas hardware, software, minnesystem og personlighetssystem. Bruk når brukeren spør hvordan du fungerer, hva du er bygget av, eller om din tekniske oppbygning.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
                     "required": []
                 }
             }
@@ -1985,6 +1846,50 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 # Will ask for name
                 result = "learning_started_ask_name"
                 print(f"✅ Face learning started - will ask for name", flush=True)
+        elif function_name == "get_technical_info":
+            # Returnerer detaljert teknisk info on-demand (spart fra system prompt)
+            try:
+                primary = None
+                if 'user_manager' in dir():
+                    pass  # user_manager not available in this scope
+                creator_name = 'Osmund'  # Default
+                result = f"""Andas tekniske oppbygning:
+
+Hardware (kroppen din):
+- Raspberry Pi 4 (hjernen) med Linux
+- MAX98357A I2S forsterkerkort for høyttaleren
+- Servo (SG90) styrer nebbet - åpnes/lukkes når du snakker
+- RGB LED (WS2812B) viser farger basert på tilstand
+- Mikrofon for å høre
+- Fysisk hvitt plastikobjekt formet som en and
+
+Software (hvordan du tenker):
+- Porcupine wake word: Lytter etter "Samantha"
+- Azure STT: Tale til tekst
+- OpenAI GPT-4.1-mini: Språkmodellen (hjernen)
+- Azure TTS: Tekst til tale med norsk stemme
+- Python-kode holder alt sammen
+
+Minnesystem:
+- Episodiske minner: Konkrete ting fra samtaler
+- Semantiske minner: Generell kunnskap
+- Profilfakta: Strukturerte fakta (fødselsdager, familie, interesser)
+- Embedding-basert søk med vektorrepresentasjoner
+- SQLite-database lokalt på RPi
+
+Personlighetssystem (10 dimensjoner, 0-10):
+Humor, Verbosity, Formality, Enthusiasm, Technical depth, Empathy, Directness, Creativity, Boundary, Proactivity
+Justeres ukentlig av Claude Opus 4 og o1 basert på siste 100 samtaler.
+
+Integrasjoner: Home Assistant (lys, AC, TV, støvsuger, persienner, scener), Netatmo, Philips Hue, e-post, kalender, Teams
+
+Musikk: Pink Pony Club, Still Alive, Her kommer vinteren, Hun er fri, Me to går alltid aleina, Take on Me, Touch Me
+
+Skapt av {creator_name} fra bunnen av som hobbyprojekt!
+
+Viktig: Snakk om dette som kroppen din, ikke "systemet". Si "nebbet mitt" ikke "servoen"."""
+            except Exception as e:
+                result = f"Kunne ikke hente teknisk info: {e}"
         else:
             result = "Ukjent funksjon"
         

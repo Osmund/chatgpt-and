@@ -5,7 +5,6 @@ Handles wake word detection and speech recognition (STT).
 
 import sounddevice as sd
 import numpy as np
-from scipy.signal import resample
 import pvporcupine
 import time
 import os
@@ -90,7 +89,7 @@ def wait_for_wake_word():
         # 0.5 sekunder = 500ms buffer (mye større enn 'high' ~200ms)
         latency_setting = 0.5  # 'low', 'high', eller sekunder (float)
         
-        print(f"Resampling: {mic_sample_rate} Hz -> {porcupine_sample_rate} Hz (ratio: {ratio}), buffer: {mic_buffer_size}", flush=True)
+        print(f"Decimation: {mic_sample_rate} Hz -> {porcupine_sample_rate} Hz (ratio: {int(ratio)}:1), buffer: {mic_buffer_size}", flush=True)
         print(f"Audio latency: {latency_setting} (reduces overflow risk)", flush=True)
         
         # Prøv å åpne mikrofon-input i en retry-loop
@@ -146,8 +145,15 @@ def wait_for_wake_word():
                     if check_normal:
                         normal_check_counter = 0
                     
+                    # Batch file I/O: single listdir instead of 7 separate os.path.exists() syscalls
+                    if check_critical or check_normal:
+                        try:
+                            _tmp_files = set(os.listdir('/tmp'))
+                        except OSError:
+                            _tmp_files = set()
+                    
                     # Sjekk om det finnes en ekstern melding (CRITICAL - every ~1.6s)
-                    if check_critical and os.path.exists(MESSAGE_FILE):
+                    if check_critical and os.path.basename(MESSAGE_FILE) in _tmp_files:
                         try:
                             with open(MESSAGE_FILE, 'r', encoding='utf-8') as f:
                                 message = f.read().strip()
@@ -164,8 +170,8 @@ def wait_for_wake_word():
                     # Sjekk SMS og duck messages (CRITICAL - every ~1.6s / 50 iterations)
                     if check_critical:
                         # SMS announcements
-                        sms_announcement_file = '/tmp/duck_sms_announcement.txt'
-                        if os.path.exists(sms_announcement_file):
+                        if 'duck_sms_announcement.txt' in _tmp_files:
+                            sms_announcement_file = '/tmp/duck_sms_announcement.txt'
                             try:
                                 with open(sms_announcement_file, 'r', encoding='utf-8') as f:
                                     announcement = f.read().strip()
@@ -177,8 +183,8 @@ def wait_for_wake_word():
                                 print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
                         
                         # Duck-to-duck message announcements
-                        duck_msg_file = '/tmp/duck_message_announcement.txt'
-                        if os.path.exists(duck_msg_file):
+                        if 'duck_message_announcement.txt' in _tmp_files:
+                            duck_msg_file = '/tmp/duck_message_announcement.txt'
                             try:
                                 with open(duck_msg_file, 'r', encoding='utf-8') as f:
                                     import json
@@ -193,12 +199,11 @@ def wait_for_wake_word():
                                 print(f"⚠️ Error reading duck message: {e}", flush=True)
                     
                     # Sjekk om det finnes hunger-annonseringer (NORMAL - every ~4.8s)
-                    hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
-                    if check_normal and os.path.exists(hunger_announcement_file):
+                    if check_normal and 'duck_hunger_announcement.txt' in _tmp_files:
                         try:
-                            with open(hunger_announcement_file, 'r', encoding='utf-8') as f:
+                            with open('/tmp/duck_hunger_announcement.txt', 'r', encoding='utf-8') as f:
                                 announcement = f.read().strip()
-                            os.remove(hunger_announcement_file)
+                            os.remove('/tmp/duck_hunger_announcement.txt')
                             if announcement:
                                 print(f"😋 Hunger announcement: {announcement[:50]}...", flush=True)
                                 return f"__HUNGER_ANNOUNCEMENT__{announcement}"
@@ -206,12 +211,11 @@ def wait_for_wake_word():
                             print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
                     
                     # Sjekk om Anda ble matet fra kontrollpanelet (NORMAL - every ~4.8s)
-                    hunger_fed_file = '/tmp/duck_hunger_fed.txt'
-                    if check_normal and os.path.exists(hunger_fed_file):
+                    if check_normal and 'duck_hunger_fed.txt' in _tmp_files:
                         try:
-                            with open(hunger_fed_file, 'r', encoding='utf-8') as f:
+                            with open('/tmp/duck_hunger_fed.txt', 'r', encoding='utf-8') as f:
                                 announcement = f.read().strip()
-                            os.remove(hunger_fed_file)
+                            os.remove('/tmp/duck_hunger_fed.txt')
                             if announcement:
                                 print(f"😋 Fed from control panel: {announcement}", flush=True)
                                 return f"__HUNGER_FED__{announcement}"
@@ -219,12 +223,11 @@ def wait_for_wake_word():
                             print(f"⚠️ Error reading hunger fed announcement: {e}", flush=True)
                     
                     # Sjekk om det finnes hotspot-annonseringer (NORMAL - every ~4.8s)
-                    hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
-                    if check_normal and os.path.exists(hotspot_announcement_file):
+                    if check_normal and 'duck_hotspot_announcement.txt' in _tmp_files:
                         try:
-                            with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
+                            with open('/tmp/duck_hotspot_announcement.txt', 'r', encoding='utf-8') as f:
                                 announcement = f.read().strip()
-                            os.remove(hotspot_announcement_file)
+                            os.remove('/tmp/duck_hotspot_announcement.txt')
                             if announcement:
                                 print(f"📡 Hotspot announcement: {announcement[:50]}...", flush=True)
                                 return f"__HOTSPOT_ANNOUNCEMENT__{announcement}"
@@ -232,7 +235,7 @@ def wait_for_wake_word():
                             print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
                     
                     # Sjekk om det finnes en sang-forespørsel (NORMAL - every ~4.8s)
-                    if check_normal and os.path.exists(SONG_REQUEST_FILE):
+                    if check_normal and os.path.basename(SONG_REQUEST_FILE) in _tmp_files:
                         try:
                             with open(SONG_REQUEST_FILE, 'r', encoding='utf-8') as f:
                                 song_path = f.read().strip()
@@ -257,9 +260,8 @@ def wait_for_wake_word():
                     # Konverter til numpy array
                     pcm_48k_array = np.frombuffer(pcm_48k, dtype=np.int16)
                     
-                    # Resample til 16000 Hz (én frame per buffer nå)
-                    pcm_16k_array = resample(pcm_48k_array, porcupine.frame_length)
-                    pcm_16k = pcm_16k_array.astype(np.int16)
+                    # Decimation 48kHz -> 16kHz (ratio 3:1, tar hver 3. sample)
+                    pcm_16k = pcm_48k_array[::3]
                     
                     # Sjekk for wake word
                     keyword_index = porcupine.process(pcm_16k)

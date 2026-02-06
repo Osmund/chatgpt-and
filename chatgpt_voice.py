@@ -1438,6 +1438,13 @@ def main():
                     continue
             
             messages.append({"role": "user", "content": prompt})
+            
+            # Sliding window: behold maks 20 meldinger for å spare tokens
+            # Memory worker har allerede lagret viktige fakta fra eldre meldinger
+            MAX_CONVERSATION_MESSAGES = 20
+            if len(messages) > MAX_CONVERSATION_MESSAGES:
+                messages = messages[-MAX_CONVERSATION_MESSAGES:]
+            
             try:
                 # Blinking startet allerede rett etter STT - fortsetter under AI-prosessering
                 result = chatgpt_query(
