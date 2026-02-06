@@ -884,23 +884,24 @@ async function loadWorkerStatus() {
 }
 
 async function toggleMemoryView() {
-    const view = document.getElementById('memory-view');
-    const toggleText = document.getElementById('memory-toggle-text');
+    const details = document.getElementById('memory-details');
+    if (!details) return;
     
-    memoryViewVisible = !memoryViewVisible;
+    memoryViewVisible = details.open;
     
     if (memoryViewVisible) {
-        view.style.display = 'block';
-        toggleText.textContent = '🙈 Skjul detaljert minne';
         await loadRecentUpdates();
         await loadMemoryFacts();
         await loadMemoryMemories();
         await loadMemoryTopics();
-    } else {
-        view.style.display = 'none';
-        toggleText.textContent = '👁️ Vis detaljert minne';
     }
 }
+
+// Hook up details toggle event
+document.addEventListener('DOMContentLoaded', () => {
+    const details = document.getElementById('memory-details');
+    if (details) details.addEventListener('toggle', toggleMemoryView);
+});
 
 async function loadRecentUpdates() {
     const list = document.getElementById('recent-updates-list');
@@ -1521,6 +1522,7 @@ window.onload = function() {
     loadContacts();  // Last SMS kontakter
     loadDuckLocation();  // Last Andas lokasjon - lastes én gang
     loadPrinterStatus();  // Last printer status én gang
+    loadMemoryStats();  // Last nøkkelfakta og worker status
     
     // Første batch-poll (erstatter alle individuelle kall)
     pollDashboard();
@@ -2029,12 +2031,12 @@ async function loadSMSHistory() {
             }
         });
         
-        // Build contact list + message area
+        // Build contact filter + message area
         let html = `
             <div style="display: flex; flex-direction: column; height: 780px;">
                 <div style="border-bottom: 2px solid #ddd; padding: 10px; background: white; flex-shrink: 0;">
-                    <strong style="display: block; margin-bottom: 8px;">Velg kontakt:</strong>
-                    <div id="contact-filter-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <select id="sms-contact-select" onchange="filterSMSByContact(this.value || null)" style="width: 100%; padding: 10px; border: 2px solid #42a5f5; border-radius: 8px; font-size: 1em; background: white; cursor: pointer;">
+                        <option value="">📱 Alle meldinger</option>
         `;
         
         // Sort contacts by most recent message
@@ -2045,29 +2047,16 @@ async function loadSMSHistory() {
         });
         
         sortedContacts.forEach(([contactName, data]) => {
-            const newBadge = data.newCount > 0 ? 
-                `<span style="background: #f44336; color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 4px;">${data.newCount}</span>` 
-                : '';
-            html += `
-                <button onclick="filterSMSByContact('${contactName.replace(/'/g, "\\'")}')" 
-                        data-contact="${contactName.replace(/'/g, "\\'")}"
-                        class="contact-filter-btn"
-                        style="display: inline-block !important; width: auto !important; padding: 8px 12px; background: white; border: 2px solid #42a5f5; border-radius: 20px; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap; margin: 4px;">
-                    ${contactName}${newBadge}
-                </button>
-            `;
+            const isDuck = data.messages.some(m => m.message_type === 'duck');
+            const icon = isDuck ? '🦆' : '👤';
+            const newBadge = data.newCount > 0 ? ` (${data.newCount} ny)` : '';
+            html += `<option value="${contactName.replace(/"/g, '&quot;')}">${icon} ${contactName}${newBadge}</option>`;
         });
         
         html += `
-                    <button onclick="filterSMSByContact(null)" 
-                            class="contact-filter-btn"
-                            style="display: inline-block !important; width: auto !important; padding: 8px 12px; background: white; border: 2px solid #999; border-radius: 20px; cursor: pointer; white-space: nowrap; margin: 4px;">
-                        Vis alle
-                    </button>
+                    </select>
                 </div>
-            </div>
             <div id="sms-messages-area" style="flex: 1; min-height: 0; overflow-y: auto; padding: 10px; max-height: 650px;">
-                <div style="text-align: center; color: #666; padding: 20px;">Velg en kontakt for å se meldinger</div>
             </div>
         </div>
         `;
@@ -2076,6 +2065,9 @@ async function loadSMSHistory() {
         
         // Store messages globally for filtering
         window.smsHistoryData = contactMessages;
+        
+        // Show all messages immediately
+        displayAllMessages();
         
     } catch (error) {
         console.error('Feil ved lasting av SMS:', error);
@@ -2096,19 +2088,9 @@ function filterSMSByContact(contactName) {
         smsFilterInterval = null;
     }
     
-    // Update button styles to show selected contact
-    document.querySelectorAll('.contact-filter-btn').forEach(btn => {
-        const btnContact = btn.getAttribute('data-contact');
-        if ((contactName && btnContact === contactName) || (!contactName && !btnContact)) {
-            btn.style.background = '#42a5f5';
-            btn.style.color = 'white';
-            btn.style.fontWeight = 'bold';
-        } else {
-            btn.style.background = 'white';
-            btn.style.color = 'black';
-            btn.style.fontWeight = '500';
-        }
-    });
+    // Update dropdown selection
+    const selectEl = document.getElementById('sms-contact-select');
+    if (selectEl) selectEl.value = contactName || '';
     
     currentSMSContact = contactName;
     const messagesArea = document.getElementById('sms-messages-area');
@@ -2184,8 +2166,16 @@ function displayContactMessages(contactName, contact) {
         
         const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
         const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
-        const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
-        const directionText = isIncoming ? 'Fra' : 'Til';
+        
+        // Build name label
+        let nameLabel;
+        if (isDuckMessage) {
+            // contact_name is "from → to" for duck messages
+            const parts = contactName.split(' → ');
+            nameLabel = isIncoming ? `🦆 Fra ${parts[0] || 'and'}` : `🦆 Til ${parts[1] || 'and'}`;
+        } else {
+            nameLabel = isIncoming ? `📩 Fra ${contactName}` : `📤 Til ${contactName}`;
+        }
         
         // Format timestamp
         const date = new Date(sms.timestamp);
@@ -2199,10 +2189,10 @@ function displayContactMessages(contactName, contact) {
         html += `
             <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <strong>${icon} ${directionText}</strong>
-                    <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
+                    <strong style="font-size: 0.9em;">${nameLabel}</strong>
+                    <span style="font-size: 0.8em; color: #666;">${timeStr}</span>
                 </div>
-                <div style="color: #333;">
+                <div style="color: #333; font-size: 0.95em;">
                     ${sms.message}
                 </div>
             </div>
@@ -2245,8 +2235,15 @@ function displayAllMessages() {
         
         const bgColor = isDuckMessage ? (isIncoming ? '#fff3e0' : '#ffe0b2') : (isIncoming ? '#e3f2fd' : '#f1f8e9');
         const borderColor = isDuckMessage ? '#ff9800' : (isIncoming ? '#42a5f5' : '#66bb6a');
-        const icon = isDuckMessage ? '🦆' : (isIncoming ? '📩' : '📤');
-        const directionText = isIncoming ? 'Fra' : 'Til';
+        
+        // Build name label
+        let nameLabel;
+        if (isDuckMessage) {
+            const parts = sms.displayContact.split(' → ');
+            nameLabel = isIncoming ? `🦆 Fra ${parts[0] || 'and'}` : `🦆 Til ${parts[1] || 'and'}`;
+        } else {
+            nameLabel = isIncoming ? `📩 Fra ${sms.displayContact}` : `📤 Til ${sms.displayContact}`;
+        }
         
         // Format timestamp
         const date = new Date(sms.timestamp);
@@ -2260,10 +2257,10 @@ function displayAllMessages() {
         html += `
             <div style="padding: 10px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <strong>${icon} ${directionText} ${sms.displayContact}</strong>
-                    <span style="font-size: 0.85em; color: #666;">${timeStr}</span>
+                    <strong style="font-size: 0.9em;">${nameLabel}</strong>
+                    <span style="font-size: 0.8em; color: #666;">${timeStr}</span>
                 </div>
-                <div style="color: #333;">
+                <div style="color: #333; font-size: 0.95em;">
                     ${sms.message}
                 </div>
             </div>
