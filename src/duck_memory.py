@@ -260,7 +260,9 @@ class MemoryManager:
                 message_count INTEGER DEFAULT 0,
                 topics TEXT,
                 start_time TEXT NOT NULL,
-                end_time TEXT NOT NULL
+                end_time TEXT NOT NULL,
+                session_mood TEXT DEFAULT 'nøytral',
+                session_theme TEXT DEFAULT ''
             )
         """)
         
@@ -1242,7 +1244,7 @@ class MemoryManager:
         
         return scored_memories[:limit]
     
-    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None, boost_user: str = None, query_embedding=None, touch: bool = True) -> List[Memory]:
+    def search_memories_by_embedding(self, query: str, limit: int = 8, threshold: float = 0.5, user_name: str = None, boost_user: str = None, query_embedding=None, touch: bool = True, return_scores: bool = False) -> List:
         """
         Søk i memories med embedding similarity (semantisk søk)
         
@@ -1254,9 +1256,10 @@ class MemoryManager:
             boost_user: Gi relevance boost til minner om denne personen (optional, soft preference)
             query_embedding: Ferdig embedding (unngår ekstra API-kall)
             touch: Oppdater last_accessed (sett False for sanntidssamtaler)
+            return_scores: Returner (Memory, score) tuples i stedet for bare Memory
         
         Returns:
-            List of Memory objects, sortert etter relevans
+            List of Memory objects (or (Memory, score) tuples if return_scores=True), sortert etter relevans
         """
         # Bruk ferdig embedding eller generer ny
         if query_embedding is None:
@@ -1321,6 +1324,8 @@ class MemoryManager:
                 self._touch_memory(memory_id)
         
         # Returner top N memories
+        if return_scores:
+            return [(memory, similarity) for similarity, memory, _ in results[:limit]]
         return [memory for _, memory, _ in results[:limit]]
     
     def _touch_memory(self, memory_id: int):
@@ -1521,18 +1526,16 @@ class MemoryManager:
         # 6. Relevant memories (gjenbruker samme embedding - spar 1 API-kall)
         # Søk i ALLE minner, men boost minner om personen vi snakker med
         conn = self._get_connection()  # Re-open connection
-        relevant_memories_list = self.search_memories_by_embedding(
+        relevant_memories = self.search_memories_by_embedding(
             query, 
             limit=MEMORY_LIMIT, 
             threshold=MEMORY_THRESHOLD, 
             user_name=None,  # Søk i alle minner
             boost_user=user_name,  # Men boost minner om denne personen
             query_embedding=query_embedding,  # Gjenbruk embedding (spar 1 API-kall)
-            touch=False  # Ikke oppdater last_accessed i sanntid (ytelse)
+            touch=False,  # Ikke oppdater last_accessed i sanntid (ytelse)
+            return_scores=True  # Returner ekte similarity scores
         )
-        # Convert to same format as old search_memories (List[Tuple[Memory, float]])
-        # For now, use similarity score of 1.0 as we don't return it from search_memories_by_embedding
-        relevant_memories = [(m, 1.0) for m in relevant_memories_list]
         
         # 7. Recent topics
         topic_stats = self.get_topic_stats(limit=5)
@@ -1578,12 +1581,16 @@ class MemoryManager:
             
             image_context.append(img_text)
         
+        # 9. Last session summary for cross-session continuity
+        last_session = self.get_last_session_summary(user_name=user_name)
+        
         context = {
             'profile_facts': [asdict(f) for f in profile_facts],
             'relevant_memories': [(m.text, score) for m, score in relevant_memories],
             'recent_topics': topic_stats,
             'recent_conversation': recent_conv,
             'recent_images': image_context,
+            'last_session': last_session,
             'metadata': {
                 'total_facts': len(profile_facts),
                 'total_memories': len(relevant_memories),
@@ -1615,6 +1622,82 @@ class MemoryManager:
         else:
             weeks = int(seconds / 604800)
             return f"{weeks} uke{'r' if weeks > 1 else ''} siden"
+    
+    # ==================== SESSION CONTINUITY ====================
+    
+    def get_last_session_summary(self, user_name: str = None) -> Optional[Dict]:
+        """
+        Hent siste sesjonssummering for cross-session continuity.
+        Returnerer summary, mood, theme og tidsinfo for siste avsluttede samtale.
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        try:
+            c.execute("""
+                SELECT summary, session_mood, session_theme, end_time, message_count, topics
+                FROM session_summaries
+                WHERE summary IS NOT NULL 
+                  AND summary != ''
+                  AND message_count >= 3
+                ORDER BY end_time DESC
+                LIMIT 1
+            """)
+            row = c.fetchone()
+            
+            if not row:
+                return None
+            
+            summary = row[0]
+            mood = row[1] or 'nøytral'
+            theme = row[2] or ''
+            end_time_str = row[3]
+            message_count = row[4]
+            topics = row[5] or ''
+            
+            # Skip summaries that are just "Samtale med N meldinger. Topics: ..." (auto-generated, not insightful)
+            if summary.startswith('Samtale med ') and 'meldinger. Topics:' in summary:
+                # Look for the next real summary
+                c.execute("""
+                    SELECT summary, session_mood, session_theme, end_time, message_count, topics
+                    FROM session_summaries
+                    WHERE summary IS NOT NULL 
+                      AND summary != ''
+                      AND message_count >= 3
+                      AND summary NOT LIKE 'Samtale med % meldinger. Topics:%'
+                    ORDER BY end_time DESC
+                    LIMIT 1
+                """)
+                row = c.fetchone()
+                if not row:
+                    return None
+                summary = row[0]
+                mood = row[1] or 'nøytral'
+                theme = row[2] or ''
+                end_time_str = row[3]
+                message_count = row[4]
+                topics = row[5] or ''
+            
+            # Calculate time ago
+            try:
+                end_time = datetime.fromisoformat(end_time_str)
+                time_ago = self._human_time_ago(end_time)
+            except (ValueError, TypeError):
+                time_ago = 'nylig'
+            
+            return {
+                'summary': summary,
+                'mood': mood,
+                'theme': theme,
+                'time_ago': time_ago,
+                'message_count': message_count,
+                'topics': topics
+            }
+        except Exception as e:
+            print(f"⚠️ Kunne ikke hente siste sesjon: {e}", flush=True)
+            return None
+        finally:
+            conn.close()
     
     # ==================== MAINTENANCE ====================
     

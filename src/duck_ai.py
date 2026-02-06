@@ -588,8 +588,12 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
     memory_section = ""
     if memory_manager:
         try:
-            # Hent brukerens siste melding for relevant søk
-            user_query = messages[-1]["content"] if messages else ""
+            # Bruk de siste 3 meldingene for bedre minnetreff (ikke bare siste)
+            if messages:
+                recent_user_msgs = [m["content"] for m in messages[-5:] if m.get("role") == "user"]
+                user_query = " ".join(recent_user_msgs[-3:]) if recent_user_msgs else messages[-1]["content"]
+            else:
+                user_query = ""
             # Send med current_user for å filtrere minner og meldinger
             context = memory_manager.build_context_for_ai(user_query, recent_messages=3, user_name=current_user['username'])
             
@@ -622,6 +626,14 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
             if context['recent_topics']:
                 topics = [t['topic'] for t in context['recent_topics'][:3]]
                 memory_section += f"\nSiste emner vi har snakket om: {', '.join(topics)}\n"
+            
+            # Session continuity - hva vi snakket om sist
+            if context.get('last_session'):
+                session = context['last_session']
+                memory_section += f"\n### Siste samtale ###\n"
+                memory_section += f"({session['time_ago']}, stemning: {session['mood']})\n"
+                memory_section += f"{session['summary']}\n"
+                memory_section += "Du kan referere til dette naturlig hvis det passer, f.eks. 'sist vi snakket...'.\n"
             
             # Recent images
             if context.get('recent_images'):
@@ -1985,6 +1997,21 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         data["tool_choice"] = "auto"  # La modellen velge når den skal bruke tools
     
     response = requests.post(url, headers=headers, json=data)
+    
+    # Retry-logikk for API-feil (429 rate limit, 500+ server errors)
+    max_retries = 3
+    for attempt in range(max_retries):
+        if response.ok:
+            break
+        if response.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
+            import time as _time
+            wait = 2 ** attempt  # 1s, 2s, 4s
+            print(f"⚠️ OpenAI API {response.status_code}, retry {attempt+1}/{max_retries} om {wait}s...", flush=True)
+            _time.sleep(wait)
+            response = requests.post(url, headers=headers, json=data)
+        else:
+            break
+    
     response.raise_for_status()
     response_data = response.json()
     
@@ -2004,6 +2031,19 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         # Kall API igjen med all tool data
         data["messages"] = final_messages
         response2 = requests.post(url, headers=headers, json=data)
+        
+        # Retry for tool follow-up call
+        for attempt in range(max_retries):
+            if response2.ok:
+                break
+            if response2.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
+                import time as _time
+                wait = 2 ** attempt
+                print(f"⚠️ OpenAI API {response2.status_code} (tool follow-up), retry {attempt+1}/{max_retries} om {wait}s...", flush=True)
+                _time.sleep(wait)
+                response2 = requests.post(url, headers=headers, json=data)
+            else:
+                break
         
         # Bedre error-håndtering for debugging
         if not response2.ok:
