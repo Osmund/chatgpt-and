@@ -223,11 +223,20 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         # Handle configuration changes, service control
 ```
 
-**HTML Template**: Embedded i Python-fil som multiline string.
-- Responsive design med gradient styling
-- Real-time status updates (setInterval 5s)
-- Live log streaming med color-coding
-- Inline JavaScript for all client-side logic
+**HTML Template**: Separate filer i `templates/` mappen.
+- `index.html` - Struktur og inline scripts
+- `style.css` - All styling (ingen inline-stiler)
+- `app.js` - Hovedlogikk (2500+ linjer)
+
+**Kontrollpanel-struktur** (7 seksjoner):
+1. **Dashboard** - 2×3 grid med status (bruker, HA, lokasjon, vision, CPU, RAM)
+2. **🎮 Tamagotchi** - Sult-, kjedsomhets- og søvnmeter
+3. **💬 Snakk med Anda** - Samtale, meldinger og musikk
+4. **📱 SMS** - Historikk/kontakter med tab-switching
+5. **🎛️ Innstillinger** - Stemme/lyd + AI/oppførsel
+6. **🎭 Personlighet** - 10 justerbare personlighetslidere
+7. **🧠 Minne** - Stats, worker, fakta, søk, innstillinger
+8. **⚙️ System** - Tjenester, brukere, logger, 3D-printer, vifte, backup, WiFi
 
 #### Service Control
 ```python

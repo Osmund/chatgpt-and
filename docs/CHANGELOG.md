@@ -4,6 +4,73 @@ Alle viktige endringer i ChatGPT Duck-prosjektet dokumenteres her.
 
 Formatet er basert på [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.3.0] - 2026-02-06
+
+### Ytelse & Infrastruktur
+
+#### 🔧 Auto-Hotspot Redesign
+- Separert WiFi-portal og WiFi-watchdog i egne services
+- Portal kjører kun ved behov, watchdog overvåker kontinuerlig
+- Bedre stabilitet og ressursbruk
+
+#### ⚡ Kontrollpanel Performance
+- Byttet til `ThreadingHTTPServer` for parallelle requests
+- Batch polling: én `/dashboard-status` erstatter 6 separate kall
+- Template caching: HTML/CSS/JS lastes fra disk én gang
+
+#### 🔄 Shutdown/Reboot UX
+- Umiddelbar HTTP-respons før systemkommando kjøres
+- Visuell progress bar med steg-indikator
+- Forhindrer timeout-feil i nettleseren
+
+#### 🎤 Samtalerespons: 4 Sekunder Raskere
+- Fjernet unødvendig `get_boredom()` kall fra samtaleflyt
+- Redusert silence-deteksjon fra 1.5s → 1.0s
+- Streamet Azure STT med 0.3s pre-buffer
+
+### Memory & Intelligens
+
+#### 🧠 Memory Worker v2 (11 forbedringer)
+- Topic-normalisering: "ChatGPT → AI" dedup
+- 6 nye database-indekser for raskere oppslag
+- Fikset embedding-duplikater (sjekker hash før insert)
+- Bedre session-håndtering med mood/theme
+- Smart batch-prosessering med backoff
+
+#### 💰 Token-Optimalisering (~3000-5000 spart per tur)
+- Fjernet fullt JSON-personlighets-objekt fra system prompt
+- Komprimert personlighets-instruksjon til 2 linjer
+- Kuttet fakta til maks 2 linjer + relevans-poeng
+- Minner begrenset til 1 linje + score
+- Fjernet verbose embedding-diagnostikk fra prompt
+- Samlet instruksjoner under felles header
+
+#### 🦆 Smartere And (4 intelligens-forbedringer)
+- **Session-kontinuitet**: `get_last_session_summary()` gir Anda kontekst fra forrige samtale
+- **Multi-message minnessøk**: Søker med siste 3 meldinger (ikke bare siste)
+- **Ekte similarity scores**: Bruker cosine similarity i stedet for hardkodet 1.0
+- **API retry-logikk**: 3 forsøk med eksponentiell backoff på 429/500/502/503
+
+### Kontrollpanel
+
+#### 🎨 Full Redesign av Kontrollpanel
+- **7 logiske seksjoner** i stedet for 10+ uorganiserte
+- **Dashboard**: Kompakt 2×3 grid (bruker, HA, lokasjon, vision, CPU, RAM)
+- **Tamagotchi**: Sult, kjedsomhet og søvn samlet
+- **Snakk med Anda**: Samtale + meldinger + musikk i én seksjon
+- **SMS**: Tab-switching mellom historikk og kontakter
+- **Innstillinger**: Stemme/lyd og AI/oppførsel i grupperte underkategorier
+- **System**: Tjenester, brukere, logger, 3D-printer, vifte, backup, WiFi, faresone
+- Fjernet alle inline-stiler → CSS-klasser
+- Responsive grid-baserte knappgrupper
+- `<details>` element for minneinnstillinger
+
+#### 📱 SMS-Forbedringer
+- Kompakt dropdown-filter erstatter pill-knapper
+- Viser navn på alle meldinger: "Fra Osmund", "Til Osmund"
+- Duck-meldinger viser avsender: "🦆 Fra Samantha"
+- Laster alle meldinger direkte (ikke tom side)
+
 ## [2.2.1] - 2026-01-28
 
 ### Forbedringer

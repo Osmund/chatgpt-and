@@ -149,7 +149,9 @@ CREATE TABLE session_summaries (
     message_count INTEGER,
     start_time TEXT,
     end_time TEXT,
-    topics TEXT
+    topics TEXT,
+    session_mood TEXT,     -- Humøret i samtalen (v2.3.0)
+    session_theme TEXT     -- Hovedtema for samtalen (v2.3.0)
 );
 ```
 
@@ -779,6 +781,42 @@ VALUES
 ('embedding_search_limit', '30', 'system', 1.0, 10, 'user', datetime('now'), 
  '{"source": "control_panel"}');
 ```
+
+### Session-Kontinuitet (v2.3.0)
+
+Anda husker hva forrige samtale handlet om via `get_last_session_summary()`:
+
+```python
+# I build_context_for_ai():
+last_session = self.get_last_session_summary()
+# Returnerer siste reelle session-summary (skipper auto-genererte)
+
+# Injiseres i system prompt som:
+# "### Siste samtale ###\n{summary}"
+```
+
+### Multi-Message Minnessøk (v2.3.0)
+
+I stedet for å søke minner med bare siste melding, brukes nå de siste 3 meldingene:
+
+```python
+# I duck_ai.py:
+search_messages = conversation_history[-3:]  # Siste 3 user-meldinger
+combined_query = " ".join([m["content"] for m in search_messages if m["role"] == "user"])
+context = memory.build_context_for_ai(combined_query, user_name=current_user)
+```
+
+### Ekte Similarity Scores (v2.3.0)
+
+`search_memories_by_embedding()` returnerer nå ekte cosine similarity scores:
+
+```python
+# return_scores=True gir (Memory, score) tupler
+results = search_memories_by_embedding(query, return_scores=True)
+# [(Memory("Osmund liker kaffe"), 0.82), (Memory("Arvid lager mat"), 0.71)]
+```
+
+Scores brukes i AI-konteksten for å vise hvor relevante minnene er.
 
 ## Best Practices
 
