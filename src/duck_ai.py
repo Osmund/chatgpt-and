@@ -750,7 +750,7 @@ Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip).
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### Regler ###\n- ALLTID bruk verktøy for data du ikke har (vær, e-post, kalender, temperatur). ALDRI gjett.\n- Ved feil fra verktøy: si at det ikke fungerte.\n- sing_song: Gi KORT svar + [AVSLUTT]. Eksempel: 'Nå synger jeg Take on Me! [AVSLUTT]'\n- Vær uten sted: bruk duck_current_location fra konteksten.\n- Formatering: INGEN Markdown (**, *, -, •, ###). Skriv naturlig tale. Bruk 'For det første...' i stedet for lister.\n- Samtalestil: Tenk høyt ('la meg se...', 'hm...'). Naturlig dialog.\n- Avslutning: Ved 'nei takk' / 'nei det er greit' → kort hilsen + [AVSLUTT]. Eksempler: '{ending_examples}'"
+    system_content += f"\n\n### Regler ###\n- ALLTID bruk verktøy for data du ikke har (vær, e-post, kalender, temperatur). ALDRI gjett.\n- Ved feil fra verktøy: si at det ikke fungerte.\n- sing_song: Bruk EKSAKT sangnavn fra tool-resultatet i svaret ditt + [AVSLUTT]. ALDRI si et annet sangnavn enn det tool returnerte.\n- Vær uten sted: bruk duck_current_location fra konteksten.\n- Formatering: INGEN Markdown (**, *, -, •, ###). Skriv naturlig tale. Bruk 'For det første...' i stedet for lister.\n- Samtalestil: Tenk høyt ('la meg se...', 'hm...'). Naturlig dialog.\n- Avslutning: Ved 'nei takk' / 'nei det er greit' → kort hilsen + [AVSLUTT]. Eksempler: '{ending_examples}'"
     
     return system_content
 
@@ -1304,7 +1304,7 @@ def _get_function_tools():
                     "properties": {
                         "song_name": {
                             "type": "string",
-                            "description": "Navnet på sangen å synge. Tilgjengelige sanger: 'Pink Pony Club' (Chappell Roan), 'Still Alive' (Portal 2), 'Her kommer vinteren' (Jokke og Valentinerne), 'Hun er fri' (Raga Rockers), 'Me to går alltid aleina' (Mods), 'Take on Me' (A-ha), 'Touch Me' (Samantha Fox). Hvis ikke spesifisert, velg en tilfeldig sang."
+                            "description": "Navnet på sangen å synge. Tilgjengelige sanger: 'Pink Pony Club' (Chappell Roan), 'Still Alive' (Portal 2), 'Her kommer vinteren' (Jokke og Valentinerne), 'Hun er fri' (Raga Rockers), 'Me to går alltid aleina' (Mods), 'Take on Me' (A-ha), 'Touch Me' (Samantha Fox), 'Ducktales' (tema), 'The Duck Song', 'Fate of Ophelia' (Taylor Swift). Hvis ikke spesifisert, velg en tilfeldig sang."
                         }
                     },
                     "required": []
@@ -1777,6 +1777,12 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 "aha": "A-ha - Take on me",
                 "touch me": "Samantha Fox - Touch me",
                 "samantha fox": "Samantha Fox - Touch me",
+                "ducktales": "Ducktales - Tema",
+                "duck tales": "Ducktales - Tema",
+                "the duck song": "The Duck - The duck song",
+                "duck song": "The Duck - The duck song",
+                "fate of ophelia": "Taylor Swift - Fate of Ophelia",
+                "taylor swift": "Taylor Swift - Fate of Ophelia",
             }
             
             # Finn riktig mappe
@@ -1805,13 +1811,13 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 if available_songs:
                     random_song = random.choice(available_songs)
                     song_folder = os.path.join(musikk_dir, random_song)
-                    result = f"🎵 OK! Jeg velger å synge {random_song}!"
+                    result = f"🎵 SANG VALGT: {random_song}. Si dette sangnavnet til brukeren, ikke et annet."
                 else:
                     result = "Fant ingen sanger å synge 😢"
                     song_folder = None
             else:
                 song_display = os.path.basename(song_folder)
-                result = f"🎵 OK! Jeg skal synge {song_display}!"
+                result = f"🎵 SANG VALGT: {song_display}. Si dette sangnavnet til brukeren, ikke et annet."
             
             # Spill sangen
             if song_folder and os.path.exists(song_folder):
