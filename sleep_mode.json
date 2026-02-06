@@ -1,5 +1,5 @@
 {
-  "enabled": false,
-  "end_time": null,
-  "duration_minutes": 0
+  "enabled": true,
+  "end_time": "2026-02-06T20:10:20.407867",
+  "duration_minutes": 120
 }

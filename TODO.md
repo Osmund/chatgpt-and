@@ -70,16 +70,38 @@
 
 ## 🔧 Andre forbedringer
 
-### Kodebase
+### Arkitektur (høy prioritet)
+- [ ] **Event-bus/Queue**: Erstatt ~15 `/tmp/duck_*.txt`-filer med `queue.Queue` — fjerner race conditions, ~150 linjer duplikat, og polling-overhead
+- [ ] **ConversationStateMachine**: Trekk ut ~800 linjer fra `main()` i chatgpt_voice.py til en tilstandsmaskin (IDLE → WAKE → LISTENING → PROCESSING → SPEAKING)
+- [ ] **Sentralisert DB**: Lag `DatabaseManager` med connection pool og context managers i ServiceManager — fjerner 30+ spredte `sqlite3.connect()`-kall
+- [ ] **DuckSettings-klasse**: Samle all config-lesing (beak, volume, sleep, etc.) — fjerner 3x duplisert beak/volum-lesemønster
+
+### Kodebase (middels prioritet)
+- [ ] Fjern 13+ hardkodede `/home/admog/Code/chatgpt-and/`-stier — bruk `BASE_PATH`/`DB_PATH` fra duck_config.py
+- [ ] Fiks 9x `sys.path.insert`-hacks — én `sys.path` per entry point, fiks pakkestruktur
+- [ ] Splitt `duck_ai.py` (2074 linjer) — flytt tool-definisjoner til `duck_tool_definitions.py`, bryt opp `_build_system_prompt()`
+- [ ] Splitt `duck-control.py` (1925 linjer) — flytt inline SQL til DuckAPIHandlers, vurder Flask
+- [ ] Fiks requirements.txt — `audioop-lts` er klebet til `requests`-kommentaren, mangler `paho-mqtt`, `twilio`
 - [ ] Dokumentere PYTHONPATH-kravet i README/INSTALL.md
 - [ ] Vurder dynamisk BASE_PATH i service-filer
-- [ ] Lag backup/restore-funksjonalitet for database
 - [ ] Legg til mer omfattende error handling
 
+### Sikkerhet
+- [ ] Legg til auth på kontrollpanelet (port 3000) — ingen autentisering i dag
+- [ ] Beskytt SMS-autorisasjon mot endring via kontrollpanelet
+- [ ] Fjern `str(e)` fra JSON-svar — eksponerer filstier og stack traces
+
 ### Testing
-- [ ] Lag enhetstester for moduler i src/
+- [ ] Lag enhetstester for `duck_memory.py` (MemoryManager, embedding-søk)
+- [ ] Lag enhetstester for `duck_ai.py` (chatgpt_query, metadata, duration parsing)
+- [ ] Lag enhetstester for `duck_messenger.py` (loop detection, token budgets)
 - [ ] Integrasjonstester for AI tools
 - [ ] Test memory system under load
+
+### Ytelse
+- [ ] Cach pitch-shifted audio for gjentatte fraser (oppstartshilsen, feilmeldinger)
+- [ ] Per-tråd persistent SQLite-connection i stedet for åpne/lukke per kall
+- [ ] Trådsikring av globaler (`_waiting_for_name` etc.) med `threading.Lock`
 
 ### Deployment
 - [ ] Lag installer-script for nye systemer

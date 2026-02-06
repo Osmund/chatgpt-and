@@ -1554,21 +1554,30 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     
                     # Send via SMS relay
                     send_result = sms_manager.send_duck_message(duck_name, message)
+                    print(f"🔧 send_duck_message result: {send_result}", flush=True)
                     
                     if send_result['status'] == 'sent':
-                        # Log in database
-                        duck_messenger.log_message(
-                            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
-                            to_duck=duck_name.lower(),
-                            message=message,
-                            direction='sent',
-                            initiated=True,
-                            tokens_used=len(message.split())
-                        )
+                        # Set result FIRST (before logging which might fail)
                         result = f"✅ Melding sendt til {duck_name}: {message}"
+                        
+                        # Log in database (non-critical)
+                        try:
+                            duck_messenger.log_message(
+                                from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                                to_duck=duck_name.lower(),
+                                message=message,
+                                direction='sent',
+                                initiated=True,
+                                tokens_used=len(message.split())
+                            )
+                        except Exception as log_err:
+                            print(f"⚠️ Duck message sent OK but logging failed: {log_err}", flush=True)
                     else:
                         result = f"❌ Kunne ikke sende melding til {duck_name}: {send_result.get('error', 'Ukjent feil')}"
                 except Exception as e:
+                    import traceback
+                    print(f"❌ Duck message exception: {e}", flush=True)
+                    traceback.print_exc()
                     result = f"Feil ved sending av duck message: {e}"
         elif function_name == "get_recent_sms":
             contact_name = function_args.get("contact_name", "").strip()
@@ -1909,6 +1918,7 @@ Viktig: Snakk om dette som kroppen din, ikke "systemet". Si "nebbet mitt" ikke "
             result = "Ukjent funksjon"
         
         # Legg til tool result for denne funksjonen
+        print(f"📤 Tool '{function_name}' result: {result[:200] if isinstance(result, str) else result}", flush=True)
         final_messages.append({
             "role": "tool",
             "tool_call_id": tool_call["id"],
