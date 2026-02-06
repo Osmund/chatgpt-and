@@ -1811,13 +1811,13 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 if available_songs:
                     random_song = random.choice(available_songs)
                     song_folder = os.path.join(musikk_dir, random_song)
-                    result = f"🎵 SANG VALGT: {random_song}. Si dette sangnavnet til brukeren, ikke et annet."
+                    result = f"🎵 SANG VALGT: {random_song}. Si KORT 'Nå synger jeg {random_song}!' + [AVSLUTT]. IKKE spør om mer."
                 else:
                     result = "Fant ingen sanger å synge 😢"
                     song_folder = None
             else:
                 song_display = os.path.basename(song_folder)
-                result = f"🎵 SANG VALGT: {song_display}. Si dette sangnavnet til brukeren, ikke et annet."
+                result = f"🎵 SANG VALGT: {song_display}. Si KORT 'Nå synger jeg {song_display}!' + [AVSLUTT]. IKKE spør om mer."
             
             # Spill sangen
             if song_folder and os.path.exists(song_folder):
