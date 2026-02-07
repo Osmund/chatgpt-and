@@ -1316,7 +1316,6 @@ def main():
                 elif response_event:
                     # Put back non-DUCK_RESPONSE event
                     bus.post(response_event[0], response_event[1])
-                        print(f"⚠️ Error reading duck response: {e}", flush=True)
                 continue  # Gå tilbake til wake word etter duck message
             elif external_message.startswith('__HUNGER_ANNOUNCEMENT__'):
                 # Hunger announcement
