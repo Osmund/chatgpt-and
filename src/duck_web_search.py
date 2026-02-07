@@ -15,7 +15,7 @@ BRAVE_API_KEY = os.getenv('BRAVE_SEARCH_API_KEY')
 BRAVE_SEARCH_URL = 'https://api.search.brave.com/res/v1/web/search'
 
 
-def _fetch_article_content(url: str, max_length: int = 1500) -> str:
+def _fetch_article_content(url: str, max_length: int = 3000) -> str:
     """
     Henter hovedinnholdet fra en nettside
     
@@ -31,7 +31,7 @@ def _fetch_article_content(url: str, max_length: int = 1500) -> str:
             'User-Agent': 'Mozilla/5.0 (compatible; DuckBot/1.0; +http://example.com/bot)'
         }
         
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=8)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -39,6 +39,16 @@ def _fetch_article_content(url: str, max_length: int = 1500) -> str:
         # Fjern uønskede elementer
         for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside', 'advertisement', 'iframe']):
             tag.decompose()
+        
+        # Prøv å hente tabelldata (viktig for medaljeoversikter etc.)
+        tables = soup.find_all('table')
+        table_text = ""
+        for table in tables[:2]:  # Maks 2 tabeller
+            rows = table.find_all('tr')
+            for row in rows[:20]:  # Maks 20 rader
+                cells = row.find_all(['td', 'th'])
+                if cells:
+                    table_text += " | ".join(cell.get_text(strip=True) for cell in cells) + "\n"
         
         # Prøv å finne hovedinnholdet
         article = (
@@ -56,6 +66,11 @@ def _fetch_article_content(url: str, max_length: int = 1500) -> str:
         
         # Rens opp tekst
         text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Legg til tabelldata først (verdifullt for medaljer, statistikk etc.)
+        if table_text:
+            combined = f"TABELLDATA:\n{table_text.strip()}\n\nTEKST: {text}"
+            return combined[:max_length] if combined else None
         
         # Returner maks lengde
         return text[:max_length] if text else None

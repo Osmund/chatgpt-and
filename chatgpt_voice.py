@@ -1443,6 +1443,12 @@ def main():
             # Sjekk om bruker vil avslutte samtalen
             should_end_conversation = is_conversation_ending(prompt)
             
+            # Avslutt umiddelbart hvis brukeren sier en avslutningsfrase
+            if should_end_conversation:
+                print("🔚 Samtale avsluttet (bruker sa avslutningsfrase)", flush=True)
+                off()
+                break
+            
             # Sjekk for direkte bytte til eier/Osmund
             prompt_lower = prompt.strip().lower()
             if user_manager and ("bytt til eier" in prompt_lower or "bytte til eier" in prompt_lower or 
@@ -1551,9 +1557,6 @@ def main():
                     break
                 elif ai_wants_to_end:
                     print("🔚 Samtale avsluttet av AI", flush=True)
-                    break
-                elif should_end_conversation:
-                    print("🔚 Samtale avsluttet (bruker sa avslutningsfrase)", flush=True)
                     break
                 elif is_thank_you:
                     print("🔚 Samtale avsluttet (bruker takket)", flush=True)
