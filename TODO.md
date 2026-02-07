@@ -71,10 +71,10 @@
 ## 🔧 Andre forbedringer
 
 ### Arkitektur (høy prioritet)
-- [ ] **Event-bus/Queue**: Erstatt ~15 `/tmp/duck_*.txt`-filer med `queue.Queue` — fjerner race conditions, ~150 linjer duplikat, og polling-overhead
+- [x] **Event-bus/Queue**: Erstatt ~15 `/tmp/duck_*.txt`-filer med `queue.Queue` — fjerner race conditions, ~150 linjer duplikat, og polling-overhead *(commit 4e05b87, 7. feb 2026)*
 - [ ] **ConversationStateMachine**: Trekk ut ~800 linjer fra `main()` i chatgpt_voice.py til en tilstandsmaskin (IDLE → WAKE → LISTENING → PROCESSING → SPEAKING)
-- [ ] **Sentralisert DB**: Lag `DatabaseManager` med connection pool og context managers i ServiceManager — fjerner 30+ spredte `sqlite3.connect()`-kall
-- [ ] **DuckSettings-klasse**: Samle all config-lesing (beak, volume, sleep, etc.) — fjerner 3x duplisert beak/volum-lesemønster
+- [x] **Sentralisert DB**: Lag `DatabaseManager` med connection pool og context managers i ServiceManager — fjerner 30+ spredte `sqlite3.connect()`-kall *(commit b0a3a30, feb 2026)*
+- [x] **DuckSettings-klasse**: Samle all config-lesing (beak, volume, sleep, etc.) — fjerner 3x duplisert beak/volum-lesemønster *(commit 25a1be3, feb 2026)*
 
 ### Kodebase (middels prioritet)
 - [ ] Fjern 13+ hardkodede `/home/admog/Code/chatgpt-and/`-stier — bruk `BASE_PATH`/`DB_PATH` fra duck_config.py
@@ -100,7 +100,7 @@
 
 ### Ytelse
 - [ ] Cach pitch-shifted audio for gjentatte fraser (oppstartshilsen, feilmeldinger)
-- [ ] Per-tråd persistent SQLite-connection i stedet for åpne/lukke per kall
+- [x] Per-tråd persistent SQLite-connection i stedet for åpne/lukke per kall *(DatabaseManager med thread-local connections)*
 - [ ] Trådsikring av globaler (`_waiting_for_name` etc.) med `threading.Lock`
 
 ### Deployment
