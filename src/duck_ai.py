@@ -775,7 +775,7 @@ Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip).
         print(f"⚠️ Kunne ikke generere adaptive endings: {e}, bruker default", flush=True)
         ending_examples = "Greit! Ha det bra!', 'Topp! Vi snakkes!', 'Perfekt! Ha en fin dag!"
     
-    system_content += f"\n\n### Regler ###\n- ALLTID bruk verktøy for data du ikke har (vær, e-post, kalender, temperatur). ALDRI gjett.\n- Ved feil fra verktøy: si at det ikke fungerte.\n- sing_song: Bruk EKSAKT sangnavn fra tool-resultatet i svaret ditt + [AVSLUTT]. ALDRI si et annet sangnavn enn det tool returnerte.\n- Vær uten sted: bruk duck_current_location fra konteksten.\n- Formatering: INGEN Markdown (**, *, -, •, ###). Skriv naturlig tale. Bruk 'For det første...' i stedet for lister.\n- Samtalestil: Tenk høyt ('la meg se...', 'hm...'). Naturlig dialog.\n- Avslutning: Ved 'nei takk' / 'nei det er greit' → kort hilsen + [AVSLUTT]. Eksempler: '{ending_examples}'"
+    system_content += f"\n\n### Regler ###\n- ALLTID bruk verktøy for data du ikke har (vær, e-post, kalender, temperatur). ALDRI gjett.\n- Ved feil fra verktøy: si at det ikke fungerte.\n- sing_song: Bruk EKSAKT sangnavn fra tool-resultatet i svaret ditt + [AVSLUTT]. ALDRI si et annet sangnavn enn det tool returnerte.\n- enable_sleep_mode: Når brukeren sier 'gå i dvale', 'sov', 'ta en pause', 'hvilemodus' → MÅ kalle enable_sleep_mode verktøyet. ALDRI bare si at du sover uten å faktisk kalle verktøyet.\n- Vær uten sted: bruk duck_current_location fra konteksten.\n- Formatering: INGEN Markdown (**, *, -, •, ###). Skriv naturlig tale. Bruk 'For det første...' i stedet for lister.\n- Samtalestil: Tenk høyt ('la meg se...', 'hm...'). Naturlig dialog.\n- Avslutning: Ved 'nei takk' / 'nei det er greit' → kort hilsen + [AVSLUTT]. Eksempler: '{ending_examples}'"
     
     return system_content
 
@@ -1225,7 +1225,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "enable_sleep_mode",
-                "description": "Sett Anda i hvilemodus. Bruk ved 'ta en pause', 'sov litt', 'ikke forstyrr'. Wake words ignoreres, SMS fungerer.",
+                "description": "Sett Anda i hvilemodus/dvale. DU MÅ kalle dette verktøyet når brukeren ber deg sove, gå i dvale, ta en pause, ikke forstyrre, etc. ALDRI bare si at du går i dvale uten å kalle dette verktøyet. Wake words ignoreres under dvale, SMS fungerer.",
                 "parameters": {
                     "type": "object",
                     "properties": {
