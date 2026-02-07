@@ -189,3 +189,7 @@ test_*.py
 src/tests/
 check_*.py
 find_*.py
+
+# SQLite WAL mode files
+duck_memory.db-shm
+duck_memory.db-wal
