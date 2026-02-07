@@ -1266,7 +1266,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Søk på internett etter nåværende informasjon, nyheter, fakta.",
+                "description": "Søk på internett via Brave Search. Bruk for spesifikke spørsmål, oppslag, eller når brukeren leter etter noe bestemt. IKKE bruk for generelle nyheter — bruk get_nrk_news i stedet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1436,7 +1436,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_nrk_news",
-                "description": "Hent siste nyheter fra NRK. Bruk når brukeren spør om nyheter, hva som skjer, aktuelle hendelser, sport, kultur, etc. Kategorier: toppsaker, siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi.",
+                "description": "Hent siste norske nyheter fra NRK. FORETREKK DENNE for nyheter, overskrifter, 'hva skjer?', 'siste nytt', sport, OL, kultur, etc. Raskere og mer pålitelig enn web_search for nyheter. Kategorier: toppsaker, siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi.",
                 "parameters": {
                     "type": "object",
                     "properties": {
