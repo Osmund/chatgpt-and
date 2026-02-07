@@ -11,7 +11,7 @@ import os
 from dotenv import load_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
-from scripts.hardware.rgb_duck import set_blue, set_green, off, pulse_blue, stop_blink
+from scripts.hardware.rgb_duck import set_blue, set_green, off, pulse_blue, pulse_yellow, stop_blink
 from src.duck_config import (
     MESSAGE_FILE, SONG_REQUEST_FILE,
     PORCUPINE_ACCESS_KEY_ENV, WAKE_WORD_PATH,
@@ -120,11 +120,15 @@ def wait_for_wake_word():
                         sleep_check_counter = 0
                         
                         if is_sleeping():
-                            # Start blå pulsering hvis ikke allerede startet
+                            # Start pulsering hvis ikke allerede startet (gul=hotspot, blå=normal)
                             if not sleep_led_started:
-                                pulse_blue()
+                                from chatgpt_voice import is_hotspot_active
+                                if is_hotspot_active():
+                                    pulse_yellow()
+                                else:
+                                    pulse_blue()
                                 sleep_led_started = True
-                                print("💤 [wait_for_wake_word] Sleep mode detektert - starter blå pulsering", flush=True)
+                                print("💤 [wait_for_wake_word] Sleep mode detektert - starter pulsering", flush=True)
                         else:
                             # Stopp LED hvis sleep mode deaktiveres
                             if sleep_led_started:

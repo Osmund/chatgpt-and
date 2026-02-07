@@ -20,7 +20,7 @@ import azure.cognitiveservices.speech as speechsdk
 
 # Duck moduler
 from scripts.hardware.duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
-from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, stop_blink, set_yellow, blink_yellow
+from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, pulse_yellow, stop_blink, set_yellow, blink_yellow
 from src.duck_config import MESSAGES_FILE
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
@@ -61,6 +61,14 @@ def set_idle_led():
         blink_yellow()
     else:
         set_blue()
+
+
+def set_sleep_led():
+    """Sett LED til riktig sleep-farge: gul pulsering hvis hotspot, ellers blå pulsering."""
+    if is_hotspot_active():
+        pulse_yellow()
+    else:
+        pulse_blue()
 
 
 def cleanup():
@@ -469,6 +477,52 @@ def sms_polling_loop():
             print(f"⚠️ Duck message polling error: {e}", flush=True)
 
 
+def reminder_checker_loop():
+    """Sjekker påminnelser og alarmer hver 30. sekund"""
+    import sys
+    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
+    from duck_reminders import ReminderManager, REMINDER_TYPE_ALARM
+    from duck_sleep import is_sleeping, disable_sleep
+    
+    reminder_mgr = ReminderManager()
+    
+    while True:
+        time.sleep(30)  # Sjekk hvert 30. sekund
+        try:
+            due = reminder_mgr.get_due_reminders()
+            
+            for reminder in due:
+                announcement = reminder_mgr.format_announcement(reminder)
+                is_alarm = reminder.get('reminder_type') == REMINDER_TYPE_ALARM
+                
+                # Hvis alarm og anda sover, vekk henne!
+                if is_alarm and is_sleeping():
+                    print(f"⏰ ALARM! Vekker anda fra sovemodus: {reminder['message']}", flush=True)
+                    disable_sleep()
+                
+                # Skriv påminnelse til fil for main loop
+                with open('/tmp/duck_reminder_announcement.txt', 'w', encoding='utf-8') as f:
+                    f.write(json.dumps({
+                        'announcement': announcement,
+                        'reminder_id': reminder['id'],
+                        'is_alarm': is_alarm,
+                        'message': reminder['message']
+                    }))
+                
+                type_str = "⏰ Alarm" if is_alarm else "🔔 Påminnelse"
+                print(f"{type_str}: {reminder['message']}", flush=True)
+                
+                # Marker som annonsert
+                reminder_mgr.mark_announced(reminder['id'])
+                
+                # Vent litt mellom flere påminnelser
+                if len(due) > 1:
+                    time.sleep(5)
+                    
+        except Exception as e:
+            print(f"⚠️ Reminder check error: {e}", flush=True)
+
+
 def boredom_timer_loop():
     """Increase boredom gradually every hour and check for triggers"""
     import sys
@@ -808,6 +862,11 @@ def main():
     boredom_timer_thread.start()
     print("✅ Boredom timer started (checks every hour)", flush=True)
     
+    # Start reminder checker thread
+    reminder_thread = threading.Thread(target=reminder_checker_loop, daemon=True)
+    reminder_thread.start()
+    print("✅ Reminder checker started (checks every 30 seconds)", flush=True)
+    
     # Start hunger timer thread
     hunger_timer_thread = threading.Thread(target=hunger_timer_loop, daemon=True)
     hunger_timer_thread.start()
@@ -1012,11 +1071,12 @@ def main():
     while True:
         # Sjekk sleep mode først
         if is_sleeping():
-            # Start blå pulsering bare én gang
+            # Start pulsering bare én gang (gul hvis hotspot, blå ellers)
             if not sleep_led_active:
-                pulse_blue()
+                set_sleep_led()
+                hotspot_str = " + hotspot" if is_hotspot_active() else ""
+                print(f"💤 Sleep mode aktiv{hotspot_str} - pulserer LED", flush=True)
                 sleep_led_active = True
-                print("💤 Sleep mode aktiv - ignorerer wake words (blå pulsering)", flush=True)
             
             # Sjekk SMS/hunger/hotspot SELV I SØVNMODUS (skal alltid leses opp!)
             # Sjekk SMS-annonseringer
@@ -1044,7 +1104,7 @@ def main():
                             except Exception as e:
                                 print(f"⚠️ Error reading SMS response: {e}", flush=True)
                         # Sett RGB tilbake til sleep mode etter SMS
-                        pulse_blue()
+                        set_sleep_led()
                 except Exception as e:
                     print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
             
@@ -1060,7 +1120,7 @@ def main():
                     if announcement:
                         print(f"🦆💬 [SLEEP MODE] Duck message: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
-                        pulse_blue()  # Sett RGB tilbake til sleep mode
+                        set_sleep_led()  # Sett RGB tilbake til sleep mode
                 except Exception as e:
                     print(f"⚠️ Error reading duck message: {e}", flush=True)
             
@@ -1076,7 +1136,7 @@ def main():
                     if response:
                         print(f"🦆📤 [SLEEP MODE] Duck response: {response[:50]}...", flush=True)
                         speak(response, speech_config, beak)
-                        pulse_blue()  # Sett RGB tilbake til sleep mode
+                        set_sleep_led()  # Sett RGB tilbake til sleep mode
                 except Exception as e:
                     print(f"⚠️ Error reading duck response: {e}", flush=True)
             
@@ -1091,7 +1151,7 @@ def main():
                         print(f"🎵 [SLEEP MODE] Song announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
                         # Sett RGB tilbake til sleep mode etter speaking
-                        pulse_blue()
+                        set_sleep_led()
                 except Exception as e:
                     print(f"⚠️ Error reading song announcement: {e}", flush=True)
             
@@ -1106,7 +1166,7 @@ def main():
                         print(f"😋 [SLEEP MODE] Hunger announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
                         # Sett RGB tilbake til sleep mode etter speaking
-                        pulse_blue()
+                        set_sleep_led()
                 except Exception as e:
                     print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
             
@@ -1121,7 +1181,7 @@ def main():
                         print(f"📡 [SLEEP MODE] Hotspot announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
                         # Sett RGB tilbake til sleep mode etter speaking
-                        pulse_blue()
+                        set_sleep_led()
                 except Exception as e:
                     print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
             
@@ -1136,9 +1196,32 @@ def main():
                         print(f"🖨️ [SLEEP MODE] Prusa announcement: {announcement[:50]}...", flush=True)
                         speak(announcement, speech_config, beak)
                         # Sett RGB tilbake til sleep mode etter speaking
-                        pulse_blue()
+                        set_sleep_led()
                 except Exception as e:
                     print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
+            
+            # Sjekk påminnelser og alarmer
+            reminder_file = '/tmp/duck_reminder_announcement.txt'
+            if os.path.exists(reminder_file):
+                try:
+                    with open(reminder_file, 'r', encoding='utf-8') as f:
+                        data = json.loads(f.read())
+                    os.remove(reminder_file)
+                    
+                    announcement = data.get('announcement')
+                    is_alarm = data.get('is_alarm', False)
+                    
+                    if announcement:
+                        if is_alarm:
+                            # Alarmen vekker fra sleep mode - sleep er allerede deaktivert av reminder_checker_loop
+                            print(f"⏰ [SLEEP MODE → WAKE] Alarm: {announcement[:50]}...", flush=True)
+                        else:
+                            print(f"🔔 [SLEEP MODE] Reminder: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                        if not is_alarm:
+                            set_sleep_led()
+                except Exception as e:
+                    print(f"⚠️ Error reading reminder announcement: {e}", flush=True)
             
             # Vent 0.5 sekunder før vi sjekker igjen (for rask respons)
             time.sleep(0.5)
@@ -1183,6 +1266,24 @@ def main():
                     speak(announcement, speech_config, beak)
             except Exception as e:
                 print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
+        
+        # Sjekk påminnelser og alarmer UTENFOR sleep mode
+        reminder_file = '/tmp/duck_reminder_announcement.txt'
+        if os.path.exists(reminder_file):
+            try:
+                with open(reminder_file, 'r', encoding='utf-8') as f:
+                    data = json.loads(f.read())
+                os.remove(reminder_file)
+                
+                announcement = data.get('announcement')
+                is_alarm = data.get('is_alarm', False)
+                
+                if announcement:
+                    emoji = "⏰" if is_alarm else "🔔"
+                    print(f"{emoji} Reminder announcement: {announcement[:50]}...", flush=True)
+                    speak(announcement, speech_config, beak)
+            except Exception as e:
+                print(f"⚠️ Error reading reminder announcement: {e}", flush=True)
         
         # SMS og duck messages sjekkes nå inne i wait_for_wake_word()
         # (Ingen dobbeltsjekking nødvendig her)

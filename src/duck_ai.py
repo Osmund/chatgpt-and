@@ -1351,6 +1351,61 @@ def _get_function_tools():
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "set_reminder",
+                "description": "Sett en påminnelse eller vekkeklokke. Bruk når brukeren sier 'minn meg på', 'påminn meg', 'husk å si', 'sett alarm', 'vekk meg', 'kan du vekke meg' osv. Du kan også bruke dette proaktivt hvis du lover å minne noen på noe.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "Hva brukeren skal minnes på. F.eks. 'Ta ut av oppvaskmaskinen', 'Ring mamma', 'Stå opp!'"
+                        },
+                        "time_description": {
+                            "type": "string",
+                            "description": "Naturlig tidsbeskrivelse. Eksempler: 'om 30 minutter', 'om 1 time', 'klokka 14', 'kl 14:30', 'i morgen klokka 7', 'om en halv time'"
+                        },
+                        "is_alarm": {
+                            "type": "boolean",
+                            "description": "True hvis dette er en vekkeklokke/alarm (vekker fra sleep mode). False for vanlig påminnelse.",
+                            "default": False
+                        }
+                    },
+                    "required": ["message", "time_description"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "cancel_reminder",
+                "description": "Avbryt en aktiv påminnelse eller alarm. Bruk når brukeren sier 'avbryt alarm', 'slett påminnelse', 'ikke minn meg på det likevel'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reminder_id": {
+                            "type": "integer",
+                            "description": "ID til påminnelsen som skal avbrytes. Bruker kan referere til den med beskrivelse; da må du finne riktig ID fra listen over aktive påminnelser."
+                        }
+                    },
+                    "required": ["reminder_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_reminders",
+                "description": "Vis alle aktive påminnelser og alarmer. Bruk når brukeren spør 'hva har jeg å huske?', 'er det noen alarmer?', 'hvilke påminnelser har jeg?'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
         }
     ]
 
@@ -1920,6 +1975,68 @@ Skapt av {creator_name} fra bunnen av som hobbyprojekt!
 Viktig: Snakk om dette som kroppen din, ikke "systemet". Si "nebbet mitt" ikke "servoen"."""
             except Exception as e:
                 result = f"Kunne ikke hente teknisk info: {e}"
+        elif function_name == "set_reminder":
+            try:
+                from src.duck_reminders import ReminderManager, REMINDER_TYPE_ALARM, REMINDER_TYPE_NORMAL
+                reminder_mgr = ReminderManager()
+                
+                message = function_args.get('message', '')
+                time_desc = function_args.get('time_description', '')
+                is_alarm = function_args.get('is_alarm', False)
+                reminder_type = REMINDER_TYPE_ALARM if is_alarm else REMINDER_TYPE_NORMAL
+                
+                # Parse tidsbeskrivelse
+                remind_at = reminder_mgr.parse_time_description(time_desc)
+                
+                if remind_at is None:
+                    result = f"Kunne ikke forstå tidspunktet '{time_desc}'. Prøv f.eks. 'om 30 minutter', 'klokka 14', 'i morgen klokka 7'."
+                else:
+                    set_result = reminder_mgr.set_reminder(
+                        message=message,
+                        remind_at=remind_at,
+                        reminder_type=reminder_type,
+                        user_name='Osmund'
+                    )
+                    type_name = "alarm" if is_alarm else "påminnelse"
+                    result = f"✅ {type_name.capitalize()} satt! Jeg minner deg på '{message}' kl {set_result['remind_at_formatted']}."
+                    if is_alarm:
+                        result += " Alarmen vil vekke meg fra sovemodus hvis jeg sover."
+            except Exception as e:
+                result = f"Feil ved setting av påminnelse: {e}"
+                import traceback
+                traceback.print_exc()
+        elif function_name == "cancel_reminder":
+            try:
+                from src.duck_reminders import ReminderManager
+                reminder_mgr = ReminderManager()
+                
+                reminder_id = function_args.get('reminder_id')
+                cancel_result = reminder_mgr.cancel_reminder(reminder_id)
+                
+                if cancel_result['status'] == 'cancelled':
+                    result = f"✅ Påminnelse avbrutt: '{cancel_result['message']}'"
+                else:
+                    result = f"Fant ingen aktiv påminnelse med ID {reminder_id}"
+            except Exception as e:
+                result = f"Feil ved avbryting: {e}"
+        elif function_name == "list_reminders":
+            try:
+                from src.duck_reminders import ReminderManager
+                reminder_mgr = ReminderManager()
+                
+                pending = reminder_mgr.get_pending_reminders()
+                
+                if not pending:
+                    result = "Du har ingen aktive påminnelser eller alarmer."
+                else:
+                    lines = [f"Du har {len(pending)} aktiv(e) påminnelse(r):"]
+                    for r in pending:
+                        remind_time = datetime.fromisoformat(r['remind_at']).strftime('%d.%m kl %H:%M')
+                        type_icon = "⏰" if r['reminder_type'] == 'alarm' else "🔔"
+                        lines.append(f"  {type_icon} ID {r['id']}: '{r['message']}' - {remind_time}")
+                    result = "\n".join(lines)
+            except Exception as e:
+                result = f"Feil ved henting av påminnelser: {e}"
         else:
             result = "Ukjent funksjon"
         

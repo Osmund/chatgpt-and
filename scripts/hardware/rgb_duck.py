@@ -78,6 +78,25 @@ def pulse_blue():
     _blink_thread = threading.Thread(target=_pulse, daemon=True)
     _blink_thread.start()
 
+def pulse_yellow():
+    """Pulserer gult lys kontinuerlig (for sleep mode + hotspot)"""
+    stop_blink()
+    def _pulse():
+        import math
+        while not _blink_stop.is_set():
+            # Sinusbølge pulsering over 2 sekunder
+            for i in range(100):
+                if _blink_stop.is_set():
+                    break
+                # Sinusbølge fra 0.1 til 1.0
+                intensity = 0.1 + 0.9 * (math.sin(i * 0.0628) + 1) / 2
+                led.color = (intensity, intensity, 0)  # Gul
+                sleep(0.02)  # 2 sekunder total (100 * 0.02)
+    global _blink_thread
+    _blink_stop.clear()
+    _blink_thread = threading.Thread(target=_pulse, daemon=True)
+    _blink_thread.start()
+
 def set_intensity(intensity):
     """Setter LED-intensitet basert på lydnivå (0.0-1.0)"""
     stop_blink()
