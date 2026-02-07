@@ -1495,9 +1495,9 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         elif function_name == "switch_network":
             # Bytt nettverk - koble fra WiFi og start hotspot
             try:
-                # Skriv trigger-fil for å fortelle Duck å skifte
-                with open('/tmp/duck_switch_network.txt', 'w') as f:
-                    f.write('SWITCH')
+                from src.duck_event_bus import get_event_bus, Event
+                bus = get_event_bus()
+                bus.post(Event.SWITCH_NETWORK, 'SWITCH')
                 
                 result = "OK, jeg starter hotspot nå. Koble til ChatGPT-Duck med passord kvakkkvakk for å velge nytt nettverk."
             except Exception as e:
@@ -1879,15 +1879,12 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 song_display = os.path.basename(song_folder)
                 result = f"🎵 SANG VALGT: {song_display}. Si KORT 'Nå synger jeg {song_display}!' + [AVSLUTT]. IKKE spør om mer."
             
-            # Spill sangen
+            # Spill sangen via event bus
             if song_folder and os.path.exists(song_folder):
-                # Skriv sangsti til fil - med markør at AI allerede har annonsert
                 try:
-                    with open('/tmp/duck_song_request.txt', 'w', encoding='utf-8') as f:
-                        f.write(song_folder)
-                    # Markør-fil: AI har allerede annonsert sangen
-                    with open('/tmp/duck_song_no_announce.txt', 'w') as f:
-                        f.write('1')
+                    from src.duck_event_bus import get_event_bus, Event
+                    bus = get_event_bus()
+                    bus.post(Event.PLAY_SONG, {'path': song_folder, 'announce': False})
                     print(f"✅ Sang queued for playback (no announce): {song_folder}", flush=True)
                 except Exception as e:
                     result = f"Kunne ikke queue sangen: {e}"

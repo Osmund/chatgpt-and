@@ -72,6 +72,39 @@ def _get_settings() -> dict:
     except Exception:
         return None
 
+EVENT_API_URL = 'http://127.0.0.1:5111/event'
+
+def _post_event(event_type: str, data) -> bool:
+    """Send event til chatgpt-duck via intern HTTP API.
+    Faller tilbake til /tmp-fil hvis chatgpt-duck ikke kjører."""
+    try:
+        payload = json.dumps({'type': event_type, 'data': data}).encode()
+        req = urllib.request.Request(
+            EVENT_API_URL, data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except Exception:
+        # Fallback: skriv til /tmp-fil (f.eks. hvis chatgpt-duck ikke kjører)
+        _event_file_map = {
+            'EXTERNAL_MESSAGE': '/tmp/duck_message.txt',
+            'PLAY_SONG': '/tmp/duck_song_request.txt',
+            'HUNGER_FED': '/tmp/duck_hunger_fed.txt',
+            'HOTSPOT_ANNOUNCEMENT': '/tmp/duck_hotspot_announcement.txt',
+        }
+        filepath = _event_file_map.get(event_type)
+        if filepath:
+            try:
+                # For PLAY_SONG, data is a dict with 'path' key
+                write_data = data.get('path', str(data)) if isinstance(data, dict) else str(data)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(write_data)
+            except Exception:
+                pass
+        return False
+
 # Initialize services once at startup
 services = get_services()
 api_handlers = DuckAPIHandlers(services)
@@ -1092,10 +1125,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             print("Testing beak...", flush=True)
             
             try:
-                # Send en testmelding til duck
-                message_file = '/tmp/duck_message.txt'
-                with open(message_file, 'w', encoding='utf-8') as f:
-                    f.write('Testing nebbet nå')
+                # Send en testmelding til duck via event API
+                _post_event('EXTERNAL_MESSAGE', 'Testing nebbet nå')
                 
                 response = {'success': True, 'message': 'Nebbet-test sendt!'}
                 self.send_json_response(response, 200)
@@ -1134,10 +1165,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({'success': False, 'error': 'Duck-servicen kjører ikke'}).encode())
                     return
                 
-                # Skriv melding til fil som duck-servicen sjekker
-                message_file = '/tmp/duck_message.txt'
-                with open(message_file, 'w', encoding='utf-8') as f:
-                    f.write(text)
+                # Send melding via event API
+                _post_event('EXTERNAL_MESSAGE', text)
                 
                 response = {'success': True}
                 self.send_json_response(response, 200)
@@ -1336,10 +1365,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({'success': False, 'error': 'Duck-servicen kjører ikke'}).encode())
                     return
                 
-                # Skriv spesiell trigger til fil som duck-servicen sjekker
-                message_file = '/tmp/duck_message.txt'
-                with open(message_file, 'w', encoding='utf-8') as f:
-                    f.write('__START_CONVERSATION__')
+                # Send start-conversation event via API
+                _post_event('EXTERNAL_MESSAGE', '__START_CONVERSATION__')
                 
                 response = {'success': True}
                 self.send_json_response(response, 200)
@@ -1389,10 +1416,8 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({'success': False, 'error': 'Duck-servicen kjører ikke'}).encode())
                     return
                 
-                # Skriv sangforespørsel til fil
-                song_request_file = '/tmp/duck_song_request.txt'
-                with open(song_request_file, 'w', encoding='utf-8') as f:
-                    f.write(song_path)
+                # Send sang-forespørsel via event API
+                _post_event('PLAY_SONG', {'path': song_path, 'announce': True})
                 
                 response = {'success': True}
                 self.send_json_response(response, 200)
@@ -1407,7 +1432,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             print("Stopp sang-forespørsel", flush=True)
             
             try:
-                # Skriv stopp-forespørsel til fil
+                # Send stopp-forespørsel via fil (duck_music sjekker denne under avspilling)
                 song_stop_file = '/tmp/duck_song_stop.txt'
                 with open(song_stop_file, 'w', encoding='utf-8') as f:
                     f.write('stop')

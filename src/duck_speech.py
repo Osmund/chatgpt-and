@@ -13,7 +13,6 @@ import azure.cognitiveservices.speech as speechsdk
 
 from scripts.hardware.rgb_duck import set_blue, set_green, off, pulse_blue, pulse_yellow, stop_blink
 from src.duck_config import (
-    MESSAGE_FILE, SONG_REQUEST_FILE,
     PORCUPINE_ACCESS_KEY_ENV, WAKE_WORD_PATH,
     AZURE_SPEECH_KEY_ENV, AZURE_SPEECH_REGION_ENV
 )
@@ -108,9 +107,8 @@ def wait_for_wake_word():
                 # Sleep mode tracking for LED
                 sleep_led_started = False
                 
-                # Optimization counters for reduced file I/O
-                critical_check_counter = 0  # SMS + external messages (every ~1.6s)
-                normal_check_counter = 0     # Hunger, hotspot, songs (every ~4.8s)
+                # Event bus sjekking — mye billigere enn fil-I/O (O(1) queue check)
+                event_check_counter = 0  # Sjekk bussen hver ~50 frames (~1.6s)
                 sleep_check_counter = 0
                 
                 while True:
@@ -137,118 +135,45 @@ def wait_for_wake_word():
                                 sleep_led_started = False
                                 print("⏰ [wait_for_wake_word] Sleep mode deaktivert - blå LED", flush=True)
                     
-                    # Critical checks every ~1.6s (SMS, external messages)
-                    critical_check_counter += 1
-                    check_critical = critical_check_counter >= 50
-                    if check_critical:
-                        critical_check_counter = 0
-                    
-                    # Normal checks every ~4.8s (hunger, hotspot, songs)
-                    normal_check_counter += 1
-                    check_normal = normal_check_counter >= 150
-                    if check_normal:
-                        normal_check_counter = 0
-                    
-                    # Batch file I/O: single listdir instead of 7 separate os.path.exists() syscalls
-                    if check_critical or check_normal:
-                        try:
-                            _tmp_files = set(os.listdir('/tmp'))
-                        except OSError:
-                            _tmp_files = set()
-                    
-                    # Sjekk om det finnes en ekstern melding (CRITICAL - every ~1.6s)
-                    if check_critical and os.path.basename(MESSAGE_FILE) in _tmp_files:
-                        try:
-                            with open(MESSAGE_FILE, 'r', encoding='utf-8') as f:
-                                message = f.read().strip()
-                            os.remove(MESSAGE_FILE)
-                            if message:
+                    # Sjekk event bus hver ~1.6s (50 frames × 32ms)
+                    event_check_counter += 1
+                    if event_check_counter >= 50:
+                        event_check_counter = 0
+                        
+                        from src.duck_event_bus import get_event_bus, Event
+                        bus = get_event_bus()
+                        event = bus.get_nowait()
+                        if event:
+                            event_type, data = event
+                            if event_type == Event.EXTERNAL_MESSAGE:
+                                message = data if isinstance(data, str) else str(data)
                                 print(f"Ekstern melding mottatt: {message}", flush=True)
                                 if message == '__START_CONVERSATION__':
                                     return '__START_CONVERSATION__'
                                 else:
                                     return message
-                        except Exception as e:
-                            print(f"Feil ved lesing av meldingsfil: {e}", flush=True)
-                    
-                    # Sjekk SMS og duck messages (CRITICAL - every ~1.6s / 50 iterations)
-                    if check_critical:
-                        # SMS announcements
-                        if 'duck_sms_announcement.txt' in _tmp_files:
-                            sms_announcement_file = '/tmp/duck_sms_announcement.txt'
-                            try:
-                                with open(sms_announcement_file, 'r', encoding='utf-8') as f:
-                                    announcement = f.read().strip()
-                                os.remove(sms_announcement_file)
-                                if announcement:
-                                    print(f"📬 SMS announcement: {announcement[:50]}...", flush=True)
-                                    return f"__SMS_ANNOUNCEMENT__{announcement}"
-                            except Exception as e:
-                                print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
-                        
-                        # Duck-to-duck message announcements
-                        if 'duck_message_announcement.txt' in _tmp_files:
-                            duck_msg_file = '/tmp/duck_message_announcement.txt'
-                            try:
-                                with open(duck_msg_file, 'r', encoding='utf-8') as f:
-                                    import json
-                                    data = json.loads(f.read())
-                                os.remove(duck_msg_file)
-                                
-                                announcement = data.get('announcement')
+                            elif event_type == Event.SMS_ANNOUNCEMENT:
+                                print(f"📬 SMS announcement: {str(data)[:50]}...", flush=True)
+                                return f"__SMS_ANNOUNCEMENT__{data}"
+                            elif event_type == Event.DUCK_MESSAGE:
+                                announcement = data.get('announcement') if isinstance(data, dict) else data
                                 if announcement:
                                     print(f"🦆💬 Duck message: {announcement[:50]}...", flush=True)
                                     return f"__DUCK_MESSAGE__{announcement}"
-                            except Exception as e:
-                                print(f"⚠️ Error reading duck message: {e}", flush=True)
-                    
-                    # Sjekk om det finnes hunger-annonseringer (NORMAL - every ~4.8s)
-                    if check_normal and 'duck_hunger_announcement.txt' in _tmp_files:
-                        try:
-                            with open('/tmp/duck_hunger_announcement.txt', 'r', encoding='utf-8') as f:
-                                announcement = f.read().strip()
-                            os.remove('/tmp/duck_hunger_announcement.txt')
-                            if announcement:
-                                print(f"😋 Hunger announcement: {announcement[:50]}...", flush=True)
-                                return f"__HUNGER_ANNOUNCEMENT__{announcement}"
-                        except Exception as e:
-                            print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
-                    
-                    # Sjekk om Anda ble matet fra kontrollpanelet (NORMAL - every ~4.8s)
-                    if check_normal and 'duck_hunger_fed.txt' in _tmp_files:
-                        try:
-                            with open('/tmp/duck_hunger_fed.txt', 'r', encoding='utf-8') as f:
-                                announcement = f.read().strip()
-                            os.remove('/tmp/duck_hunger_fed.txt')
-                            if announcement:
-                                print(f"😋 Fed from control panel: {announcement}", flush=True)
-                                return f"__HUNGER_FED__{announcement}"
-                        except Exception as e:
-                            print(f"⚠️ Error reading hunger fed announcement: {e}", flush=True)
-                    
-                    # Sjekk om det finnes hotspot-annonseringer (NORMAL - every ~4.8s)
-                    if check_normal and 'duck_hotspot_announcement.txt' in _tmp_files:
-                        try:
-                            with open('/tmp/duck_hotspot_announcement.txt', 'r', encoding='utf-8') as f:
-                                announcement = f.read().strip()
-                            os.remove('/tmp/duck_hotspot_announcement.txt')
-                            if announcement:
-                                print(f"📡 Hotspot announcement: {announcement[:50]}...", flush=True)
-                                return f"__HOTSPOT_ANNOUNCEMENT__{announcement}"
-                        except Exception as e:
-                            print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
-                    
-                    # Sjekk om det finnes en sang-forespørsel (NORMAL - every ~4.8s)
-                    if check_normal and os.path.basename(SONG_REQUEST_FILE) in _tmp_files:
-                        try:
-                            with open(SONG_REQUEST_FILE, 'r', encoding='utf-8') as f:
-                                song_path = f.read().strip()
-                            os.remove(SONG_REQUEST_FILE)
-                            if song_path:
-                                print(f"Sang-forespørsel mottatt: {song_path}", flush=True)
-                                return f'__PLAY_SONG__{song_path}'  # Spesiell trigger for sang
-                        except Exception as e:
-                            print(f"Feil ved lesing av sang-forespørsel: {e}", flush=True)
+                            elif event_type == Event.HUNGER_ANNOUNCEMENT:
+                                print(f"😋 Hunger announcement: {str(data)[:50]}...", flush=True)
+                                return f"__HUNGER_ANNOUNCEMENT__{data}"
+                            elif event_type == Event.HUNGER_FED:
+                                print(f"😋 Fed from control panel: {data}", flush=True)
+                                return f"__HUNGER_FED__{data}"
+                            elif event_type == Event.HOTSPOT_ANNOUNCEMENT:
+                                print(f"📡 Hotspot announcement: {str(data)[:50]}...", flush=True)
+                                return f"__HOTSPOT_ANNOUNCEMENT__{data}"
+                            elif event_type == Event.PLAY_SONG:
+                                song_path = data.get('path') if isinstance(data, dict) else data
+                                if song_path:
+                                    print(f"Sang-forespørsel mottatt: {song_path}", flush=True)
+                                    return f'__PLAY_SONG__{song_path}'
                     
                     # Les audio fra mikrofon (gjøres hver iterasjon for kontinuerlig deteksjon)
                     pcm_48k, overflowed = audio_stream.read(mic_buffer_size)

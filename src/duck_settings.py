@@ -204,19 +204,44 @@ class DuckSettings:
 # ═══════════════════════════════════════════════════════════════
 
 class _SettingsHandler(BaseHTTPRequestHandler):
-    """Minimalistisk HTTP-handler for settings-oppdateringer."""
+    """Minimalistisk HTTP-handler for settings og events."""
 
     def do_POST(self):
-        """POST /settings — oppdater en eller flere settings."""
+        """POST /settings eller /event."""
         try:
             length = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(length).decode())
-            settings = get_settings()
-            settings.update(body)
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode())
+
+            if self.path == '/event':
+                # Event fra tverr-prosess (duck-control, wifi-portal)
+                from src.duck_event_bus import get_event_bus, Event
+                bus = get_event_bus()
+                event_name = body.get('type', '').upper()
+                event_data = body.get('data')
+                try:
+                    event_type = Event[event_name]
+                except KeyError:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': f'Unknown event type: {event_name}'
+                    }).encode())
+                    return
+                bus.post(event_type, event_data)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True}).encode())
+            else:
+                # Default: settings update
+                settings = get_settings()
+                settings.update(body)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True}).encode())
         except Exception as e:
             self.send_response(400)
             self.send_header('Content-Type', 'application/json')

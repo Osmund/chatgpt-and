@@ -258,11 +258,22 @@ class DuckAPIHandlers:
             hunger_manager = self.services.get_hunger_manager()
             result = hunger_manager.feed(food_type)
             
-            # Create announcement file so Anda says thank you
+            # Send event via HTTP API så Anda sier takk
             if result.get('status') == 'fed':
                 announcement = f"Takk for maten! Nam nam! {result['food']}🦆"
-                with open('/tmp/duck_hunger_fed.txt', 'w', encoding='utf-8') as f:
-                    f.write(announcement)
+                try:
+                    import urllib.request
+                    payload = json.dumps({'type': 'HUNGER_FED', 'data': announcement}).encode()
+                    req = urllib.request.Request(
+                        'http://127.0.0.1:5111/event', data=payload,
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    urllib.request.urlopen(req, timeout=2)
+                except Exception:
+                    # Fallback til fil
+                    with open('/tmp/duck_hunger_fed.txt', 'w', encoding='utf-8') as f:
+                        f.write(announcement)
             
             return result
         except Exception as e:

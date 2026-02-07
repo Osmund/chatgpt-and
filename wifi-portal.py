@@ -13,6 +13,24 @@ import os
 
 # Cache for network list (unngå gjentatte scans)
 network_cache = {'data': {}, 'timestamp': 0}
+
+
+def _post_hotspot_event(announcement: str):
+    """Send hotspot-annonsering til chatgpt-duck via intern HTTP API.
+    Faller tilbake til /tmp-fil hvis chatgpt-duck ikke kjører."""
+    try:
+        import urllib.request
+        payload = json.dumps({'type': 'HOTSPOT_ANNOUNCEMENT', 'data': announcement}).encode()
+        req = urllib.request.Request(
+            'http://127.0.0.1:5111/event', data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=2)
+    except Exception:
+        # Fallback: skriv til /tmp-fil
+        with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
+            f.write(announcement)
 CACHE_DURATION = 5  # sekunder (redusert for bedre oppdatering)
 
 HTML_TEMPLATE = """
@@ -335,8 +353,7 @@ class WiFiHandler(BaseHTTPRequestHandler):
                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
                 # Voice announcement: Prøver å koble til
-                with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
-                    f.write(f"Jeg prøver å koble til {ssid} nå...")
+                _post_hotspot_event(f"Jeg prøver å koble til {ssid} nå...")
                 
                 try:
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -363,8 +380,7 @@ class WiFiHandler(BaseHTTPRequestHandler):
                     ], capture_output=True, timeout=2)
                     
                     # Voice announcement: Vellykket
-                    with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
-                        f.write(f"Supert! Jeg er nå koblet til {ssid}. Hotspot stoppes og jeg starter opp igjen.")
+                    _post_hotspot_event(f"Supert! Jeg er nå koblet til {ssid}. Hotspot stoppes og jeg starter opp igjen.")
                     
                     # Verifiser at vi har internett (ping test)
                     time.sleep(2)  # Vent litt for at connection skal stabilisere seg
@@ -420,8 +436,7 @@ class WiFiHandler(BaseHTTPRequestHandler):
                     
                     # Voice announcement: Feilet
                     error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
-                    with open('/tmp/duck_hotspot_announcement.txt', 'w', encoding='utf-8') as f:
-                        f.write(f"Ojsann, jeg klarte ikke å koble til {ssid}. Sjekk passordet og prøv igjen.")
+                    _post_hotspot_event(f"Ojsann, jeg klarte ikke å koble til {ssid}. Sjekk passordet og prøv igjen.")
                     
                     response = {'success': False, 'error': error_msg}
                     print(f"Tilkobling feilet: {error_msg}", flush=True)

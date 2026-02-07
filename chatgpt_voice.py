@@ -28,6 +28,7 @@ from src.duck_audio import speak
 from src.duck_speech import wait_for_wake_word, recognize_speech_from_mic
 from src.duck_music import play_song
 from src.duck_conversation import check_ai_queries, ask_for_user_switch, is_conversation_ending
+from src.duck_event_bus import get_event_bus, Event
 from src.duck_ai import chatgpt_query, generate_message_metadata
 from src.adaptive_greetings import get_adaptive_greeting, get_adaptive_goodbye
 from src.duck_sleep import is_sleeping, get_sleep_status
@@ -203,12 +204,12 @@ Skriv et kort, hyggelig svar (maks 160 tegn) ELLER skriv "NO_RESPONSE" hvis samt
         sms_manager.send_duck_message(from_duck, response)
         print(f"🦆📤 Sent response to {from_duck}: {response[:50]}...", flush=True)
         
-        # Write response announcement to file for main loop to speak
-        with open('/tmp/duck_response_announcement.txt', 'w', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'response': response,
-                'to_duck': from_duck
-            }))
+        # Post response event til main loop
+        bus = get_event_bus()
+        bus.post(Event.DUCK_RESPONSE, {
+            'response': response,
+            'to_duck': from_duck
+        })
         
         # Save to memory
         memory_manager.save_message(
@@ -330,9 +331,9 @@ def sms_polling_loop():
                                             
                                             print(f"🖼️  Image description: {description}", flush=True)
                                             
-                                            # Write announcement to file
-                                            with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                                                f.write(announcement)
+                                            # Post MMS SMS announcement event
+                                            bus = get_event_bus()
+                                            bus.post(Event.SMS_ANNOUNCEMENT, announcement)
                                             
                                             # Check if there are people in the image
                                             people_count = 0
@@ -385,9 +386,9 @@ def sms_polling_loop():
                                 
                                 print(f"🔊 Announcing SMS: {announcement[:50]}...", flush=True)
                                 
-                                # Write announcement to file for main loop to speak
-                                with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                                    f.write(announcement)
+                                # Post SMS announcement event
+                                bus = get_event_bus()
+                                bus.post(Event.SMS_ANNOUNCEMENT, announcement)
                                 
                                 # Send AI-generated response (AI will know if she was fed from context)
                                 if result.get('should_respond'):
@@ -397,9 +398,9 @@ def sms_polling_loop():
                                     if response_result.get('status') == 'sent':
                                         response_text = response_result.get('message', '')
                                         print(f"📤 Sent response: {response_text[:50]}...", flush=True)
-                                        # Write response announcement to file
-                                        with open('/tmp/duck_sms_response.txt', 'w', encoding='utf-8') as f:
-                                            f.write(f"Jeg sendte svar: {response_text}")
+                                        # Post SMS response event
+                                        bus = get_event_bus()
+                                        bus.post(Event.SMS_RESPONSE, f"Jeg sendte svar: {response_text}")
                             
                             print(f"✅ SMS processed", flush=True)
                         except Exception as msg_error:
@@ -465,14 +466,14 @@ def sms_polling_loop():
                     
                     print(f"🦆💬 Message from {from_duck}: {message_text[:50]}...", flush=True)
                     
-                    # Write announcement to file for main loop to speak
-                    with open('/tmp/duck_message_announcement.txt', 'w', encoding='utf-8') as f:
-                        f.write(json.dumps({
-                            'announcement': announcement,
-                            'from_duck': from_duck,
-                            'message': message_text,
-                            'media_url': media_url
-                        }))
+                    # Post duck message event
+                    bus = get_event_bus()
+                    bus.post(Event.DUCK_MESSAGE, {
+                        'announcement': announcement,
+                        'from_duck': from_duck,
+                        'message': message_text,
+                        'media_url': media_url
+                    })
         except Exception as e:
             print(f"⚠️ Duck message polling error: {e}", flush=True)
 
@@ -502,14 +503,14 @@ def reminder_checker_loop():
                     print(f"⏰ ALARM! Vekker anda fra sovemodus: {reminder['message']}", flush=True)
                     disable_sleep()
                 
-                # Skriv påminnelse til fil for main loop
-                with open('/tmp/duck_reminder_announcement.txt', 'w', encoding='utf-8') as f:
-                    f.write(json.dumps({
-                        'announcement': announcement,
-                        'reminder_id': reminder['id'],
-                        'is_alarm': is_alarm,
-                        'message': reminder['message']
-                    }))
+                # Post reminder event
+                bus = get_event_bus()
+                bus.post(Event.REMINDER, {
+                    'announcement': announcement,
+                    'reminder_id': reminder['id'],
+                    'is_alarm': is_alarm,
+                    'message': reminder['message']
+                })
                 
                 type_str = "⏰ Alarm" if is_alarm else "🔔 Påminnelse"
                 print(f"{type_str}: {reminder['message']}", flush=True)
@@ -581,8 +582,8 @@ def boredom_timer_loop():
                             announcement = f"Jeg kjeder meg litt, så nå skal jeg synge {song_title} av {artist}!"
                         else:
                             announcement = f"Jeg kjeder meg litt, så jeg skal synge {random_song}!"
-                        with open('/tmp/duck_song_announcement.txt', 'w', encoding='utf-8') as f:
-                            f.write(announcement)
+                        bus = get_event_bus()
+                        bus.post(Event.SONG_ANNOUNCEMENT, announcement)
                         
                         # Spill sangen uten ekstra annonsering
                         play_song(song_folder, beak, speech_config, announce=False)
@@ -609,10 +610,10 @@ def boredom_timer_loop():
                         message = result.get('message')
                         print(f"📤 Sent bored message to {contact['name']}: {message[:50]}...", flush=True)
                         
-                        # Write announcement to file
+                        # Post boredom SMS announcement event
                         announcement = f"Jeg sendte en melding til {contact['name']} fordi jeg kjeder meg."
-                        with open('/tmp/duck_sms_announcement.txt', 'w', encoding='utf-8') as f:
-                            f.write(announcement)
+                        bus = get_event_bus()
+                        bus.post(Event.SMS_ANNOUNCEMENT, announcement)
                     elif result.get('status') == 'no_contact':
                         print("😔 Ingen kontakter tilgjengelig for kjed-melding", flush=True)
         except Exception as e:
@@ -652,9 +653,9 @@ def hunger_timer_loop():
                 announcement = "Jeg er sulten! Kan du gi meg mat? Send meg 🍪 cookie eller 🍕 pizza!"
                 print(f"😋 {announcement}", flush=True)
                 
-                # Write announcement to file for voice
-                with open('/tmp/duck_hunger_announcement.txt', 'w', encoding='utf-8') as f:
-                    f.write(announcement)
+                # Post hunger announcement event
+                bus = get_event_bus()
+                bus.post(Event.HUNGER_ANNOUNCEMENT, announcement)
                 
                 hunger_manager.mark_announcement_made()
             
@@ -819,13 +820,10 @@ def handle_name_response(user_text: str, speech_config, beak) -> bool:
 
 def main():
     """Hovedloop for stemmeassistenten"""
-    # Rydd opp gamle trigger-filer ved oppstart
-    try:
-        if os.path.exists('/tmp/duck_switch_network.txt'):
-            os.remove('/tmp/duck_switch_network.txt')
-            print("🧹 Ryddet opp gammel switch_network trigger", flush=True)
-    except:
-        pass
+    # Rydd opp gammel event-bus ved oppstart
+    from src.duck_event_bus import get_event_bus, Event
+    bus = get_event_bus()
+    bus.clear()
     
     # Prøv å initialisere servo, men fortsett uten hvis den ikke finnes
     beak = None
@@ -904,10 +902,9 @@ def main():
             """Callback når 3D-print er ferdig"""
             try:
                 message = f"🖨️ 3D-printen din er ferdig! {job_name} er klar til å plukkes opp."
-                # speech_config er ikke tilgjengelig ennå, så vi lagrer meldingen til senere
-                trigger_file = '/tmp/duck_prusa_announcement.txt'
-                with open(trigger_file, 'w', encoding='utf-8') as f:
-                    f.write(message)
+                # Post prusa event til main loop
+                bus = get_event_bus()
+                bus.post(Event.PRUSA_ANNOUNCEMENT, message)
                 print(f"✅ Prusa: Print ferdig - {job_name}", flush=True)
             except Exception as e:
                 print(f"⚠️ Prusa callback feilet: {e}", flush=True)
@@ -1102,150 +1099,77 @@ def main():
                 print(f"💤 Sleep mode aktiv{hotspot_str} - pulserer LED", flush=True)
                 sleep_led_active = True
             
-            # Sjekk SMS/hunger/hotspot SELV I SØVNMODUS (skal alltid leses opp!)
-            # Sjekk SMS-annonseringer
-            sms_announcement_file = '/tmp/duck_sms_announcement.txt'
-            if os.path.exists(sms_announcement_file):
+            # Sjekk events fra event bus SELV I SØVNMODUS
+            bus = get_event_bus()
+            for event_type, data in bus.drain():
                 try:
-                    with open(sms_announcement_file, 'r', encoding='utf-8') as f:
-                        announcement = f.read().strip()
-                    os.remove(sms_announcement_file)
-                    if announcement:
-                        print(f"📬 [SLEEP MODE] SMS announcement: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        
-                        # Sjekk om det er en respons-annonsering
-                        sms_response_file = '/tmp/duck_sms_response.txt'
-                        time.sleep(1)
-                        if os.path.exists(sms_response_file):
-                            try:
-                                with open(sms_response_file, 'r', encoding='utf-8') as f:
-                                    response_announcement = f.read().strip()
-                                if response_announcement:
-                                    time.sleep(0.5)
-                                    speak(response_announcement, speech_config, beak)
-                                os.remove(sms_response_file)
-                            except Exception as e:
-                                print(f"⚠️ Error reading SMS response: {e}", flush=True)
-                        # Sett RGB tilbake til sleep mode etter SMS
+                    if event_type == Event.SMS_ANNOUNCEMENT:
+                        print(f"📬 [SLEEP MODE] SMS announcement: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
                         set_sleep_led()
-                except Exception as e:
-                    print(f"⚠️ Error reading SMS announcement: {e}", flush=True)
-            
-            # Sjekk duck-to-duck message announcements
-            duck_msg_file = '/tmp/duck_message_announcement.txt'
-            if os.path.exists(duck_msg_file):
-                try:
-                    with open(duck_msg_file, 'r', encoding='utf-8') as f:
-                        data = json.loads(f.read())
-                    os.remove(duck_msg_file)
-                    
-                    announcement = data.get('announcement')
-                    if announcement:
-                        print(f"🦆💬 [SLEEP MODE] Duck message: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        set_sleep_led()  # Sett RGB tilbake til sleep mode
-                except Exception as e:
-                    print(f"⚠️ Error reading duck message: {e}", flush=True)
-            
-            # Sjekk duck-to-duck response announcements
-            duck_response_file = '/tmp/duck_response_announcement.txt'
-            if os.path.exists(duck_response_file):
-                try:
-                    with open(duck_response_file, 'r', encoding='utf-8') as f:
-                        data = json.loads(f.read())
-                    os.remove(duck_response_file)
-                    
-                    response = data.get('response')
-                    if response:
-                        print(f"🦆📤 [SLEEP MODE] Duck response: {response[:50]}...", flush=True)
-                        speak(response, speech_config, beak)
-                        set_sleep_led()  # Sett RGB tilbake til sleep mode
-                except Exception as e:
-                    print(f"⚠️ Error reading duck response: {e}", flush=True)
-            
-            # Sjekk sang-annonseringer (når Anda synger av kjedsomhet)
-            song_announcement_file = '/tmp/duck_song_announcement.txt'
-            if os.path.exists(song_announcement_file):
-                try:
-                    with open(song_announcement_file, 'r', encoding='utf-8') as f:
-                        announcement = f.read().strip()
-                    os.remove(song_announcement_file)
-                    if announcement:
-                        print(f"🎵 [SLEEP MODE] Song announcement: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        # Sett RGB tilbake til sleep mode etter speaking
+                    elif event_type == Event.SMS_RESPONSE:
+                        print(f"📤 [SLEEP MODE] SMS response: {str(data)[:50]}...", flush=True)
+                        time.sleep(0.5)
+                        speak(data, speech_config, beak)
                         set_sleep_led()
-                except Exception as e:
-                    print(f"⚠️ Error reading song announcement: {e}", flush=True)
-            
-            # Sjekk hunger-annonseringer
-            hunger_announcement_file = '/tmp/duck_hunger_announcement.txt'
-            if os.path.exists(hunger_announcement_file):
-                try:
-                    with open(hunger_announcement_file, 'r', encoding='utf-8') as f:
-                        announcement = f.read().strip()
-                    os.remove(hunger_announcement_file)
-                    if announcement:
-                        print(f"😋 [SLEEP MODE] Hunger announcement: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        # Sett RGB tilbake til sleep mode etter speaking
-                        set_sleep_led()
-                except Exception as e:
-                    print(f"⚠️ Error reading hunger announcement: {e}", flush=True)
-            
-            # Sjekk hotspot-annonseringer
-            hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
-            if os.path.exists(hotspot_announcement_file):
-                try:
-                    with open(hotspot_announcement_file, 'r', encoding='utf-8') as f:
-                        announcement = f.read().strip()
-                    os.remove(hotspot_announcement_file)
-                    if announcement:
-                        print(f"📡 [SLEEP MODE] Hotspot announcement: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        # Sett RGB tilbake til sleep mode etter speaking
-                        set_sleep_led()
-                except Exception as e:
-                    print(f"⚠️ Error reading hotspot announcement: {e}", flush=True)
-            
-            # Sjekk Prusa-annonseringer
-            prusa_announcement_file = '/tmp/duck_prusa_announcement.txt'
-            if os.path.exists(prusa_announcement_file):
-                try:
-                    with open(prusa_announcement_file, 'r', encoding='utf-8') as f:
-                        announcement = f.read().strip()
-                    os.remove(prusa_announcement_file)
-                    if announcement:
-                        print(f"🖨️ [SLEEP MODE] Prusa announcement: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        # Sett RGB tilbake til sleep mode etter speaking
-                        set_sleep_led()
-                except Exception as e:
-                    print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
-            
-            # Sjekk påminnelser og alarmer
-            reminder_file = '/tmp/duck_reminder_announcement.txt'
-            if os.path.exists(reminder_file):
-                try:
-                    with open(reminder_file, 'r', encoding='utf-8') as f:
-                        data = json.loads(f.read())
-                    os.remove(reminder_file)
-                    
-                    announcement = data.get('announcement')
-                    is_alarm = data.get('is_alarm', False)
-                    
-                    if announcement:
-                        if is_alarm:
-                            # Alarmen vekker fra sleep mode - sleep er allerede deaktivert av reminder_checker_loop
-                            print(f"⏰ [SLEEP MODE → WAKE] Alarm: {announcement[:50]}...", flush=True)
-                        else:
-                            print(f"🔔 [SLEEP MODE] Reminder: {announcement[:50]}...", flush=True)
-                        speak(announcement, speech_config, beak)
-                        if not is_alarm:
+                    elif event_type == Event.DUCK_MESSAGE:
+                        announcement = data.get('announcement') if isinstance(data, dict) else data
+                        if announcement:
+                            print(f"🦆💬 [SLEEP MODE] Duck message: {announcement[:50]}...", flush=True)
+                            speak(announcement, speech_config, beak)
                             set_sleep_led()
+                    elif event_type == Event.DUCK_RESPONSE:
+                        response = data.get('response') if isinstance(data, dict) else data
+                        if response:
+                            print(f"🦆📤 [SLEEP MODE] Duck response: {response[:50]}...", flush=True)
+                            speak(response, speech_config, beak)
+                            set_sleep_led()
+                    elif event_type == Event.SONG_ANNOUNCEMENT:
+                        print(f"🎵 [SLEEP MODE] Song announcement: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.PLAY_SONG:
+                        song_path = data.get('path') if isinstance(data, dict) else data
+                        should_announce = data.get('announce', True) if isinstance(data, dict) else True
+                        if song_path and os.path.exists(song_path):
+                            print(f"🎵 [SLEEP MODE] Playing song: {song_path} (announce={should_announce})", flush=True)
+                            play_song(song_path, beak, speech_config, announce=should_announce)
+                            set_sleep_led()
+                    elif event_type == Event.HUNGER_ANNOUNCEMENT:
+                        print(f"😋 [SLEEP MODE] Hunger announcement: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.HUNGER_FED:
+                        print(f"😋 [SLEEP MODE] Fed from panel: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.HOTSPOT_ANNOUNCEMENT:
+                        print(f"📡 [SLEEP MODE] Hotspot announcement: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.PRUSA_ANNOUNCEMENT:
+                        print(f"🖨️ [SLEEP MODE] Prusa announcement: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.REMINDER:
+                        announcement = data.get('announcement') if isinstance(data, dict) else data
+                        is_alarm = data.get('is_alarm', False) if isinstance(data, dict) else False
+                        if announcement:
+                            if is_alarm:
+                                print(f"⏰ [SLEEP MODE → WAKE] Alarm: {announcement[:50]}...", flush=True)
+                            else:
+                                print(f"🔔 [SLEEP MODE] Reminder: {announcement[:50]}...", flush=True)
+                            speak(announcement, speech_config, beak)
+                            if not is_alarm:
+                                set_sleep_led()
+                    elif event_type == Event.EXTERNAL_MESSAGE:
+                        print(f"💬 [SLEEP MODE] External message: {str(data)[:50]}...", flush=True)
+                        speak(data, speech_config, beak)
+                        set_sleep_led()
+                    elif event_type == Event.SWITCH_NETWORK:
+                        print(f"🔄 [SLEEP MODE] Network switch ignored in sleep mode", flush=True)
                 except Exception as e:
-                    print(f"⚠️ Error reading reminder announcement: {e}", flush=True)
+                    print(f"⚠️ Error handling sleep event {event_type}: {e}", flush=True)
             
             # Vent 0.5 sekunder før vi sjekker igjen (for rask respons)
             time.sleep(0.5)
@@ -1258,62 +1182,49 @@ def main():
                 sleep_led_active = False
                 print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
         
-        # Sjekk sang-forespørsler UTENFOR sleep mode (alltid!)
-        song_request_file = '/tmp/duck_song_request.txt'
-        if os.path.exists(song_request_file):
+        # Sjekk events fra bus UTENFOR sleep mode (før wake word)
+        bus = get_event_bus()
+        pre_wake_event = None
+        for event_type, data in bus.drain():
             try:
-                with open(song_request_file, 'r', encoding='utf-8') as f:
-                    song_folder = f.read().strip()
-                os.remove(song_request_file)
-                # Sjekk om AI allerede har annonsert sangen
-                no_announce_file = '/tmp/duck_song_no_announce.txt'
-                should_announce = not os.path.exists(no_announce_file)
-                if os.path.exists(no_announce_file):
-                    os.remove(no_announce_file)
-                if song_folder and os.path.exists(song_folder):
-                    print(f"🎵 Playing song from request: {song_folder} (announce={should_announce})", flush=True)
-                    from src.duck_music import play_song
-                    play_song(song_folder, beak, speech_config, announce=should_announce)
-                    # Etter sangen, fortsett normal loop
+                if event_type == Event.PLAY_SONG:
+                    song_path = data.get('path') if isinstance(data, dict) else data
+                    should_announce = data.get('announce', True) if isinstance(data, dict) else True
+                    if song_path and os.path.exists(song_path):
+                        print(f"🎵 Playing song from request: {song_path} (announce={should_announce})", flush=True)
+                        play_song(song_path, beak, speech_config, announce=should_announce)
+                elif event_type == Event.PRUSA_ANNOUNCEMENT:
+                    print(f"🖨️ Prusa announcement: {str(data)[:50]}...", flush=True)
+                    speak(data, speech_config, beak)
+                elif event_type == Event.REMINDER:
+                    announcement = data.get('announcement') if isinstance(data, dict) else data
+                    is_alarm = data.get('is_alarm', False) if isinstance(data, dict) else False
+                    if announcement:
+                        emoji = "⏰" if is_alarm else "🔔"
+                        print(f"{emoji} Reminder announcement: {announcement[:50]}...", flush=True)
+                        speak(announcement, speech_config, beak)
+                elif event_type in (Event.SMS_ANNOUNCEMENT, Event.SMS_RESPONSE, Event.DUCK_MESSAGE,
+                                     Event.DUCK_RESPONSE, Event.SONG_ANNOUNCEMENT, Event.HUNGER_ANNOUNCEMENT,
+                                     Event.HUNGER_FED, Event.HOTSPOT_ANNOUNCEMENT):
+                    # Speak these directly (they would otherwise be caught in wake word loop)
+                    text = data.get('announcement', data) if isinstance(data, dict) else data
+                    if isinstance(data, dict) and 'response' in data:
+                        text = data['response']
+                    print(f"📢 Event {event_type.name}: {str(text)[:50]}...", flush=True)
+                    speak(text, speech_config, beak)
+                elif event_type == Event.EXTERNAL_MESSAGE:
+                    # Pass to main loop as external_message
+                    pre_wake_event = data
+                elif event_type == Event.SWITCH_NETWORK:
+                    pre_wake_event = '__SWITCH_NETWORK__'
             except Exception as e:
-                print(f"⚠️ Error playing song: {e}", flush=True)
+                print(f"⚠️ Error handling pre-wake event {event_type}: {e}", flush=True)
         
-        # Sjekk Prusa-annonseringer UTENFOR sleep mode
-        prusa_announcement_file = '/tmp/duck_prusa_announcement.txt'
-        if os.path.exists(prusa_announcement_file):
-            try:
-                with open(prusa_announcement_file, 'r', encoding='utf-8') as f:
-                    announcement = f.read().strip()
-                os.remove(prusa_announcement_file)
-                if announcement:
-                    print(f"🖨️ Prusa announcement: {announcement[:50]}...", flush=True)
-                    speak(announcement, speech_config, beak)
-            except Exception as e:
-                print(f"⚠️ Error reading prusa announcement: {e}", flush=True)
-        
-        # Sjekk påminnelser og alarmer UTENFOR sleep mode
-        reminder_file = '/tmp/duck_reminder_announcement.txt'
-        if os.path.exists(reminder_file):
-            try:
-                with open(reminder_file, 'r', encoding='utf-8') as f:
-                    data = json.loads(f.read())
-                os.remove(reminder_file)
-                
-                announcement = data.get('announcement')
-                is_alarm = data.get('is_alarm', False)
-                
-                if announcement:
-                    emoji = "⏰" if is_alarm else "🔔"
-                    print(f"{emoji} Reminder announcement: {announcement[:50]}...", flush=True)
-                    speak(announcement, speech_config, beak)
-            except Exception as e:
-                print(f"⚠️ Error reading reminder announcement: {e}", flush=True)
-        
-        # SMS og duck messages sjekkes nå inne i wait_for_wake_word()
-        # (Ingen dobbeltsjekking nødvendig her)
-        
-        # Normal wake word detection
-        external_message = wait_for_wake_word()
+        if pre_wake_event:
+            external_message = pre_wake_event
+        else:
+            # Normal wake word detection (nå uten fil-sjekking)
+            external_message = wait_for_wake_word()
         
         # Generer ny session_id for ny samtale
         # Session fortsetter hvis mindre enn 30 min siden siste melding
@@ -1377,38 +1288,34 @@ def main():
                 announcement = external_message.replace('__SMS_ANNOUNCEMENT__', '', 1)
                 speak(announcement, speech_config, beak)
                 
-                # Sjekk om det er en respons-annonsering
-                sms_response_file = '/tmp/duck_sms_response.txt'
+                # Sjekk om det er en respons-annonsering via event bus
                 time.sleep(1)
-                if os.path.exists(sms_response_file):
-                    try:
-                        with open(sms_response_file, 'r', encoding='utf-8') as f:
-                            response_announcement = f.read().strip()
-                        if response_announcement:
-                            time.sleep(0.5)
-                            speak(response_announcement, speech_config, beak)
-                        os.remove(sms_response_file)
-                    except Exception as e:
-                        print(f"⚠️ Error reading SMS response: {e}", flush=True)
+                bus = get_event_bus()
+                response_event = bus.get_nowait()
+                if response_event and response_event[0] == Event.SMS_RESPONSE:
+                    time.sleep(0.5)
+                    speak(response_event[1], speech_config, beak)
+                elif response_event:
+                    # Put back non-SMS_RESPONSE event
+                    bus.post(response_event[0], response_event[1])
                 continue  # Gå tilbake til wake word etter SMS
             elif external_message.startswith('__DUCK_MESSAGE__'):
                 # Duck-to-duck message announcement
                 announcement = external_message.replace('__DUCK_MESSAGE__', '', 1)
                 speak(announcement, speech_config, beak)
                 
-                # Sjekk om det er en respons-annonsering
-                duck_response_file = '/tmp/duck_response_announcement.txt'
+                # Sjekk om det er en respons-annonsering via event bus
                 time.sleep(1)
-                if os.path.exists(duck_response_file):
-                    try:
-                        with open(duck_response_file, 'r', encoding='utf-8') as f:
-                            data = json.loads(f.read())
-                        response = data.get('response')
-                        if response:
-                            time.sleep(0.5)
-                            speak(response, speech_config, beak)
-                        os.remove(duck_response_file)
-                    except Exception as e:
+                bus = get_event_bus()
+                response_event = bus.get_nowait()
+                if response_event and response_event[0] == Event.DUCK_RESPONSE:
+                    response = response_event[1].get('response') if isinstance(response_event[1], dict) else response_event[1]
+                    if response:
+                        time.sleep(0.5)
+                        speak(response, speech_config, beak)
+                elif response_event:
+                    # Put back non-DUCK_RESPONSE event
+                    bus.post(response_event[0], response_event[1])
                         print(f"⚠️ Error reading duck response: {e}", flush=True)
                 continue  # Gå tilbake til wake word etter duck message
             elif external_message.startswith('__HUNGER_ANNOUNCEMENT__'):
@@ -1521,10 +1428,11 @@ def main():
                 continue
             print("🔍 handle_name_response returned False, proceeding to ChatGPT", flush=True)
             
-            # Sjekk om bruker vil bytte nettverk (trigger fra AI funksjon)
-            if os.path.exists('/tmp/duck_switch_network.txt'):
+            # Sjekk om bruker vil bytte nettverk (trigger fra AI via event bus)
+            bus = get_event_bus()
+            switch_event = bus.get_nowait()
+            if switch_event and switch_event[0] == Event.SWITCH_NETWORK:
                 try:
-                    os.remove('/tmp/duck_switch_network.txt')
                     print("🔄 Bytter til hotspot-modus...", flush=True)
                     
                     # Koble ned alle WiFi-connections først
@@ -1549,6 +1457,9 @@ def main():
                     
                 except Exception as e:
                     print(f"⚠️ Kunne ikke bytte til hotspot: {e}", flush=True)
+            elif switch_event:
+                # Put back any non-SWITCH_NETWORK event
+                bus.post(switch_event[0], switch_event[1])
             
             # Sjekk om bruker vil avslutte samtalen
             should_end_conversation = is_conversation_ending(prompt)
