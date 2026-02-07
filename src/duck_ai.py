@@ -24,6 +24,9 @@ from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, c
 from src.duck_electricity import format_price_response
 from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
 from src.duck_web_search import web_search
+from src.duck_news import get_nrk_news
+from src.duck_transport import get_departures, plan_journey
+from src.duck_wikipedia import wikipedia_lookup, wikipedia_random
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -286,7 +289,10 @@ def generate_message_metadata(user_text: str, ai_response: str) -> dict:
         'todo': ['handleliste', 'todo', 'å gjøre', 'huskeliste'],
         'teams': ['teams', 'status', 'tilgjengelig', 'chat', 'melding'],
         'electricity': ['strømpris', 'strømkostnad', 'strøm', 'elektrisitet', 'kilowatt', 'kwh', 'billig strøm', 'dyr strøm', 'norgespris', 'sparer', 'besparelse'],
-        'backup': ['backup', 'sikkerhetskopi', 'ta backup', 'sikre', 'lagre']
+        'backup': ['backup', 'sikkerhetskopi', 'ta backup', 'sikre', 'lagre'],
+        'news': ['nyheter', 'nytt', 'nrk', 'avis', 'hva skjer', 'nyhetene', 'siste nytt', 'toppsaker', 'sport', 'ol'],
+        'transport': ['buss', 'tog', 'trikk', 't-bane', 'tbane', 'avgang', 'holdeplass', 'reise', 'rutetid', 'kollektiv', 'entur', 'rute'],
+        'wikipedia': ['wikipedia', 'hva er', 'hvem er', 'fortell om', 'visste du', 'fakta', 'definer', 'forklar'],
     }
     
     for topic, keywords in topic_keywords.items():
@@ -1425,6 +1431,103 @@ def _get_function_tools():
                     "required": []
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_nrk_news",
+                "description": "Hent siste nyheter fra NRK. Bruk når brukeren spør om nyheter, hva som skjer, aktuelle hendelser, sport, kultur, etc. Kategorier: toppsaker, siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": "string",
+                            "description": "Nyhetskategori: toppsaker (default), siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi",
+                            "default": "toppsaker"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall nyheter (default 5, max 15)",
+                            "default": 5
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_departures",
+                "description": "Hent neste buss-, trikk-, tog- eller t-baneavganger fra en holdeplass. Bruk når brukeren spør om kollektivtransport, avganger, buss, tog, trikk, t-bane. Data fra Entur (hele Norge).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "stop_name": {
+                            "type": "string",
+                            "description": "Navn på holdeplass/stasjon (f.eks. 'Jernbanetorget', 'Oslo S', 'Byparken', 'Grønland')"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall avganger (default 8, max 20)",
+                            "default": 8
+                        },
+                        "transport_mode": {
+                            "type": "string",
+                            "description": "Filtrer på type: buss, trikk, tbane, tog, båt (valgfritt)"
+                        }
+                    },
+                    "required": ["stop_name"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "plan_journey",
+                "description": "Planlegg en reise med kollektivtransport mellom to steder i Norge. Bruk når brukeren spør 'hvordan kommer jeg til...', 'reise fra X til Y', 'rute til...'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "from_place": {
+                            "type": "string",
+                            "description": "Avgangssted (holdeplass, stasjon, adresse eller sted)"
+                        },
+                        "to_place": {
+                            "type": "string",
+                            "description": "Destinasjon (holdeplass, stasjon, adresse eller sted)"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall reiseforslag (default 3, max 5)",
+                            "default": 3
+                        }
+                    },
+                    "required": ["from_place", "to_place"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "wikipedia_lookup",
+                "description": "Slå opp et emne på norsk Wikipedia. Bruk når brukeren spør om fakta, definisjoner, historiske hendelser, kjente personer, steder, vitenskapelige emner. Gir pålitelig informasjon.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Emne å slå opp (f.eks. 'Nidarosdomen', 'fotosyntese', 'Roald Amundsen')"
+                        },
+                        "sentences": {
+                            "type": "integer",
+                            "description": "Antall setninger å returnere (default 5)",
+                            "default": 5
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
         }
     ]
 
@@ -1773,6 +1876,24 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             query = function_args.get("query", "")
             count = function_args.get("count", 5)
             result = web_search(query, count)
+        elif function_name == "get_nrk_news":
+            category = function_args.get("category", "toppsaker")
+            count = function_args.get("count", 5)
+            result = get_nrk_news(category, count)
+        elif function_name == "get_departures":
+            stop_name = function_args.get("stop_name", "")
+            count = function_args.get("count", 8)
+            transport_mode = function_args.get("transport_mode", None)
+            result = get_departures(stop_name, count, transport_mode)
+        elif function_name == "plan_journey":
+            from_place = function_args.get("from_place", "")
+            to_place = function_args.get("to_place", "")
+            count = function_args.get("count", 3)
+            result = plan_journey(from_place, to_place, count)
+        elif function_name == "wikipedia_lookup":
+            query = function_args.get("query", "")
+            sentences = function_args.get("sentences", 5)
+            result = wikipedia_lookup(query, sentences)
         elif function_name == "set_led_color":
             color = function_args.get("color", "")
             color_map = {
