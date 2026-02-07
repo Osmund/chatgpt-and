@@ -195,11 +195,22 @@ def is_conversation_ending(user_text: str) -> bool:
         "avslutt",
         "ha det",
         "farvel",
+        "adjø",
         "takk for hjelpen",
         "takk for meg",
         "det var alt",
         "det var det",
-        "ferdig"
+        "det er greit",
+        "det er bra",
+        "nei takk",
+        "nei det er greit",
+        "nei det holder",
+        "det holder",
+        "ferdig",
+        "vi snakkes",
+        "snakkes",
+        "god natt",
+        "natta",
     ]
     
     return any(phrase in user_lower for phrase in ending_phrases)

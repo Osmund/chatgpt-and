@@ -1516,6 +1516,14 @@ def main():
                 reply_upper = reply.upper()
                 ai_wants_to_end = "[AVSLUTT]" in reply_upper or " AVSLUTT" in reply_upper or reply_upper.endswith("AVSLUTT")
                 
+                # Sjekk om AI-svaret inneholder typiske avslutningsfraser
+                # (AI glemmer ofte [AVSLUTT] men bruker farvel-språk)
+                if not ai_wants_to_end:
+                    reply_lower = reply.lower()
+                    ai_farewell_phrases = ["vi snakkes", "ha det bra", "kvakk for nå", "bare si ifra"]
+                    if any(phrase in reply_lower for phrase in ai_farewell_phrases):
+                        ai_wants_to_end = True
+                
                 # Fjern AVSLUTT markør
                 import re
                 reply_clean = re.sub(r'\[?AVSLUTT\]?\.?', '', reply, flags=re.IGNORECASE).strip()
