@@ -24,7 +24,7 @@ from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, c
 from src.duck_electricity import format_price_response
 from src.duck_sleep import enable_sleep, disable_sleep, is_sleeping, get_sleep_status
 from src.duck_web_search import web_search
-from src.duck_news import get_nrk_news
+from src.duck_news import get_nrk_news, get_news_headlines
 from src.duck_transport import get_departures, plan_journey
 from src.duck_wikipedia import wikipedia_lookup, wikipedia_random
 
@@ -1284,7 +1284,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Søk på internett via Brave Search. Bruk for spesifikke spørsmål, oppslag, eller når brukeren leter etter noe bestemt. IKKE bruk for generelle nyheter — bruk get_nrk_news i stedet.",
+                "description": "Søk på internett via Brave Search. Bruk for spesifikke spørsmål, oppslag, eller når brukeren leter etter noe bestemt. IKKE bruk for generelle nyheter — bruk get_nrk_news eller get_news_headlines i stedet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1454,7 +1454,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_nrk_news",
-                "description": "Hent siste norske nyheter fra NRK. FORETREKK DENNE for nyheter, overskrifter, 'hva skjer?', 'siste nytt', sport, OL, kultur, etc. Raskere og mer pålitelig enn web_search for nyheter. Kategorier: toppsaker, siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi.",
+                "description": "Hent siste norske nyheter fra NRK. Bruk for NRK-nyheter, kategorier: toppsaker, siste, sport, kultur, norge, urix, teknologi, klima, livsstil, ytring, sapmi. For VG/Aftenposten brukes get_news_headlines i stedet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1466,6 +1466,30 @@ def _get_function_tools():
                         "count": {
                             "type": "integer",
                             "description": "Antall nyheter (default 5, max 15)",
+                            "default": 5
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_news_headlines",
+                "description": "Hent siste nyhetsoverskrifter fra norske aviser. Støtter VG, Aftenposten og Stavanger Aftenblad (aftenbladet). Bruk når brukeren spør om 'hva er siste nytt i VG?', 'hva skriver Aftenposten?', 'nyheter fra Aftenbladet', etc. Raskere og mer pålitelig enn web_search for norske nyheter.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "description": "Nyhetskilde: 'vg' (VG/Verdens Gang), 'aftenposten' eller 'aftenbladet' (Stavanger Aftenblad). Default 'vg'.",
+                            "enum": ["vg", "aftenposten", "aftenbladet"],
+                            "default": "vg"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall overskrifter (default 5, max 15)",
                             "default": 5
                         }
                     },
@@ -1529,18 +1553,24 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "wikipedia_lookup",
-                "description": "Slå opp et emne på norsk Wikipedia. Bruk når brukeren spør om fakta, definisjoner, historiske hendelser, kjente personer, steder, vitenskapelige emner. Gir pålitelig informasjon.",
+                "description": "Slå opp et emne på Wikipedia. Støtter norsk (default) og engelsk Wikipedia. Bruk når brukeren spør om fakta, definisjoner, historiske hendelser, kjente personer, steder, vitenskapelige emner. Prøv engelsk Wikipedia (language='en') hvis norsk ikke har god nok artikkel, f.eks. for internasjonale sportsresultater, medaljetabeller, eller emner som ofte dekkes bedre på engelsk.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Emne å slå opp (f.eks. 'Nidarosdomen', 'fotosyntese', 'Roald Amundsen')"
+                            "description": "Emne å slå opp (f.eks. 'Nidarosdomen', 'fotosyntese', 'Roald Amundsen', '2026 Winter Olympics medal table')"
                         },
                         "sentences": {
                             "type": "integer",
                             "description": "Antall setninger å returnere (default 5)",
                             "default": 5
+                        },
+                        "language": {
+                            "type": "string",
+                            "enum": ["no", "en"],
+                            "description": "Språk for Wikipedia: 'no' for norsk (default), 'en' for engelsk. Bruk 'en' for internasjonale emner som medaljetabeller, sportsresultater, teknologi.",
+                            "default": "no"
                         }
                     },
                     "required": ["query"]
@@ -1919,6 +1949,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             category = function_args.get("category", "toppsaker")
             count = function_args.get("count", 5)
             result = get_nrk_news(category, count)
+        elif function_name == "get_news_headlines":
+            source = function_args.get("source", "vg")
+            count = function_args.get("count", 5)
+            result = get_news_headlines(source, count)
         elif function_name == "get_departures":
             stop_name = function_args.get("stop_name", "")
             count = function_args.get("count", 8)
@@ -1932,7 +1966,8 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         elif function_name == "wikipedia_lookup":
             query = function_args.get("query", "")
             sentences = function_args.get("sentences", 5)
-            result = wikipedia_lookup(query, sentences)
+            language = function_args.get("language", "no")
+            result = wikipedia_lookup(query, sentences, language)
         elif function_name == "set_led_color":
             color = function_args.get("color", "")
             color_map = {

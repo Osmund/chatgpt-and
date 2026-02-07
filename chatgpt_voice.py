@@ -1507,7 +1507,10 @@ def main():
                 
                 # Håndter hvis chatgpt_query returnerte None (f.eks. ved API-feil)
                 if reply is None:
-                    raise Exception("ChatGPT returnerte None - sannsynligvis API-feil")
+                    print("⚠️ ChatGPT returnerte None - sannsynligvis API-feil", flush=True)
+                    reply = "Beklager, jeg fikk en feil fra AI-tjenesten. Kan du prøve å spørre igjen?"
+                    is_thank_you = False
+                    force_end = False
                 
                 # Sjekk om AI har markert samtalen som ferdig
                 reply_upper = reply.upper()

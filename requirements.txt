@@ -23,6 +23,7 @@ python-dotenv>=1.0.0                   # Environment variable management
 requests>=2.31.0                       # HTTP requests for web features
 audioop-lts>=0.2.2                     # Python 3.13+ audioop replacement
 beautifulsoup4>=4.12.0                 # HTML parsing for web scraping
+trafilatura>=2.0.0                     # Smart article content extraction
 Pillow                                 # Image processing
 
 # Communication

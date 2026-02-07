@@ -163,3 +163,129 @@ def get_nrk_news(category: str = 'toppsaker', count: int = 5) -> str:
     except Exception as e:
         print(f"❌ Uventet feil i get_nrk_news: {e}", flush=True)
         return f"❌ Kunne ikke hente nyheter: {str(e)}"
+
+
+# === Andre norske nyhetskilder (VG, Aftenposten) ===
+
+NEWS_SOURCES = {
+    'vg': {
+        'name': 'VG',
+        'url': 'https://www.vg.no/rss/feed/',
+        'emoji': '📰',
+    },
+    'aftenposten': {
+        'name': 'Aftenposten',
+        'url': 'https://www.aftenposten.no/rss',
+        'emoji': '📰',
+    },
+    'aftenbladet': {
+        'name': 'Stavanger Aftenblad',
+        'url': 'https://www.aftenbladet.no/rss',
+        'emoji': '📰',
+    },
+}
+
+# Alias for naturlig språk
+SOURCE_ALIASES = {
+    'verdens gang': 'vg',
+    'aften': 'aftenposten',
+    'apost': 'aftenposten',
+    'ap': 'aftenposten',
+    'stavanger aftenblad': 'aftenbladet',
+    'stavanger aftenbladet': 'aftenbladet',
+    'sa': 'aftenbladet',
+}
+
+
+def get_news_headlines(source: str = 'vg', count: int = 5) -> str:
+    """
+    Hent nyhetsoverskrifter fra norske aviser (VG, Aftenposten).
+
+    Args:
+        source: Kilde - 'vg' eller 'aftenposten'
+        count: Antall overskrifter (default 5, max 15)
+
+    Returns:
+        Formatert streng med nyhetsoverskrifter
+    """
+    # Oppløs alias
+    src = source.lower().strip()
+    if src in SOURCE_ALIASES:
+        src = SOURCE_ALIASES[src]
+    if src not in NEWS_SOURCES:
+        available = ', '.join(NEWS_SOURCES.keys())
+        return f"Ukjent kilde '{source}'. Tilgjengelige kilder: {available}. Bruk get_nrk_news for NRK-nyheter."
+
+    source_info = NEWS_SOURCES[src]
+    url = source_info['url']
+    name = source_info['name']
+    emoji = source_info['emoji']
+
+    try:
+        headers = {
+            'User-Agent': 'ChatGPTDuck/2.1 (Samantha; +https://github.com/osmund/chatgpt-and)'
+        }
+
+        print(f"{emoji} Henter nyheter fra {name}: {url}", flush=True)
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        root = ET.fromstring(response.content)
+        channel = root.find('channel')
+
+        if channel is None:
+            return f"❌ Kunne ikke parse {name} RSS-feed"
+
+        items = channel.findall('item')
+        count = min(count, 15)
+        items = items[:count]
+
+        if not items:
+            return f"Fant ingen nyheter fra {name}"
+
+        results = [f"{emoji} {name} - Siste nytt ({len(items)} saker):\n"]
+
+        for i, item in enumerate(items, 1):
+            title_el = item.find('title')
+            desc_el = item.find('description')
+            pub_date_el = item.find('pubDate')
+            category_el = item.find('category')
+
+            title = title_el.text.strip() if title_el is not None and title_el.text else 'Ingen tittel'
+            desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
+            pub_date = _parse_pub_date(pub_date_el.text) if pub_date_el is not None and pub_date_el.text else ''
+            category = category_el.text.strip() if category_el is not None and category_el.text else ''
+
+            results.append(f"{i}. {title}")
+
+            if desc:
+                desc_clean = desc.strip()
+                if len(desc_clean) > 300:
+                    desc_clean = desc_clean[:300] + "..."
+                results.append(f"   {desc_clean}")
+
+            meta_parts = []
+            if pub_date:
+                meta_parts.append(pub_date)
+            if category:
+                meta_parts.append(category)
+            if meta_parts:
+                results.append(f"   [{' | '.join(meta_parts)}]")
+
+            results.append("")
+
+        results.append(f"Tilgjengelige kilder: {', '.join(NEWS_SOURCES.keys())}. Bruk get_nrk_news for NRK.")
+
+        formatted = "\n".join(results)
+        print(f"✅ Hentet {len(items)} saker fra {name}", flush=True)
+        return formatted
+
+    except requests.Timeout:
+        return f"❌ {name} svarte ikke (timeout)"
+    except requests.RequestException as e:
+        return f"❌ Feil ved henting av {name}-nyheter: {str(e)}"
+    except ET.ParseError as e:
+        return f"❌ Kunne ikke parse {name} RSS: {str(e)}"
+    except Exception as e:
+        print(f"❌ Uventet feil i get_news_headlines ({name}): {e}", flush=True)
+        return f"❌ Kunne ikke hente nyheter fra {name}: {str(e)}"

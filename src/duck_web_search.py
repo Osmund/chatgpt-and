@@ -6,7 +6,7 @@ Handles web search via Brave Search API and fetches article content
 import os
 import requests
 import re
-from bs4 import BeautifulSoup
+import trafilatura
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,10 +14,30 @@ load_dotenv()
 BRAVE_API_KEY = os.getenv('BRAVE_SEARCH_API_KEY')
 BRAVE_SEARCH_URL = 'https://api.search.brave.com/res/v1/web/search'
 
+# Domener som er trege, blokkerer bots, eller krever JavaScript for innhold
+SLOW_DOMAINS = {
+    'olympics.com',
+    'theathletic.com',
+    'nytimes.com',
+    'wsj.com',
+    'bloomberg.com',
+    'paywallsite.com',
+}
+
+
+def _is_slow_domain(url: str) -> bool:
+    """Sjekk om en URL er fra et kjent tregt/blokkert domene"""
+    try:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc.lower()
+        return any(blocked in domain for blocked in SLOW_DOMAINS)
+    except Exception:
+        return False
+
 
 def _fetch_article_content(url: str, max_length: int = 3000) -> str:
     """
-    Henter hovedinnholdet fra en nettside
+    Henter hovedinnholdet fra en nettside via trafilatura.
     
     Args:
         url: URL til siden
@@ -27,52 +47,25 @@ def _fetch_article_content(url: str, max_length: int = 3000) -> str:
         Hovedteksten fra siden, eller None hvis feil
     """
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; DuckBot/1.0; +http://example.com/bot)'
-        }
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            return None
         
-        response = requests.get(url, headers=headers, timeout=8)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Fjern uønskede elementer
-        for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside', 'advertisement', 'iframe']):
-            tag.decompose()
-        
-        # Prøv å hente tabelldata (viktig for medaljeoversikter etc.)
-        tables = soup.find_all('table')
-        table_text = ""
-        for table in tables[:2]:  # Maks 2 tabeller
-            rows = table.find_all('tr')
-            for row in rows[:20]:  # Maks 20 rader
-                cells = row.find_all(['td', 'th'])
-                if cells:
-                    table_text += " | ".join(cell.get_text(strip=True) for cell in cells) + "\n"
-        
-        # Prøv å finne hovedinnholdet
-        article = (
-            soup.find('article') or 
-            soup.find('main') or 
-            soup.find('div', class_=re.compile(r'article|content|post|entry', re.I))
+        # Ekstraher innhold med tabeller inkludert
+        text = trafilatura.extract(
+            downloaded,
+            include_tables=True,
+            include_links=False,
+            include_images=False,
+            include_comments=False,
+            favor_recall=True,  # Hent mer innhold fremfor presisjon
         )
         
-        if article:
-            text = article.get_text(separator=' ', strip=True)
-        else:
-            # Fallback: hent all tekst fra body
-            body = soup.find('body')
-            text = body.get_text(separator=' ', strip=True) if body else ''
+        if not text:
+            return None
         
-        # Rens opp tekst
+        # Rens og begrens
         text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Legg til tabelldata først (verdifullt for medaljer, statistikk etc.)
-        if table_text:
-            combined = f"TABELLDATA:\n{table_text.strip()}\n\nTEKST: {text}"
-            return combined[:max_length] if combined else None
-        
-        # Returner maks lengde
         return text[:max_length] if text else None
         
     except Exception as e:
@@ -129,15 +122,19 @@ def web_search(query: str, count: int = 5) -> str:
                     
                     results.append(f"\n{i}. {title}")
                     
-                    # Prøv å hente faktisk innhold fra siden (kun første 2 resultater)
-                    if i <= 2:
+                    # Prøv å hente faktisk innhold fra siden (kun første 2 resultater, hopp over trege domener)
+                    if i <= 2 and not _is_slow_domain(url):
                         content = _fetch_article_content(url)
                         if content:
                             results.append(f"   Innhold: {content}")
                         else:
                             results.append(f"   Beskrivelse: {description}")
                     else:
-                        results.append(f"   Beskrivelse: {description}")
+                        if _is_slow_domain(url) and i <= 2:
+                            results.append(f"   Beskrivelse: {description}")
+                            results.append(f"   (Hopper over innholdshenting - tregt nettsted)")
+                        else:
+                            results.append(f"   Beskrivelse: {description}")
                     
                     if age:
                         results.append(f"   Publisert: {age}")
