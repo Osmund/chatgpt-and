@@ -836,6 +836,12 @@ def main():
         print(f"Advarsel: Kunne ikke initialisere servo (fortsetter uten): {e}", flush=True)
         beak = None
     
+    # Initialiser DuckSettings (thread-safe in-memory settings)
+    from src.duck_settings import get_settings, start_settings_server
+    settings = get_settings()
+    settings.load_from_tmp_files()
+    start_settings_server()
+
     # Initialiser ServiceManager (delt state med kontrollpanel)
     try:
         services = get_services()

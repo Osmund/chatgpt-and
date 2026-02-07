@@ -16,9 +16,9 @@ from scripts.hardware.rgb_duck import set_red, off, stop_blink, set_intensity
 import azure.cognitiveservices.speech as speechsdk
 
 from src.duck_config import (
-    DEFAULT_VOICE, VOICE_FILE, BEAK_FILE, SPEED_FILE, VOLUME_FILE,
-    FADE_MS, BEAK_CHUNK_MS, BEAK_PRE_START_MS
+    DEFAULT_VOICE, BEAK_FILE, FADE_MS, BEAK_CHUNK_MS, BEAK_PRE_START_MS
 )
+from src.duck_settings import get_settings
 
 
 def find_usb_microphone():
@@ -98,10 +98,13 @@ def clean_markdown_for_tts(text):
 
 
 def control_beak(enabled):
-    """Slå nebb on/off via konfigurasjonsfil"""
+    """Slå nebb on/off via DuckSettings + fil (for duck-control bakoverkomp.)"""
     try:
+        value = 'on' if enabled else 'off'
+        get_settings().beak = value
+        # Skriv også til fil for duck-control som leser denne
         with open(BEAK_FILE, 'w') as f:
-            f.write('on' if enabled else 'off')
+            f.write(value)
         return {"status": "success", "beak_enabled": enabled}
     except Exception as e:
         return {"status": "error", "error": str(e)}
@@ -118,48 +121,12 @@ def speak(text, speech_config, beak):
     # Fjern Markdown-formatering før TTS
     text = clean_markdown_for_tts(text)
     
-    # Les valgt stemme fra konfigurasjonsfil
-    voice_name = DEFAULT_VOICE
-    try:
-        if os.path.exists(VOICE_FILE):
-            with open(VOICE_FILE, 'r') as f:
-                voice = f.read().strip()
-                if voice:
-                    voice_name = voice
-    except Exception as e:
-        print(f"Feil ved lesing av stemme-konfigurasjon: {e}, bruker default", flush=True)
-    
-    # Les nebbet-status
-    beak_enabled = True
-    try:
-        if os.path.exists(BEAK_FILE):
-            with open(BEAK_FILE, 'r') as f:
-                beak_status = f.read().strip()
-                beak_enabled = (beak_status != 'off')
-    except Exception as e:
-        print(f"Feil ved lesing av nebbet-konfigurasjon: {e}, nebbet aktivert", flush=True)
-    
-    # Les talehastighet (0-100, hvor 50 = normal)
-    speed_value = 40  # Default: litt saktere enn normal (40 = -10%)
-    try:
-        if os.path.exists(SPEED_FILE):
-            with open(SPEED_FILE, 'r') as f:
-                speed_str = f.read().strip()
-                if speed_str:
-                    speed_value = int(speed_str)
-    except Exception as e:
-        print(f"Feil ved lesing av hastighet-konfigurasjon: {e}, bruker normal hastighet", flush=True)
-    
-    # Les volum (0-100, hvor 50 = normal)
-    volume_value = 50
-    try:
-        if os.path.exists(VOLUME_FILE):
-            with open(VOLUME_FILE, 'r') as f:
-                volume_str = f.read().strip()
-                if volume_str:
-                    volume_value = int(volume_str)
-    except Exception as e:
-        print(f"Feil ved lesing av volum-konfigurasjon: {e}, bruker normal volum", flush=True)
+    # Hent alle TTS-settings atomisk fra DuckSettings
+    tts = get_settings().get_tts_settings()
+    voice_name = tts['voice']
+    beak_enabled = tts['beak_enabled']
+    speed_value = tts['speed']
+    volume_value = tts['volume']
     
     # Konverter volume_value (0-100) til gain multiplier (0.0-2.0, hvor 1.0 = normal)
     volume_gain = volume_value / 50.0

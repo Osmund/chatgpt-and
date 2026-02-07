@@ -13,10 +13,11 @@ from dotenv import load_dotenv
 from src.duck_database import get_db
 
 from src.duck_config import (
-    MODEL_CONFIG_FILE, DEFAULT_MODEL, PERSONALITY_FILE, MESSAGES_FILE,
+    DEFAULT_MODEL, MESSAGES_FILE,
     LOCATIONS_FILE, PERSONALITIES_FILE, SAMANTHA_IDENTITY_FILE,
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
 )
+from src.duck_settings import get_settings
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
 from src.duck_homeassistant import control_tv, control_ac, get_ac_temperature, control_vacuum, launch_tv_app, control_twinkly, get_email_status, get_calendar_events, create_calendar_event, manage_todo, get_teams_status, get_teams_chat, activate_scene, control_blinds, trigger_backup
 from src.duck_electricity import format_price_response
@@ -421,7 +422,7 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
     personality = None
     try:
         personalities = _read_cached_json(PERSONALITIES_FILE) or {}
-        personality = _read_cached_text(PERSONALITY_FILE)
+        personality = get_settings().personality
         if personality:
             personality_prompt = personalities.get(personality, "")
     except Exception as e:
@@ -2074,18 +2075,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         tuple: (reply_text, is_thank_you) eller bare reply_text
     """
     if model is None:
-        # Prøv å lese modell fra konfigurasjonsfil
-        try:
-            if os.path.exists(MODEL_CONFIG_FILE):
-                with open(MODEL_CONFIG_FILE, 'r') as f:
-                    model = f.read().strip()
-                    if not model:
-                        model = DEFAULT_MODEL
-            else:
-                model = DEFAULT_MODEL
-        except Exception as e:
-            print(f"Feil ved lesing av modellkonfigurasjon: {e}, bruker default", flush=True)
-            model = DEFAULT_MODEL
+        model = get_settings().model
     
     print(f"Bruker AI-modell: {model}", flush=True)
     

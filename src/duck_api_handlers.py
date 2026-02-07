@@ -5,10 +5,15 @@ Handles all API endpoints for the Duck control panel.
 import json
 import os
 import subprocess
+import urllib.request
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 from src.duck_database import get_db
+from src.duck_config import DEFAULT_VOICE, DEFAULT_MODEL
+
+# Settings API (intern server i chatgpt-duck)
+SETTINGS_API_URL = 'http://127.0.0.1:5111/settings'
 
 
 class DuckAPIHandlers:
@@ -29,24 +34,18 @@ class DuckAPIHandlers:
     def handle_status(self) -> Dict[str, Any]:
         """Get all current settings for status display"""
         try:
-            # Read from temp files (TMP config pattern)
-            personality = self._read_temp_file('duck_personality.txt', 'normal')
-            voice = self._read_temp_file('duck_voice.txt', 'nb-NO-FinnNeural')
-            volume = int(self._read_temp_file('duck_volume.txt', '50'))
-            beak = self._read_temp_file('duck_beak.txt', 'on')
-            speed = int(self._read_temp_file('duck_speed.txt', '50'))
-            
+            s = self._get_remote_settings()
             return {
-                'personality': personality,
-                'voice': voice,
-                'volume': volume,
-                'beak': beak,
-                'speed': speed
+                'personality': s.get('personality', 'normal'),
+                'voice': s.get('voice', DEFAULT_VOICE),
+                'volume': s.get('volume', 50),
+                'beak': s.get('beak', 'on'),
+                'speed': s.get('speed', 50),
             }
         except Exception as e:
             return {
                 'personality': 'normal',
-                'voice': 'nb-NO-FinnNeural',
+                'voice': DEFAULT_VOICE,
                 'volume': 50,
                 'beak': 'on',
                 'speed': 50,
@@ -282,8 +281,8 @@ class DuckAPIHandlers:
     
     def handle_current_model(self) -> Dict[str, Any]:
         """Get current OpenAI model"""
-        model = self._read_temp_file('duck_model.txt', 'gpt-4o-mini')
-        return {'model': model}
+        s = self._get_remote_settings()
+        return {'model': s.get('model', DEFAULT_MODEL)}
     
     def handle_available_models(self) -> Dict[str, Any]:
         """Get list of available OpenAI models"""
@@ -298,29 +297,28 @@ class DuckAPIHandlers:
     
     def handle_current_personality(self) -> Dict[str, Any]:
         """Get current personality"""
-        personality = self._read_temp_file('duck_personality.txt', 'normal')
-        return {'personality': personality}
+        s = self._get_remote_settings()
+        return {'personality': s.get('personality', 'normal')}
     
     def handle_current_voice(self) -> Dict[str, Any]:
         """Get current TTS voice"""
-        from src.duck_config import DEFAULT_VOICE
-        voice = self._read_temp_file('duck_voice.txt', DEFAULT_VOICE)
-        return {'voice': voice}
+        s = self._get_remote_settings()
+        return {'voice': s.get('voice', DEFAULT_VOICE)}
     
     def handle_current_beak(self) -> Dict[str, Any]:
         """Get current beak setting"""
-        beak = self._read_temp_file('duck_beak.txt', 'on')
-        return {'beak': beak}
+        s = self._get_remote_settings()
+        return {'beak': s.get('beak', 'on')}
     
     def handle_current_speed(self) -> Dict[str, Any]:
         """Get current TTS speed"""
-        speed = int(self._read_temp_file('duck_speed.txt', '50'))
-        return {'speed': speed}
+        s = self._get_remote_settings()
+        return {'speed': s.get('speed', 50)}
     
     def handle_current_volume(self) -> Dict[str, Any]:
         """Get current volume"""
-        volume = int(self._read_temp_file('duck_volume.txt', '50'))
-        return {'volume': volume}
+        s = self._get_remote_settings()
+        return {'volume': s.get('volume', 50)}
     
     def handle_wake_words(self) -> Dict[str, Any]:
         """Get list of wake words"""
@@ -672,8 +670,8 @@ class DuckAPIHandlers:
     def handle_personality_get(self) -> Dict[str, Any]:
         """Get current personality"""
         try:
-            personality = self._read_temp_file('duck_personality.txt', 'normal')
-            return {'status': 'success', 'personality': personality}
+            s = self._get_remote_settings()
+            return {'status': 'success', 'personality': s.get('personality', 'normal')}
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
     
@@ -786,7 +784,7 @@ class DuckAPIHandlers:
             }
     
     def _read_temp_file(self, filename: str, default: str = '') -> str:
-        """Read value from /tmp file"""
+        """Read value from /tmp file (legacy, used for non-settings files)"""
         filepath = Path('/tmp') / filename
         try:
             if filepath.exists():
@@ -796,3 +794,20 @@ class DuckAPIHandlers:
         except Exception:
             pass
         return default
+
+    def _get_remote_settings(self) -> dict:
+        """Hent settings fra chatgpt-duck via intern HTTP API. Faller tilbake til /tmp."""
+        try:
+            req = urllib.request.Request(SETTINGS_API_URL, method='GET')
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                return json.loads(resp.read().decode())
+        except Exception:
+            # Fallback til /tmp-filer (hvis chatgpt-duck ikke kjører)
+            return {
+                'personality': self._read_temp_file('duck_personality.txt', 'normal'),
+                'voice': self._read_temp_file('duck_voice.txt', DEFAULT_VOICE),
+                'beak': self._read_temp_file('duck_beak.txt', 'on'),
+                'speed': int(self._read_temp_file('duck_speed.txt', '50')),
+                'volume': int(self._read_temp_file('duck_volume.txt', '50')),
+                'model': self._read_temp_file('duck_model.txt', DEFAULT_MODEL),
+            }

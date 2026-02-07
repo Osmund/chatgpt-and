@@ -24,8 +24,53 @@ from duck_database import get_db
 from duck_services import get_services
 from duck_api_handlers import DuckAPIHandlers
 
+import urllib.request
+
 # Template directory
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
+
+# Settings API (intern server i chatgpt-duck prosessen)
+SETTINGS_API_URL = 'http://127.0.0.1:5111/settings'
+
+def _push_setting(updates: dict) -> bool:
+    """Send settings-oppdatering til chatgpt-duck via intern HTTP API.
+    Faller tilbake til /tmp-fil hvis chatgpt-duck ikke kjører."""
+    try:
+        data = json.dumps(updates).encode()
+        req = urllib.request.Request(
+            SETTINGS_API_URL, data=data,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except Exception:
+        # Fallback: skriv til /tmp-filer (f.eks. hvis chatgpt-duck ikke kjører)
+        _file_map = {
+            'personality': '/tmp/duck_personality.txt',
+            'voice': '/tmp/duck_voice.txt',
+            'beak': '/tmp/duck_beak.txt',
+            'speed': '/tmp/duck_speed.txt',
+            'volume': '/tmp/duck_volume.txt',
+            'model': '/tmp/duck_model.txt',
+        }
+        for key, value in updates.items():
+            if key in _file_map:
+                try:
+                    with open(_file_map[key], 'w') as f:
+                        f.write(str(value))
+                except Exception:
+                    pass
+        return False
+
+def _get_settings() -> dict:
+    """Hent settings fra chatgpt-duck via intern HTTP API."""
+    try:
+        req = urllib.request.Request(SETTINGS_API_URL, method='GET')
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return json.loads(resp.read().decode())
+    except Exception:
+        return None
 
 # Initialize services once at startup
 services = get_services()
@@ -907,18 +952,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 import requests
                 from dotenv import load_dotenv
                 
-                # Les personlighet og modell
-                personality_file = '/tmp/duck_personality.txt'
-                personality = 'normal'
-                if _os.path.exists(personality_file):
-                    with open(personality_file, 'r') as f:
-                        personality = f.read().strip() or 'normal'
-                
-                model_file = '/tmp/duck_model.txt'
-                model = 'gpt-3.5-turbo'
-                if _os.path.exists(model_file):
-                    with open(model_file, 'r') as f:
-                        model = f.read().strip() or 'gpt-3.5-turbo'
+                # Les personlighet og modell fra settings API
+                _s = _get_settings()
+                personality = (_s or {}).get('personality', 'normal')
+                model = (_s or {}).get('model', 'gpt-4.1-mini-2025-04-14')
                 
                 # Les API-nøkkel fra .env
                 load_dotenv()
@@ -1210,121 +1247,50 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
             personality = data.get('personality')
             print(f"Endrer personlighet til: {personality}", flush=True)
-            
-            try:
-                # Skriv personlighet til fil
-                personality_file = '/tmp/duck_personality.txt'
-                with open(personality_file, 'w', encoding='utf-8') as f:
-                    f.write(personality)
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'personality': personality})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/change-voice':
             # Endre TTS-stemme
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
             voice = data.get('voice')
             print(f"Endrer TTS-stemme til: {voice}", flush=True)
-            
-            try:
-                # Skriv stemme til fil
-                voice_file = '/tmp/duck_voice.txt'
-                with open(voice_file, 'w', encoding='utf-8') as f:
-                    f.write(voice)
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'voice': voice})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/change-beak':
             # Endre nebbet-status (on/off)
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
             beak = data.get('beak')
             print(f"Endrer nebbet til: {beak}", flush=True)
-            
-            try:
-                # Skriv nebbet-status til fil
-                beak_file = '/tmp/duck_beak.txt'
-                with open(beak_file, 'w', encoding='utf-8') as f:
-                    f.write(beak)
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'beak': beak})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/change-speed':
             # Endre talehastighet (0-100, hvor 50 er normal)
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
-            speed = int(data.get('speed', 50))
-            # Clamp til 0-100
-            speed = max(0, min(100, speed))
-            
+            speed = max(0, min(100, int(data.get('speed', 50))))
             print(f"Endrer talehastighet til: {speed}", flush=True)
-            
-            try:
-                # Skriv hastighet til fil
-                speed_file = '/tmp/duck_speed.txt'
-                with open(speed_file, 'w', encoding='utf-8') as f:
-                    f.write(str(speed))
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'speed': speed})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/change-volume':
             # Endre volum (0-100)
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
-            volume = int(data.get('volume', 50))
-            # Clamp til 0-100
-            volume = max(0, min(100, volume))
-            
+            volume = max(0, min(100, int(data.get('volume', 50))))
             print(f"Endrer volum til: {volume}", flush=True)
-            
-            try:
-                # Skriv volum til fil
-                volume_file = '/tmp/duck_volume.txt'
-                with open(volume_file, 'w', encoding='utf-8') as f:
-                    f.write(str(volume))
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'volume': volume})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/set-fan-mode':
             # Endre viftemodus (auto/on/off)
@@ -1388,23 +1354,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode())
-            
             model = data.get('model')
             print(f"Endrer AI-modell til: {model}", flush=True)
-            
-            try:
-                # Skriv modell til fil
-                model_file = '/tmp/duck_model.txt'
-                with open(model_file, 'w', encoding='utf-8') as f:
-                    f.write(model)
-                
-                response = {'success': True}
-                self.send_json_response(response, 200)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+            _push_setting({'model': model})
+            self.send_json_response({'success': True}, 200)
         
         elif self.path == '/play-song':
             # Spill av en sang
