@@ -502,6 +502,20 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
             else:
                 tamagotchi_status += "(Du kjeder deg veldig! Du lengter etter interaksjon.)\n"
         
+        # Legg til aktive påminnelser
+        try:
+            from src.duck_reminders import ReminderManager
+            reminder_mgr = ReminderManager()
+            pending = reminder_mgr.get_pending_reminders()
+            if pending:
+                tamagotchi_status += f"\nAktive påminnelser ({len(pending)}):\n"
+                for r in pending:
+                    remind_time = datetime.fromisoformat(r['remind_at']).strftime('%H:%M')
+                    type_icon = "⏰" if r['reminder_type'] == 'alarm' else "🔔"
+                    tamagotchi_status += f"  {type_icon} '{r['message']}' kl {remind_time}\n"
+        except Exception as e:
+            print(f"⚠️ Kunne ikke hente påminnelser for prompt: {e}", flush=True)
+
         if tamagotchi_status:
             tamagotchi_status += "\nViktig: Når noen spør hvordan du har det eller om du er sulten/kjeder deg, BRUK denne informasjonen! "
             tamagotchi_status += "Du vet faktisk om din egen tilstand. Svar ærlig basert på disse tallene. "

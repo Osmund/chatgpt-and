@@ -483,8 +483,10 @@ def reminder_checker_loop():
     sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
     from duck_reminders import ReminderManager, REMINDER_TYPE_ALARM
     from duck_sleep import is_sleeping, disable_sleep
+    from duck_memory import MemoryManager, Memory
     
     reminder_mgr = ReminderManager()
+    memory_mgr = MemoryManager()
     
     while True:
         time.sleep(30)  # Sjekk hvert 30. sekund
@@ -514,6 +516,22 @@ def reminder_checker_loop():
                 
                 # Marker som annonsert
                 reminder_mgr.mark_announced(reminder['id'])
+                
+                # Lagre i minnet at påminnelsen ble levert
+                try:
+                    type_name = "Alarm" if is_alarm else "Påminnelse"
+                    user_name = reminder.get('user_name', 'Osmund')
+                    memory_text = f"{type_name} levert til {user_name}: '{reminder['message']}'"
+                    memory = Memory(
+                        text=memory_text,
+                        topic="påminnelser",
+                        confidence=0.9,
+                        source="reminder_system"
+                    )
+                    memory_mgr.save_memory(memory, user_name=user_name)
+                    print(f"💾 Påminnelse lagret i minnet", flush=True)
+                except Exception as e:
+                    print(f"⚠️ Kunne ikke lagre påminnelse i minnet: {e}", flush=True)
                 
                 # Vent litt mellom flere påminnelser
                 if len(due) > 1:
