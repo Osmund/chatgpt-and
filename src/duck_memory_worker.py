@@ -446,13 +446,8 @@ class MemoryWorker:
         return self._conn
 
     def _close_conn(self):
-        """Lukk connection og nullstill."""
-        if self._conn is not None:
-            try:
-                self._conn.close()
-            except Exception:
-                pass
-            self._conn = None
+        """No-op: connection managed by DatabaseManager."""
+        pass
 
     def _ensure_tables(self):
         """Opprett nødvendige tabeller."""

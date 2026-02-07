@@ -10,12 +10,12 @@ Handles:
 - Personality impact (grumpy when hungry)
 """
 
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional
 import json
 import os
+from src.duck_database import get_db
 
 # Food values (halved to require more feeding, like a real Tamagotchi)
 FOOD_VALUES = {
@@ -44,11 +44,12 @@ class HungerManager:
         if db_path is None:
             db_path = Path(__file__).parent.parent / 'duck_memory.db'
         self.db_path = str(db_path)
+        self.db = get_db(self.db_path)
         self._init_tables()
     
     def _init_tables(self):
         """Ensure hunger_state table exists"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -66,23 +67,20 @@ class HungerManager:
         
         c.execute("INSERT OR IGNORE INTO hunger_state (id) VALUES (1)")
         conn.commit()
-        conn.close()
     
     def get_hunger_level(self) -> float:
         """Get current hunger level (0-10)"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT current_level FROM hunger_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         return row['current_level'] if row else 0.0
     
     def increase_hunger(self, amount: float = 1.0):
         """Increase hunger level (called every hour)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -93,7 +91,6 @@ class HungerManager:
         
         conn.commit()
         level = self.get_hunger_level()
-        conn.close()
         
         print(f"🍽️ Hunger increased to {level:.1f}/10", flush=True)
         return level
@@ -112,7 +109,7 @@ class HungerManager:
             return {'status': 'unknown_food', 'message': f"Jeg kjenner ikke {food_type}"}
         
         value = FOOD_VALUES[food_type]
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         # Reduce hunger
@@ -127,7 +124,6 @@ class HungerManager:
         
         conn.commit()
         new_level = self.get_hunger_level()
-        conn.close()
         
         food_emoji = food_type if food_type in ['🍪', '🍕'] else ('🍪' if food_type == 'cookie' else '🍕')
         print(f"😋 Fed with {food_emoji}! Hunger reduced to {new_level:.1f}/10", flush=True)
@@ -164,13 +160,11 @@ class HungerManager:
         if not self.is_hungry():
             return False
         
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT last_meal_time, last_announcement FROM hunger_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row:
             return False
@@ -200,7 +194,7 @@ class HungerManager:
     
     def mark_announcement_made(self):
         """Mark that we made a hunger announcement"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -210,20 +204,17 @@ class HungerManager:
         """, (datetime.now().isoformat(),))
         
         conn.commit()
-        conn.close()
     
     def should_send_sms_nag(self) -> bool:
         """Check if we should send SMS nag (10 min after last SMS or announcement)"""
         if not self.is_hungry():
             return False
         
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT last_announcement, last_sms_nag FROM hunger_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row:
             return False
@@ -247,7 +238,7 @@ class HungerManager:
     
     def mark_sms_nag_sent(self):
         """Mark that we sent SMS nag"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -257,11 +248,10 @@ class HungerManager:
         """, (datetime.now().isoformat(),))
         
         conn.commit()
-        conn.close()
     
     def reset_daily(self):
         """Reset hunger for new day (called at morning)"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -276,7 +266,6 @@ class HungerManager:
         """, (datetime.now().isoformat(),))
         
         conn.commit()
-        conn.close()
         
         print("🌅 Morning! Anda found breakfast herself - not hungry", flush=True)
     
@@ -297,13 +286,11 @@ class HungerManager:
     
     def get_status(self) -> Dict:
         """Get complete hunger status"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM hunger_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row:
             return {}
@@ -323,13 +310,11 @@ class HungerManager:
     
     def get_last_meal_info(self) -> Dict:
         """Get info about last meal for AI awareness"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT last_meal_time, meals_today FROM hunger_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row or not row['last_meal_time']:
             return {

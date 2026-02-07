@@ -4,12 +4,12 @@ Intelligent messaging system between ducks with loop prevention and token budget
 """
 
 import os
-import sqlite3
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
+from src.duck_database import get_db
 
 load_dotenv()
 
@@ -44,12 +44,13 @@ class DuckMessenger:
     
     def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
         self.db_path = db_path
+        self.db = get_db(db_path)
         self.duck_name = os.getenv('DUCK_NAME', 'Samantha')
         self._init_database()
     
     def _init_database(self):
         """Opprett tabell for duck message tracking"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -71,7 +72,6 @@ class DuckMessenger:
         c.execute("CREATE INDEX IF NOT EXISTS idx_duck_messages_from ON duck_messages(from_duck, timestamp DESC)")
         
         conn.commit()
-        conn.close()
     
     def can_initiate_message(self, boredom_level: float = 0.0) -> Tuple[bool, str]:
         """
@@ -80,8 +80,7 @@ class DuckMessenger:
         Returns:
             (can_send, reason)
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         today = datetime.now().date().isoformat()
@@ -98,7 +97,6 @@ class DuckMessenger:
         
         daily_initiated = c.fetchone()['count']
         if daily_initiated >= self.MAX_DAILY_INITIATED:
-            conn.close()
             return False, f"Daglig initiering-limit nådd ({daily_initiated}/{self.MAX_DAILY_INITIATED})"
         
         # Sjekk totalt daglig limit
@@ -110,7 +108,6 @@ class DuckMessenger:
         
         daily_total = c.fetchone()['count']
         if daily_total >= self.MAX_DAILY_TOTAL:
-            conn.close()
             return False, f"Daglig total-limit nådd ({daily_total}/{self.MAX_DAILY_TOTAL})"
         
         # Sjekk cooldown
@@ -129,15 +126,12 @@ class DuckMessenger:
             last_time = datetime.fromisoformat(last_initiated['timestamp'])
             if last_time > cooldown_time:
                 hours_left = (last_time + timedelta(hours=self.COOLDOWN_HOURS) - now).total_seconds() / 3600
-                conn.close()
                 return False, f"Cooldown aktiv ({hours_left:.1f} timer igjen)"
         
         # Sjekk kedsomhet
         if boredom_level < self.BOREDOM_THRESHOLD:
-            conn.close()
             return False, f"Ikke kjed nok (kedsomhet: {boredom_level:.1f}, trenger {self.BOREDOM_THRESHOLD})"
         
-        conn.close()
         return True, "OK"
     
     def detect_loop(self, from_duck: str, new_message: str) -> bool:
@@ -148,8 +142,7 @@ class DuckMessenger:
         Returns:
             True hvis loop detektert
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
@@ -166,7 +159,6 @@ class DuckMessenger:
         """, (from_duck, our_duck_name, cutoff_time, self.MAX_RAPID_MESSAGES + 1))
         
         recent = c.fetchall()
-        conn.close()
         
         if len(recent) < 2:
             return False
@@ -194,7 +186,7 @@ class DuckMessenger:
     def log_message(self, from_duck: str, to_duck: str, message: str, 
                    direction: str, initiated: bool = False, tokens_used: int = 0):
         """Log duck message til database"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -205,7 +197,6 @@ class DuckMessenger:
               datetime.now().isoformat()))
         
         conn.commit()
-        conn.close()
     
     def get_conversation_history(self, with_duck: str, limit: int = 5) -> List[Dict]:
         """
@@ -219,8 +210,7 @@ class DuckMessenger:
             Liste med meldinger i kronologisk rekkefølge
             [{'from_duck': 'seven', 'message': '...', 'timestamp': '...'}, ...]
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
@@ -234,7 +224,6 @@ class DuckMessenger:
         """, (with_duck, our_duck_name, our_duck_name, with_duck, limit))
         
         messages = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         # Return in chronological order (oldest first)
         return list(reversed(messages))
@@ -251,8 +240,7 @@ class DuckMessenger:
     
     def get_daily_stats(self) -> Dict:
         """Få dagens statistikk"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         today = datetime.now().date().isoformat()
@@ -267,7 +255,6 @@ class DuckMessenger:
         """, (today,))
         
         row = c.fetchone()
-        conn.close()
         
         return {
             'total_messages': row['total'] or 0,

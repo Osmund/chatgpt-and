@@ -3,9 +3,9 @@
 Adaptive Greetings - Tilpasser Andas hilsener basert på personlighet
 """
 
-import sqlite3
 import random
 from datetime import datetime
+from src.duck_database import get_db
 
 
 def get_adaptive_greeting(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", user_name: str = "på du") -> str:
@@ -20,13 +20,11 @@ def get_adaptive_greeting(db_path: str = "/home/admog/Code/chatgpt-and/duck_memo
         Personalisert hilsen-string
     """
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        conn = get_db().connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM personality_profile WHERE id = 1")
         profile = c.fetchone()
-        conn.close()
         
         if not profile:
             # Fallback til default hilsen
@@ -127,13 +125,11 @@ def get_adaptive_goodbye(db_path: str = "/home/admog/Code/chatgpt-and/duck_memor
         Personalisert avslutning
     """
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        conn = get_db().connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM personality_profile WHERE id = 1")
         profile = c.fetchone()
-        conn.close()
         
         if not profile:
             return "Greit! Ha det bra!"

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from twilio.rest import Client
+from src.duck_database import get_db
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ class SMSManager:
     
     def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
         self.db_path = db_path
+        self.db = get_db(db_path)
         
         # Twilio credentials
         self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
@@ -48,7 +50,7 @@ class SMSManager:
     
     def _init_database(self):
         """Opprett SMS-tabeller hvis de ikke finnes"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         # SMS contacts table
@@ -120,7 +122,6 @@ class SMSManager:
         c.execute("INSERT OR IGNORE INTO hunger_state (id) VALUES (1)")
         
         conn.commit()
-        conn.close()
         print("✅ SMS database initialized", flush=True)
     
     def send_sms(self, to_number: str, message: str) -> Dict:
@@ -225,19 +226,17 @@ class SMSManager:
     
     def get_boredom_level(self) -> float:
         """Get current boredom level (0-10)"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT current_level FROM boredom_state WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         return row['current_level'] if row else 0.0
     
     def increase_boredom(self, amount: float = 0.5):
         """Increase boredom level (called by timer)"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -249,14 +248,13 @@ class SMSManager:
         
         conn.commit()
         level = self.get_boredom_level()
-        conn.close()
         
         print(f"😐 Boredom increased to {level:.1f}/10", flush=True)
         return level
     
     def reduce_boredom(self, amount: float = 3.0):
         """Reduce boredom level (called when interaction happens)"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -268,15 +266,13 @@ class SMSManager:
         
         conn.commit()
         level = self.get_boredom_level()
-        conn.close()
         
         print(f"😊 Boredom reduced to {level:.1f}/10", flush=True)
         return level
     
     def check_boredom_trigger(self) -> bool:
         """Check if boredom threshold is reached"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -285,7 +281,6 @@ class SMSManager:
             WHERE id = 1
         """)
         row = c.fetchone()
-        conn.close()
         
         if not row or not row['enabled']:
             return False
@@ -302,8 +297,7 @@ class SMSManager:
         3. Prioritize by priority number (lower = higher priority)
         4. Rotate between contacts (don't spam same person)
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         now = datetime.now()
@@ -331,7 +325,6 @@ class SMSManager:
         """, (today, current_hour))
         
         row = c.fetchone()
-        conn.close()
         
         if row:
             return dict(row)
@@ -357,8 +350,7 @@ class SMSManager:
         """
         import random
         
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         now = datetime.now()
@@ -385,7 +377,6 @@ class SMSManager:
         """, (today, current_hour))
         
         rows = c.fetchall()
-        conn.close()
         
         if not rows:
             return None
@@ -428,7 +419,7 @@ class SMSManager:
             self.reduce_boredom(amount=2.0)
             
             # Update last_trigger
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn = self.db.connection()
             c = conn.cursor()
             c.execute("""
                 UPDATE boredom_state 
@@ -436,7 +427,6 @@ class SMSManager:
                 WHERE id = 1
             """, (datetime.now().isoformat(),))
             conn.commit()
-            conn.close()
         
         return {
             'status': result['status'],
@@ -536,8 +526,7 @@ Hold det kort (under 160 tegn er best)."""
     
     def _get_sms_conversation_history(self, contact_id: int, hours: int = 24) -> list:
         """Get SMS conversation history for context (last 24 hours by default)"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         # Get SMS from last X hours
@@ -556,13 +545,12 @@ Hold det kort (under 160 tegn er best)."""
                 'content': row['message']
             })
         
-        conn.close()
         return history
     
     def _log_sms(self, contact_id: int, direction: str, message: str, 
                   status: str, twilio_sid: str = None):
         """Log SMS in history table"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         boredom_level = self.get_boredom_level()
@@ -574,11 +562,10 @@ Hold det kort (under 160 tegn er best)."""
         """, (contact_id, direction, message, status, boredom_level, twilio_sid))
         
         conn.commit()
-        conn.close()
     
     def _update_contact_stats(self, contact_id: int, direction: str):
         """Update contact statistics and dynamically adjust priority"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         if direction == 'sent':
@@ -611,24 +598,21 @@ Hold det kort (under 160 tegn er best)."""
                     print(f"📊 Contact priority updated: {current_priority} → {new_priority} (received: {total_received})", flush=True)
         
         conn.commit()
-        conn.close()
     
     def get_contact_by_phone(self, phone: str) -> Optional[Dict]:
         """Get contact by phone number"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM sms_contacts WHERE phone = ?", (phone,))
         row = c.fetchone()
-        conn.close()
         
         return dict(row) if row else None
     
     def add_contact(self, name: str, phone: str, relation: str = 'friend',
                     priority: int = 5, max_daily_messages: int = 3) -> Dict:
         """Add a new SMS contact"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         try:
@@ -640,19 +624,16 @@ Hold det kort (under 160 tegn er best)."""
             
             conn.commit()
             contact_id = c.lastrowid
-            conn.close()
             
             print(f"✅ Contact added: {name} ({phone})", flush=True)
             return {'status': 'ok', 'id': contact_id}
             
         except sqlite3.IntegrityError:
-            conn.close()
             return {'status': 'error', 'message': 'Phone number already exists'}
     
     def get_all_contacts(self) -> List[Dict]:
         """Get all SMS contacts"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -662,7 +643,6 @@ Hold det kort (under 160 tegn er best)."""
         """)
         
         contacts = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         return contacts
     
@@ -710,7 +690,7 @@ Hold det kort (under 160 tegn er best)."""
             session_id = f"sms_{contact['name']}_{session_date}"
             
             # Save to messages table
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn = self.db.connection()
             c = conn.cursor()
             
             metadata = json.dumps({
@@ -733,7 +713,6 @@ Hold det kort (under 160 tegn er best)."""
             ))
             
             conn.commit()
-            conn.close()
             
             print(f"💾 SMS saved to memory: {contact['name']}", flush=True)
         except Exception as e:

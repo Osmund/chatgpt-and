@@ -19,6 +19,8 @@ from datetime import datetime
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / 'src'))
 
+from duck_database import get_db
+
 from duck_services import get_services
 from duck_api_handlers import DuckAPIHandlers
 
@@ -135,7 +137,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/hunger-status':
             # Hent sultbarometer fra database
             try:
-                import sqlite3
                 import sys
                 sys.path.insert(0, str(Path(__file__).parent / 'src'))
                 
@@ -285,11 +286,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/sms_history':
             # Hent SMS-historikk OG duck messages kombinert
             try:
-                import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
                 
-                conn = sqlite3.connect(db_path)
-                conn.row_factory = sqlite3.Row
+                conn = get_db().connection()
                 c = conn.cursor()
                 c.execute("""
                     SELECT 
@@ -322,7 +321,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 """)
                 
                 rows = c.fetchall()
-                conn.close()
                 
                 sms_list = []
                 for row in rows:
@@ -354,11 +352,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/sms_contacts':
             # Hent alle SMS-kontakter
             try:
-                import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
                 
-                conn = sqlite3.connect(db_path)
-                conn.row_factory = sqlite3.Row
+                conn = get_db().connection()
                 c = conn.cursor()
                 c.execute("""
                     SELECT id, name, phone, relation, priority, enabled, 
@@ -368,7 +364,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 """)
                 
                 rows = c.fetchall()
-                conn.close()
                 
                 contacts = []
                 for row in rows:
@@ -598,7 +593,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                             'first_seen': row['first_seen'],
                             'last_accessed': row['last_accessed']
                         })
-                    conn.close()
                 
                 response = {'status': 'success', 'memories': memories_list}
             except Exception as e:
@@ -649,14 +643,11 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/personality':
             # Hent personlighetsprofil
             try:
-                import sqlite3
-                conn = sqlite3.connect('/home/admog/Code/chatgpt-and/duck_memory.db')
-                conn.row_factory = sqlite3.Row
+                conn = get_db().connection()
                 c = conn.cursor()
                 
                 c.execute("SELECT * FROM personality_profile WHERE id = 1")
                 row = c.fetchone()
-                conn.close()
                 
                 if row:
                     response = {
@@ -780,10 +771,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 put_data = self.rfile.read(content_length)
                 data = json.loads(put_data.decode())
                 
-                import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
                 
-                conn = sqlite3.connect(db_path)
+                conn = get_db().connection()
                 c = conn.cursor()
                 c.execute("""
                     UPDATE sms_contacts 
@@ -803,7 +793,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 ))
                 conn.commit()
                 updated = c.rowcount > 0
-                conn.close()
                 
                 if updated:
                     response = {'success': True, 'message': f'Kontakt #{contact_id} oppdatert'}
@@ -834,7 +823,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 c.execute("DELETE FROM profile_facts WHERE key=?", (key,))
                 conn.commit()
                 deleted = c.rowcount > 0
-                conn.close()
                 
                 if deleted:
                     response = {'status': 'success', 'message': f'Fact "{key}" slettet'}
@@ -857,7 +845,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 c.execute("DELETE FROM memories WHERE id=?", (memory_id,))
                 conn.commit()
                 deleted = c.rowcount > 0
-                conn.close()
                 
                 if deleted:
                     response = {'status': 'success', 'message': f'Memory #{memory_id} slettet'}
@@ -874,15 +861,13 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             try:
                 contact_id = int(self.path.split('/sms_contacts/')[1])
                 
-                import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
                 
-                conn = sqlite3.connect(db_path)
+                conn = get_db().connection()
                 c = conn.cursor()
                 c.execute("DELETE FROM sms_contacts WHERE id=?", (contact_id,))
                 conn.commit()
                 deleted = c.rowcount > 0
-                conn.close()
                 
                 if deleted:
                     response = {'success': True, 'message': f'Kontakt #{contact_id} slettet'}
@@ -1544,10 +1529,9 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 post_data = self.rfile.read(content_length)
                 data = json.loads(post_data.decode())
                 
-                import sqlite3
                 db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
                 
-                conn = sqlite3.connect(db_path)
+                conn = get_db().connection()
                 c = conn.cursor()
                 c.execute("""
                     INSERT INTO sms_contacts 
@@ -1565,7 +1549,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 ))
                 conn.commit()
                 new_id = c.lastrowid
-                conn.close()
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
@@ -1628,7 +1611,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     updated['memory_threshold'] = val
                 
                 conn.commit()
-                conn.close()
                 
                 response = {'success': True, **updated}
                 self.send_json_response(response, 200)
@@ -1663,7 +1645,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 """, ('max_context_facts', str(max_facts), json.dumps({'source': 'control_panel'})))
                 
                 conn.commit()
-                conn.close()
                 
                 response = {'success': True, 'max_context_facts': max_facts}
                 self.send_json_response(response, 200)
@@ -1700,7 +1681,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                     c = conn.cursor()
                     c.execute("SELECT display_name, relation_to_primary FROM users WHERE username = ?", (username,))
                     row = c.fetchone()
-                    conn.close()
                     
                     if row:
                         found_user = {
@@ -1738,8 +1718,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 post_data = self.rfile.read(content_length)
                 data = json.loads(post_data.decode())
                 
-                import sqlite3
-                conn = sqlite3.connect('/home/admog/Code/chatgpt-and/duck_memory.db')
+                conn = get_db().connection()
                 c = conn.cursor()
                 
                 # Oppdater alle dimensjoner
@@ -1770,7 +1749,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 ))
                 
                 conn.commit()
-                conn.close()
                 
                 # Restart service for å laste ny profil
                 subprocess.run(

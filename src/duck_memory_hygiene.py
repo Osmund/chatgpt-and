@@ -72,7 +72,6 @@ def _cleanup_expired(memory_manager) -> tuple:
             pass
     
     conn.commit()
-    conn.close()
     return expired_facts, expired_memories
 
 
@@ -93,7 +92,6 @@ def _cleanup_old_contradictions(memory_manager) -> int:
     except Exception:
         deleted = 0
     
-    conn.close()
     return deleted
 
 
@@ -121,7 +119,6 @@ def _consolidate_memories(memory_manager) -> int:
     """, (CONSOLIDATION_MIN_CLUSTER, CONSOLIDATION_MAX_TOPICS))
     
     topics = [(row['topic'], row['cnt']) for row in c.fetchall()]
-    conn.close()
     
     if not topics:
         print("  ℹ️  Ingen topics å konsolidere\n", flush=True)
@@ -166,7 +163,6 @@ def _consolidate_topic(memory_manager, topic: str) -> int:
     """, (topic, cutoff))
     
     candidates = [dict(row) for row in c.fetchall()]
-    conn.close()
     
     if len(candidates) < CONSOLIDATION_MIN_CLUSTER:
         return 0
@@ -246,7 +242,6 @@ Returner JSON:
     c.execute(f"DELETE FROM memories WHERE id IN ({placeholders})", candidate_ids)
     deleted = c.rowcount
     conn.commit()
-    conn.close()
     
     print(f"  🔄 {topic}: {deleted} minner → {len(consolidated)} konsoliderte", flush=True)
     return deleted
@@ -312,13 +307,11 @@ def run_maintenance():
         else:
             print(f"  ℹ️  Ingen gamle meldinger å slette\n", flush=True)
         
-        conn.close()
         
         # 8. Vacuum database
         print("🗜️  Vacuum database...", flush=True)
         conn = memory_manager._get_connection()
         conn.execute("VACUUM")
-        conn.close()
         print("  ✅ Vacuum ferdig\n", flush=True)
         
         # 9. Stats etter cleanup

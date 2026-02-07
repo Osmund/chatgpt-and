@@ -6,13 +6,13 @@ Kjører nattlig analyse av samtaler og oppdaterer personlighetsprofil.
 Kan bruke forskjellige AI-modeller: GPT-4o, Claude 3.5, Gemini 2.0 Flash
 """
 
-import sqlite3
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 import os
 from dotenv import load_dotenv
+from src.duck_database import get_db
 
 # AI clients
 from openai import OpenAI
@@ -83,6 +83,7 @@ class PersonalityAnalyzer:
     
     def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
         self.db_path = db_path
+        self.db = get_db(db_path)
         self._init_personality_table()
         self.user_manager = UserManager(db_path=db_path)
         
@@ -111,7 +112,7 @@ class PersonalityAnalyzer:
     
     def _init_personality_table(self):
         """Opprett personality_profile tabell"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -164,12 +165,10 @@ class PersonalityAnalyzer:
         except: pass
         
         conn.commit()
-        conn.close()
     
     def get_recent_conversations(self, days: int = 7, limit: int = 100) -> List[Dict]:
         """Hent nylige samtaler for analyse"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
@@ -183,7 +182,6 @@ class PersonalityAnalyzer:
         """, (cutoff, limit))
         
         conversations = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         return conversations
     
@@ -462,7 +460,7 @@ Svar med JSON format med disse feltene:
     
     def save_profile(self, profile: PersonalityProfile):
         """Lagre personlighetsprofil til database"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -508,19 +506,16 @@ Svar med JSON format med disse feltene:
         ))
         
         conn.commit()
-        conn.close()
         
         print(f"✅ Personlighetsprofil lagret!")
     
     def load_profile(self) -> PersonalityProfile:
         """Last personlighetsprofil fra database"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM personality_profile WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row:
             return PersonalityProfile()

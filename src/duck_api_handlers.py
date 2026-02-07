@@ -5,10 +5,10 @@ Handles all API endpoints for the Duck control panel.
 import json
 import os
 import subprocess
-import sqlite3
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
+from src.duck_database import get_db
 
 
 class DuckAPIHandlers:
@@ -24,6 +24,7 @@ class DuckAPIHandlers:
         self.services = services
         self.project_root = Path(__file__).parent.parent
         self.db_path = self.project_root / 'duck_memory.db'
+        self.db = get_db(str(self.db_path))
     
     def handle_status(self) -> Dict[str, Any]:
         """Get all current settings for status display"""
@@ -116,11 +117,10 @@ class DuckAPIHandlers:
         """Get Duck's current location from profile_facts or default by DUCK_NAME"""
         try:
             # Check database first
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self.db.connection()
             c = conn.cursor()
             c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location'")
             row = c.fetchone()
-            conn.close()
             
             if row:
                 return {'location': row[0]}
@@ -141,11 +141,10 @@ class DuckAPIHandlers:
     def handle_boredom_status(self) -> Dict[str, Any]:
         """Get boredom level from database"""
         try:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = self.db.connection()
             c = conn.cursor()
             c.execute("SELECT current_level, last_check FROM boredom_state WHERE id = 1")
             row = c.fetchone()
-            conn.close()
             
             if row:
                 level, last_check = row
@@ -508,7 +507,6 @@ class DuckAPIHandlers:
                     'session_id': row['session_id']
                 })
             
-            conn.close()
             return {'status': 'success', 'conversations': conversations}
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
@@ -528,7 +526,6 @@ class DuckAPIHandlers:
             c.execute("SELECT COUNT(*) as total FROM memories")
             total_memories = c.fetchone()['total']
             
-            conn.close()
             
             percentage = (total_with_embeddings / total_memories * 100) if total_memories > 0 else 0
             
@@ -558,7 +555,6 @@ class DuckAPIHandlers:
                 c = conn.cursor()
                 c.execute("SELECT COUNT(*) FROM messages WHERE processed = 0")
                 unprocessed_count = c.fetchone()[0]
-                conn.close()
             except Exception as e:
                 print(f"Warning: Could not get unprocessed count: {e}", flush=True)
             
@@ -608,7 +604,6 @@ class DuckAPIHandlers:
                     'first_seen': row['first_seen']
                 })
             
-            conn.close()
             return {'status': 'success', 'updates': updates}
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
@@ -644,7 +639,6 @@ class DuckAPIHandlers:
             row = c.fetchone()
             max_facts = int(row['value']) if row else 100
             
-            conn.close()
             return {'status': 'success', 'max_context_facts': max_facts}
         except Exception as e:
             return {'status': 'error', 'error': str(e), 'max_context_facts': 100}
@@ -671,7 +665,6 @@ class DuckAPIHandlers:
                 else:
                     settings[key] = defaults[key]
             
-            conn.close()
             return {'status': 'success', **settings}
         except Exception as e:
             return {'status': 'error', 'error': str(e)}

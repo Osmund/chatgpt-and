@@ -5,11 +5,11 @@ Håndterer session state og brukerbytte
 """
 
 import json
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from pathlib import Path
 from src.duck_config import DB_PATH
+from src.duck_database import get_db
 
 SESSION_FILE = "/tmp/duck_current_user.json"
 
@@ -26,14 +26,13 @@ class UserManager:
     
     def __init__(self, db_path: str = DB_PATH, session_file: str = SESSION_FILE):
         self.db_path = db_path
+        self.db = get_db(db_path)
         self.session_file = session_file
         self.timeout_minutes = 30
     
-    def _get_connection(self) -> sqlite3.Connection:
-        """Hent database connection"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def _get_connection(self):
+        """Hent database connection (thread-local via DatabaseManager)"""
+        return self.db.connection()
     
     def get_current_user(self) -> Dict:
         """
@@ -139,7 +138,6 @@ class UserManager:
             c = conn.cursor()
             c.execute("SELECT relation_to_primary FROM users WHERE username = ?", (username,))
             row = c.fetchone()
-            conn.close()
             if row and row[0]:
                 relation = row[0]
             else:
@@ -200,7 +198,6 @@ class UserManager:
             """, (username, display_name, relation, now, now))
         
         conn.commit()
-        conn.close()
     
     def update_activity(self):
         """Oppdater last_activity timestamp"""
@@ -311,7 +308,6 @@ class UserManager:
                     """, (actual_name.lower(), actual_name.lower()))
                     owner = c.fetchone()
                     if owner:
-                        conn.close()
                         return {
                             'username': owner['username'],
                             'display_name': owner['display_name'],
@@ -331,7 +327,6 @@ class UserManager:
         
         row = c.fetchone()
         if row:
-            conn.close()
             return {
                 'username': row['username'],
                 'display_name': row['display_name'],
@@ -349,7 +344,6 @@ class UserManager:
         
         row = c.fetchone()
         if row:
-            conn.close()
             return {
                 'username': row['username'],
                 'display_name': row['display_name'],
@@ -367,7 +361,6 @@ class UserManager:
         
         row = c.fetchone()
         if row:
-            conn.close()
             return {
                 'username': row['username'],
                 'display_name': row['display_name'],
@@ -384,7 +377,6 @@ class UserManager:
         """, (name_lower,))
         
         row = c.fetchone()
-        conn.close()
         
         if row:
             # Ekstraher relasjon fra key
@@ -462,7 +454,6 @@ class UserManager:
                 'total_messages': row['total_messages']
             })
         
-        conn.close()
         return users
     
     def increment_message_count(self, username: str):
@@ -481,7 +472,6 @@ class UserManager:
         """, (datetime.now().isoformat(), username))
         
         conn.commit()
-        conn.close()
 
 
 if __name__ == "__main__":

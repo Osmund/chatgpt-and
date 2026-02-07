@@ -10,6 +10,8 @@ import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+from src.duck_database import get_db
+
 from src.duck_config import (
     MODEL_CONFIG_FILE, DEFAULT_MODEL, PERSONALITY_FILE, MESSAGES_FILE,
     LOCATIONS_FILE, PERSONALITIES_FILE, SAMANTHA_IDENTITY_FILE,
@@ -69,14 +71,11 @@ def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and
     Returnerer tom string hvis ingen profil finnes.
     """
     try:
-        import sqlite3
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        conn = get_db().connection()
         c = conn.cursor()
         
         c.execute("SELECT * FROM personality_profile WHERE id = 1")
         row = c.fetchone()
-        conn.close()
         
         if not row:
             return ""
@@ -372,12 +371,10 @@ def _check_sms_authorization(function_name: str, source: str, source_user_id: in
     # For SMS: sjekk om kontakt har 'owner' relation
     if source_user_id and sms_manager:
         # source_user_id er contact_id fra sms_contacts
-        conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = get_db().connection()
         c = conn.cursor()
         c.execute("SELECT relation FROM sms_contacts WHERE id = ?", (source_user_id,))
         row = c.fetchone()
-        conn.close()
         
         if not row or row['relation'] != 'owner':
             result = "❌ Smart home-kontroll er kun tilgjengelig for eier via SMS. Andre kan kun kontrollere via talekommando."
@@ -1459,13 +1456,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             # Hvis ingen lokasjon oppgitt, bruk Andas nåværende lokasjon
             if not location:
                 try:
-                    import sqlite3
-                    db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
-                    conn = sqlite3.connect(db_path, timeout=30.0)
+                    conn = get_db().connection()
                     c = conn.cursor()
                     c.execute("SELECT value FROM profile_facts WHERE key = 'duck_current_location' LIMIT 1")
                     row = c.fetchone()
-                    conn.close()
                     if row:
                         location = row[0]
                         print(f"Bruker Andas nåværende lokasjon: {location}", flush=True)
@@ -1590,13 +1584,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             else:
                 # Finn kontakt
                 try:
-                    import sqlite3
-                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
-                    conn.row_factory = sqlite3.Row
+                    conn = get_db().connection()
                     c = conn.cursor()
                     c.execute("SELECT * FROM sms_contacts WHERE name = ? AND enabled = 1", (contact_name,))
                     contact = c.fetchone()
-                    conn.close()
                     
                     if contact:
                         contact_dict = dict(contact)
@@ -1666,10 +1657,8 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 result = "SMS-funksjonalitet er ikke tilgjengelig"
             else:
                 try:
-                    import sqlite3
                     from datetime import datetime
-                    conn = sqlite3.connect(sms_manager.db_path, timeout=30.0)
-                    conn.row_factory = sqlite3.Row
+                    conn = get_db().connection()
                     c = conn.cursor()
                     
                     # Hvis kontaktnavn er spesifisert, finn contact_id
@@ -1681,7 +1670,6 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                             contact_id = contact['id']
                             actual_name = contact['name']
                         else:
-                            conn.close()
                             result = f"Fant ingen kontakt med navn '{contact_name}'"
                             continue
                     
@@ -1707,7 +1695,6 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         c.execute(query, (limit,))
                     
                     messages = c.fetchall()
-                    conn.close()
                     
                     if not messages:
                         if contact_name:
@@ -1803,9 +1790,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             location = function_args.get("location", "").strip()
             if location:
                 try:
-                    import sqlite3
-                    db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
-                    conn = sqlite3.connect(db_path, timeout=30.0)
+                    conn = get_db().connection()
                     c = conn.cursor()
                     
                     # Sjekk om duck_current_location finnes
@@ -1825,7 +1810,6 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         """, (location,))
                     
                     conn.commit()
-                    conn.close()
                     result = f"OK, jeg er nå i {location}! 📍🦆"
                 except Exception as e:
                     result = f"Kunne ikke oppdatere lokasjon: {e}"

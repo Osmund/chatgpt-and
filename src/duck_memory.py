@@ -8,7 +8,6 @@ Håndterer persistent minne på tvers av samtaler:
 - Episodisk minne (søkbare minner med vekting)
 """
 
-import sqlite3
 import json
 import time
 from datetime import datetime, timedelta
@@ -21,6 +20,7 @@ import numpy as np
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+from src.duck_database import get_db
 from src.duck_config import (
     DB_PATH as DEFAULT_DB_PATH,
     MEMORY_EMBEDDING_SEARCH_LIMIT,
@@ -172,6 +172,7 @@ class MemoryManager:
     
     def __init__(self, db_path: str = None):
         self.db_path = db_path or DEFAULT_DB_PATH
+        self.db = get_db(self.db_path)
         self.metrics = MemoryMetrics()
         
         # OpenAI client for embeddings
@@ -191,8 +192,7 @@ class MemoryManager:
     
     def _init_database(self):
         """Opprett tabeller og indexes"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         # Messages tabell
@@ -392,15 +392,12 @@ class MemoryManager:
         c.execute("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_name, last_accessed DESC)")
         
         conn.commit()
-        conn.close()
         
         print(f"✅ Memory database initialized: {self.db_path}")
     
-    def _get_connection(self) -> sqlite3.Connection:
-        """Hent database connection"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def _get_connection(self):
+        """Hent database connection (thread-local via DatabaseManager)"""
+        return self.db.connection()
     
     # ==================== MESSAGE STORAGE ====================
     
@@ -416,7 +413,6 @@ class MemoryManager:
         
         message_id = c.lastrowid
         conn.commit()
-        conn.close()
         
         return message_id
     
@@ -444,7 +440,6 @@ class MemoryManager:
                 user_name=row['user_name'] if 'user_name' in row.keys() else 'Osmund'
             ))
         
-        conn.close()
         return messages
     
     def mark_message_processed(self, message_id: int):
@@ -453,7 +448,6 @@ class MemoryManager:
         c = conn.cursor()
         c.execute("UPDATE messages SET processed = 1 WHERE id = ?", (message_id,))
         conn.commit()
-        conn.close()
     
     # ==================== PROFILE FACTS ====================
     
@@ -471,7 +465,6 @@ class MemoryManager:
             # Dette beskytter mot at memory workeren ødelegger verifiserte fakta
             if existing['confidence'] >= 1.0 and fact.value != existing['value']:
                 print(f"⚠️ Blokkerer overskriving av verifisert fact: {fact.key} = '{existing['value']}' (forsøkte: '{fact.value}')", flush=True)
-                conn.close()
                 return False
             
             # Oppdater: øk frekvens, oppdater verdi hvis ny
@@ -500,7 +493,6 @@ class MemoryManager:
                   json.dumps(fact.metadata) if hasattr(fact, 'metadata') else '{}'))
         
         conn.commit()
-        conn.close()
         
         # Generer embedding for ny/oppdatert fact
         self.update_fact_embedding(fact.key)
@@ -536,7 +528,6 @@ class MemoryManager:
                 last_updated=row['last_updated']
             ))
         
-        conn.close()
         return facts
     
     def get_top_facts_cached(self, limit: int = 10) -> List[ProfileFact]:
@@ -634,7 +625,6 @@ class MemoryManager:
                     ))
                 
                 if facts:
-                    conn.close()
                     return facts
             except Exception:
                 pass  # Fall through
@@ -663,7 +653,6 @@ class MemoryManager:
                 ))
             
             if facts:
-                conn.close()
                 return facts
         except Exception:
             pass  # Fall through
@@ -695,7 +684,6 @@ class MemoryManager:
                 last_updated=row['last_updated']
             ))
         
-        conn.close()
         return facts
     
     # ==================== EMBEDDINGS ====================
@@ -754,7 +742,6 @@ class MemoryManager:
                     )
                 ))
         
-        conn.close()
         
         # Sorter etter similarity (høyest først)
         results.sort(key=lambda x: x[0], reverse=True)
@@ -772,7 +759,6 @@ class MemoryManager:
         row = c.fetchone()
         
         if not row:
-            conn.close()
             return
         
         # Generer embedding fra key + value + topic
@@ -786,7 +772,6 @@ class MemoryManager:
                      (embedding_blob, key))
             conn.commit()
         
-        conn.close()
     
     def rebuild_all_embeddings(self):
         """Generer embeddings for alle facts"""
@@ -795,7 +780,6 @@ class MemoryManager:
         
         c.execute("SELECT key FROM profile_facts")
         keys = [row[0] for row in c.fetchall()]
-        conn.close()
         
         print(f"Genererer embeddings for {len(keys)} facts...")
         for i, key in enumerate(keys, 1):
@@ -825,7 +809,6 @@ class MemoryManager:
         """, (topic,))
         
         existing = c.fetchall()
-        conn.close()
         
         if not existing:
             return None
@@ -915,7 +898,6 @@ class MemoryManager:
             """, (new_text, datetime.now().isoformat(), memory_id))
         
         conn.commit()
-        conn.close()
     
     def save_memory(self, memory: Memory, check_duplicates: bool = True, user_name: str = 'Osmund') -> int:
         """
@@ -953,7 +935,6 @@ class MemoryManager:
         
         memory_id = c.lastrowid
         conn.commit()
-        conn.close()
         
         # Oppdater topic stats
         self._update_topic_stats(memory.topic)
@@ -999,7 +980,6 @@ class MemoryManager:
         
         image_id = c.lastrowid
         conn.commit()
-        conn.close()
         
         print(f"✅ Saved image memory: {sender} - {description[:50]}...", flush=True)
         
@@ -1034,7 +1014,6 @@ class MemoryManager:
             """, (limit,))
         
         rows = c.fetchall()
-        conn.close()
         
         images = []
         for row in rows:
@@ -1077,7 +1056,6 @@ class MemoryManager:
         """, (search_pattern, search_pattern, search_pattern, limit))
         
         rows = c.fetchall()
-        conn.close()
         
         images = []
         for row in rows:
@@ -1116,7 +1094,6 @@ class MemoryManager:
         """, (people_str, image_id))
         
         conn.commit()
-        conn.close()
         
         print(f"✅ Updated people in image {image_id}: {', '.join(people)}", flush=True)
         
@@ -1143,7 +1120,6 @@ class MemoryManager:
         """, (search_pattern,))
         
         rows = c.fetchall()
-        conn.close()
         
         images = []
         for row in rows:
@@ -1171,7 +1147,6 @@ class MemoryManager:
         # FTS5 søk - først sjekk om det finnes noen minner
         c.execute("SELECT COUNT(*) as count FROM memories")
         if c.fetchone()['count'] == 0:
-            conn.close()
             return []
         
         # Preprosesser query for FTS5:
@@ -1181,7 +1156,6 @@ class MemoryManager:
         import re
         words = re.findall(r'\w+', query.lower())  # Ekstraher bare ord (fjerner -, ?, ! etc)
         if not words:
-            conn.close()
             return []
         
         # Lag FTS5-vennlig query: "word1 OR word2 OR word3"
@@ -1228,7 +1202,6 @@ class MemoryManager:
             
             scored_memories.append((memory, combined_score))
         
-        conn.close()
         
         # Sorter etter kombinert score
         scored_memories.sort(key=lambda x: x[1], reverse=True)
@@ -1313,7 +1286,6 @@ class MemoryManager:
                 )
                 results.append((similarity, memory, row[0]))  # (similarity, memory, id)
         
-        conn.close()
         
         # Sorter etter justert similarity (høyest først)
         results.sort(key=lambda x: x[0], reverse=True)
@@ -1339,7 +1311,6 @@ class MemoryManager:
             WHERE id = ?
         """, (datetime.now().isoformat(), memory_id))
         conn.commit()
-        conn.close()
     
     # ==================== TOPIC STATS ====================
     
@@ -1357,7 +1328,6 @@ class MemoryManager:
         """, (topic, datetime.now().isoformat(), datetime.now().isoformat()))
         
         conn.commit()
-        conn.close()
     
     def get_topic_stats(self, limit: int = 10) -> List[Dict]:
         """Hent topic statistikk"""
@@ -1379,7 +1349,6 @@ class MemoryManager:
                 'avg_importance': row['avg_importance']
             })
         
-        conn.close()
         return stats
     
     # ==================== SESSION STATE ====================
@@ -1442,7 +1411,6 @@ class MemoryManager:
                     expanded.append(fact)
                     seen_keys.add(row['key'])
         
-        conn.close()
         return expanded
 
     def build_context_for_ai(self, query: str, recent_messages: int = 5, user_name: str = None) -> Dict:
@@ -1487,7 +1455,6 @@ class MemoryManager:
         frequent_limit = int(settings.get('memory_frequent_facts_limit', MEMORY_FREQUENT_FACTS_LIMIT))
         max_facts = int(settings.get('max_context_facts', 100))
         
-        conn.close()
         
         # 1. Generer embedding ÉN gang (brukes for både facts og memories)
         query_embedding = self.generate_embedding(query)
@@ -1560,7 +1527,6 @@ class MemoryManager:
         
         recent_conv = [dict(row) for row in c.fetchall()]
         recent_conv.reverse()  # Eldst først
-        conn.close()
         
         # 8. Recent images (siste 5 bilder)
         recent_images = self.get_recent_images(limit=5)
@@ -1696,8 +1662,6 @@ class MemoryManager:
         except Exception as e:
             print(f"⚠️ Kunne ikke hente siste sesjon: {e}", flush=True)
             return None
-        finally:
-            conn.close()
     
     # ==================== MAINTENANCE ====================
     
@@ -1718,7 +1682,6 @@ class MemoryManager:
         
         affected = c.rowcount
         conn.commit()
-        conn.close()
         
         return affected
     
@@ -1736,7 +1699,6 @@ class MemoryManager:
         
         deleted = c.rowcount
         conn.commit()
-        conn.close()
         
         return deleted
     
@@ -1768,7 +1730,6 @@ class MemoryManager:
         # Performance metrics
         stats['performance'] = self.metrics.to_dict()
         
-        conn.close()
         return stats
 
 

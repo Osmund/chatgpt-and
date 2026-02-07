@@ -1336,7 +1336,6 @@ def main():
                     row = c.fetchone()
                     if row:
                         last_message_time = datetime.fromisoformat(row['timestamp'])
-                    conn.close()
                 
                 # Sjekk om timeout skal trigges
                 if user_manager.check_timeout(last_message_time):

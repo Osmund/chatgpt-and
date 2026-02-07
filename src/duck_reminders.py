@@ -10,11 +10,11 @@ Funksjoner:
 """
 
 import os
-import sqlite3
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
+from src.duck_database import get_db
 
 load_dotenv()
 
@@ -33,11 +33,12 @@ class ReminderManager:
     
     def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
         self.db_path = db_path
+        self.db = get_db(db_path)
         self._init_database()
     
     def _init_database(self):
         """Opprett reminders-tabell hvis den ikke finnes"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -54,7 +55,6 @@ class ReminderManager:
         """)
         
         conn.commit()
-        conn.close()
         print("✅ Reminders database initialized", flush=True)
     
     def set_reminder(self, message: str, remind_at: datetime, 
@@ -72,7 +72,7 @@ class ReminderManager:
         Returns:
             {'status': 'set', 'id': int, 'remind_at': str, 'type': str}
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -83,7 +83,6 @@ class ReminderManager:
         
         reminder_id = c.lastrowid
         conn.commit()
-        conn.close()
         
         type_str = "⏰ Alarm" if reminder_type == REMINDER_TYPE_ALARM else "🔔 Påminnelse"
         print(f"{type_str} satt: '{message}' kl {remind_at.strftime('%H:%M')}", flush=True)
@@ -104,8 +103,7 @@ class ReminderManager:
         Returns:
             Liste med forfallene påminnelser
         """
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         now = datetime.now().isoformat()
@@ -118,13 +116,12 @@ class ReminderManager:
         """, (now,))
         
         reminders = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         return reminders
     
     def mark_announced(self, reminder_id: int):
         """Marker en påminnelse som annonsert"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -134,30 +131,26 @@ class ReminderManager:
         """, (datetime.now().isoformat(), reminder_id))
         
         conn.commit()
-        conn.close()
     
     def cancel_reminder(self, reminder_id: int) -> Dict:
         """Avbryt en påminnelse"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("SELECT message, reminder_type FROM reminders WHERE id = ? AND status = 'pending'", (reminder_id,))
         row = c.fetchone()
         
         if not row:
-            conn.close()
             return {'status': 'not_found', 'message': f'Fant ingen pending påminnelse med id {reminder_id}'}
         
         c.execute("UPDATE reminders SET status = 'cancelled' WHERE id = ?", (reminder_id,))
         conn.commit()
-        conn.close()
         
         return {'status': 'cancelled', 'id': reminder_id, 'message': row[0]}
     
     def get_pending_reminders(self) -> List[Dict]:
         """Hent alle ventende påminnelser"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+        conn = self.db.connection()
         c = conn.cursor()
         
         c.execute("""
@@ -168,7 +161,6 @@ class ReminderManager:
         """)
         
         reminders = [dict(row) for row in c.fetchall()]
-        conn.close()
         
         return reminders
     
