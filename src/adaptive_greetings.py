@@ -6,9 +6,10 @@ Adaptive Greetings - Tilpasser Andas hilsener basert på personlighet
 import random
 from datetime import datetime
 from src.duck_database import get_db
+from src.duck_config import DB_PATH
 
 
-def get_adaptive_greeting(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", user_name: str = "på du") -> str:
+def get_adaptive_greeting(db_path: str = None, user_name: str = "på du") -> str:
     """
     Generer adaptiv hilsen basert på personlighetsprofil og tid på døgnet.
     
@@ -117,7 +118,7 @@ def get_adaptive_greeting(db_path: str = "/home/admog/Code/chatgpt-and/duck_memo
         return f"Hei {user_name}, hva kan jeg hjelpe deg med?"
 
 
-def get_adaptive_goodbye(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db") -> str:
+def get_adaptive_goodbye(db_path: str = None) -> str:
     """
     Generer adaptiv avslutningshilsen basert på personlighetsprofil.
     

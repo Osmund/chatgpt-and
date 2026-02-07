@@ -975,7 +975,8 @@ def trigger_backup():
     """
     try:
         # Kjør backup-script i bakgrunnen
-        script_path = "/home/admog/Code/chatgpt-and/backup-anda.sh"
+        from src.duck_config import BASE_PATH
+        script_path = os.path.join(BASE_PATH, "backup-anda.sh")
         
         if not os.path.exists(script_path):
             return "❌ Backup-script ikke funnet"

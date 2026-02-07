@@ -25,7 +25,7 @@ if not tts_key or not tts_region:
 HOTSPOT_MESSAGE = "Jeg kunne ikke koble til WiFi, så jeg starter en hotspot du kan koble til med telefonen. Koble til nettverket Chat G P T bindestrek Duck. Altså hot spotten heter Chat G P T bindestrek duck. Passord til hot spotten er kvakk kvakk, jeg gjentar kvakk kvakk . Gå deretter til ip adressen 192 punkt 168 punkt 50 punkt 1 i nettleseren på mobilen for å sette anda opp med WiFi."
 
 # Output file
-OUTPUT_DIR = Path("/home/admog/Code/chatgpt-and/audio")
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "audio"
 OUTPUT_FILE = OUTPUT_DIR / "hotspot_announcement.wav"
 
 # Create audio directory if it doesn't exist

@@ -5,7 +5,8 @@ Test Luxaflex gardin-kontroll
 
 import asyncio
 import sys
-sys.path.insert(0, '/home/admog/Code/chatgpt-and')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.duck_tools import control_luxaflex_blinds
 

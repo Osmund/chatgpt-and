@@ -221,11 +221,9 @@ Skriv et kort, hyggelig svar (maks 160 tegn) ELLER skriv "NO_RESPONSE" hvis samt
 
 def sms_polling_loop():
     """Poll relay for new SMS messages and duck-to-duck messages every 10 seconds"""
-    import sys
-    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_sms import SMSManager
-    from duck_messenger import DuckMessenger
-    from duck_services import get_services
+    from src.duck_sms import SMSManager
+    from src.duck_messenger import DuckMessenger
+    from src.duck_services import get_services
     
     relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no/register')
     base_url = relay_url.replace('/register', '')
@@ -364,10 +362,8 @@ def sms_polling_loop():
                                     print("⚠️ Vision features disabled - skipping image analysis", flush=True)
                             
                             # Forward to SMS handler (for text processing)
-                            import sys
-                            sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
                             from src.duck_services import get_services
-                            from duck_audio import speak
+                            from src.duck_audio import speak
                             
                             services = get_services()
                             sms_manager = services.get_sms_manager()
@@ -480,11 +476,9 @@ def sms_polling_loop():
 
 def reminder_checker_loop():
     """Sjekker påminnelser og alarmer hver 30. sekund"""
-    import sys
-    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_reminders import ReminderManager, REMINDER_TYPE_ALARM
-    from duck_sleep import is_sleeping, disable_sleep
-    from duck_memory import MemoryManager, Memory
+    from src.duck_reminders import ReminderManager, REMINDER_TYPE_ALARM
+    from src.duck_sleep import is_sleeping, disable_sleep
+    from src.duck_memory import MemoryManager, Memory
     
     reminder_mgr = ReminderManager()
     memory_mgr = MemoryManager()
@@ -544,9 +538,7 @@ def reminder_checker_loop():
 
 def boredom_timer_loop():
     """Increase boredom gradually every hour and check for triggers"""
-    import sys
-    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_sms import SMSManager
+    from src.duck_sms import SMSManager
     
     while True:
         time.sleep(3600)  # Every hour
@@ -565,7 +557,8 @@ def boredom_timer_loop():
                 
                 # 50% sjanse for å synge når hun kjeder seg litt
                 if random.random() < 0.5:
-                    musikk_dir = "/home/admog/Code/chatgpt-and/musikk"
+                    from src.duck_config import MUSIKK_DIR
+                    musikk_dir = MUSIKK_DIR
                     available_songs = [d for d in os.listdir(musikk_dir) 
                                      if os.path.isdir(os.path.join(musikk_dir, d)) and 
                                      os.path.exists(os.path.join(musikk_dir, d, "duck_mix.wav"))]
@@ -622,9 +615,7 @@ def boredom_timer_loop():
 
 def hunger_timer_loop():
     """Manage hunger system - Tamagotchi style!"""
-    import sys
-    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-    from duck_services import get_services
+    from src.duck_services import get_services
     
     services = get_services()
     hunger_manager = services.get_hunger_manager()
@@ -1004,8 +995,9 @@ def main():
                 time.sleep(2)  # Vent 2 sekunder før neste forsøk
     
     # Sjekk FØRST om det finnes en hotspot-annonsering (prioriteres over normal greeting)
+    from src.duck_config import BASE_PATH
     hotspot_announcement_file = '/tmp/duck_hotspot_announcement.txt'
-    hotspot_audio_file = '/home/admog/Code/chatgpt-and/audio/hotspot_announcement.wav'
+    hotspot_audio_file = os.path.join(BASE_PATH, 'audio', 'hotspot_announcement.wav')
     hotspot_active = False
     greeting_success = False
     
@@ -1392,9 +1384,7 @@ def main():
         
         # Reduce boredom when conversation starts
         try:
-            import sys
-            sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
-            from duck_sms import SMSManager
+            from src.duck_sms import SMSManager
             sms_manager = SMSManager()
             sms_manager.reduce_boredom(amount=2.0)
         except Exception as e:
@@ -1450,7 +1440,7 @@ def main():
                     time.sleep(2)
                     
                     # Kjør auto-hotspot.sh som håndterer alt (LED, announcement, portal, monitor)
-                    subprocess.Popen(['/home/admog/Code/chatgpt-and/scripts/auto-hotspot.sh'])
+                    subprocess.Popen([os.path.join(BASE_PATH, 'scripts', 'auto-hotspot.sh')])
                     
                     print("✅ Auto-hotspot startet!", flush=True)
                     
@@ -1508,9 +1498,13 @@ def main():
                 )
                 # LED fortsetter å blinke til speak() tar over (rød LED når lyd starter)
                 
-                # Håndter tuple-retur (svar, is_thank_you)
+                # Håndter tuple-retur (svar, is_thank_you, force_end)
+                force_end = False
                 if isinstance(result, tuple):
-                    reply, is_thank_you = result
+                    if len(result) == 3:
+                        reply, is_thank_you, force_end = result
+                    else:
+                        reply, is_thank_you = result
                 else:
                     reply = result
                     is_thank_you = False
@@ -1562,7 +1556,10 @@ def main():
                         print(f"⚠️ Kunne ikke lagre melding: {e}", flush=True)
                 
                 # Sjekk om samtalen skal avsluttes
-                if ai_wants_to_end:
+                if force_end:
+                    print("🔚 Samtale tvunget avsluttet (enable_sleep_mode el.l.)", flush=True)
+                    break
+                elif ai_wants_to_end:
                     print("🔚 Samtale avsluttet av AI", flush=True)
                     break
                 elif should_end_conversation:

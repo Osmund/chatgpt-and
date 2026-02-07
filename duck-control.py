@@ -215,9 +215,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/hunger-status':
             # Hent sultbarometer fra database
             try:
-                import sys
-                sys.path.insert(0, str(Path(__file__).parent / 'src'))
-                
                 hunger_manager = services.get_hunger_manager()
                 status = hunger_manager.get_status()
                 
@@ -321,7 +318,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/songs':
             # Hent liste over tilgjengelige sanger
             try:
-                music_dir = '/home/admog/Code/chatgpt-and/musikk'
+                music_dir = str(project_root / 'musikk')
                 songs = []
                 
                 if os.path.exists(music_dir):
@@ -334,7 +331,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                             if os.path.exists(mix_file) and os.path.exists(vocals_file):
                                 songs.append({
                                     'name': artist_song,
-                                    'path': song_path
+                                    'path': artist_song
                                 })
                 
                 # Sorter alfabetisk
@@ -364,7 +361,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/sms_history':
             # Hent SMS-historikk OG duck messages kombinert
             try:
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                db_path = str(project_root / 'duck_memory.db')
                 
                 conn = get_db().connection()
                 c = conn.cursor()
@@ -430,7 +427,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         elif self.path == '/sms_contacts':
             # Hent alle SMS-kontakter
             try:
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                db_path = str(project_root / 'duck_memory.db')
                 
                 conn = get_db().connection()
                 c = conn.cursor()
@@ -849,7 +846,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 put_data = self.rfile.read(content_length)
                 data = json.loads(put_data.decode())
                 
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                db_path = str(project_root / 'duck_memory.db')
                 
                 conn = get_db().connection()
                 c = conn.cursor()
@@ -939,7 +936,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             try:
                 contact_id = int(self.path.split('/sms_contacts/')[1])
                 
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                db_path = str(project_root / 'duck_memory.db')
                 
                 conn = get_db().connection()
                 c = conn.cursor()
@@ -1238,7 +1235,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 )
                 
                 print("  Running graceful shutdown...", flush=True)
-                shutdown_script = '/home/admog/Code/chatgpt-and/scripts/graceful-shutdown.sh'
+                shutdown_script = str(project_root / 'scripts' / 'graceful-shutdown.sh')
                 if os.path.exists(shutdown_script):
                     try:
                         subprocess.run(['bash', shutdown_script], timeout=30)
@@ -1395,6 +1392,10 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             song_path = data.get('song_path', '').strip()
             print(f"Sang-forespørsel: {song_path}", flush=True)
             
+            # Rekonstruer full path fra mappenavn (unngå å eksponere filsystemstier i API)
+            if song_path and not os.path.isabs(song_path):
+                song_path = str(project_root / 'musikk' / song_path)
+            
             if not song_path:
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
@@ -1507,7 +1508,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 post_data = self.rfile.read(content_length)
                 data = json.loads(post_data.decode())
                 
-                db_path = '/home/admog/Code/chatgpt-and/duck_memory.db'
+                db_path = str(project_root / 'duck_memory.db')
                 
                 conn = get_db().connection()
                 c = conn.cursor()
@@ -1756,8 +1757,6 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 
                 # Import SMS manager and handle
                 try:
-                    import sys
-                    sys.path.insert(0, '/home/admog/Code/chatgpt-and/src')
                     from duck_sms import SMSManager
                     
                     sms_manager = SMSManager()

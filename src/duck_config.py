@@ -73,9 +73,12 @@ FADE_MS = 150  # 150ms fade in/out
 BEAK_CHUNK_MS = 30  # Hvor ofte nebbet oppdateres (mindre = mer responsivt)
 BEAK_PRE_START_MS = 0  # Start nebb før aplay (negativ = etter aplay starter)
 
+# Music directory
+MUSIKK_DIR = os.path.join(BASE_PATH, "musikk")
+
 # ============ Porcupine Configuration ============
 PORCUPINE_ACCESS_KEY_ENV = "PORCUPINE_ACCESS_KEY"
-WAKE_WORD_PATH = "/home/admog/Code/chatgpt-and/Quack-quack.ppn"
+# WAKE_WORD_PATH is already defined above using BASE_PATH (line 40)
 
 # ============ Azure Configuration ============
 AZURE_SPEECH_KEY_ENV = "AZURE_SPEECH_KEY"

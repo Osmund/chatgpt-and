@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from twilio.rest import Client
 from src.duck_database import get_db
+from src.duck_config import DB_PATH
 
 load_dotenv()
 
@@ -27,8 +28,8 @@ class SMSManager:
     - Preferred hours respect
     """
     
-    def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or DB_PATH
         self.db = get_db(db_path)
         
         # Twilio credentials

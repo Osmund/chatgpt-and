@@ -15,7 +15,8 @@ from src.duck_database import get_db
 from src.duck_config import (
     DEFAULT_MODEL, MESSAGES_FILE,
     LOCATIONS_FILE, PERSONALITIES_FILE, SAMANTHA_IDENTITY_FILE,
-    OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV
+    OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV,
+    DB_PATH, BASE_PATH, MUSIKK_DIR
 )
 from src.duck_settings import get_settings
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
@@ -65,7 +66,7 @@ def _read_cached_text(filepath: str):
         return None
 
 
-def get_adaptive_personality_prompt(db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db", hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
+def get_adaptive_personality_prompt(db_path: str = None, hunger_level: float = 0.0, boredom_level: float = 0.0) -> str:
     """
     Hent dynamisk personlighetsprompt basert på læring fra samtaler.
     Modifiserer personligheten basert på emosjonell tilstand (sult/kjedsomhet).
@@ -1439,7 +1440,11 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         source_user_id: ID på bruker (for SMS autorisation)
         sms_manager: SMSManager instans
         vision_service: DuckVisionService instans (for Duck-Vision kamera)
+    
+    Returns:
+        bool: True hvis samtalen skal tvinges avsluttet (f.eks. enable_sleep_mode)
     """
+    force_end = False
     for tool_call in tool_calls:
         function_name = tool_call["function"]["name"]
         function_args = json.loads(tool_call["function"]["arguments"])
@@ -1739,7 +1744,9 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 sleep_result = enable_sleep(duration_minutes)
                 if sleep_result.get('success'):
                     end_time = sleep_result.get('end_time_formatted', '')
-                    # Legg til [AVSLUTT] for å umiddelbart avslutte samtalen og gå i sleep mode
+                    # Legg til [AVSLUTT] og sett force_end for å tvinge avslutning
+                    # (AI-modellen dropper ofte [AVSLUTT] fra sitt endelige svar)
+                    force_end = True
                     result = f"OK, jeg går i dvale i {duration_minutes} minutter (til {end_time}). Du kan våkne meg via SMS eller kontrollpanelet. God film! 🎬🦆 [AVSLUTT]"
                 else:
                     result = f"Kunne ikke aktivere sleep mode: {sleep_result.get('error', 'Ukjent feil')}"
@@ -1848,7 +1855,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             # Finn riktig mappe
             import os
             import random
-            musikk_dir = "/home/admog/Code/chatgpt-and/musikk"
+            musikk_dir = MUSIKK_DIR
             song_folder = None
             
             if song_name:
@@ -1872,12 +1879,14 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     random_song = random.choice(available_songs)
                     song_folder = os.path.join(musikk_dir, random_song)
                     result = f"🎵 SANG VALGT: {random_song}. Si KORT 'Nå synger jeg {random_song}!' + [AVSLUTT]. IKKE spør om mer."
+                    force_end = True
                 else:
                     result = "Fant ingen sanger å synge 😢"
                     song_folder = None
             else:
                 song_display = os.path.basename(song_folder)
                 result = f"🎵 SANG VALGT: {song_display}. Si KORT 'Nå synger jeg {song_display}!' + [AVSLUTT]. IKKE spør om mer."
+                force_end = True
             
             # Spill sangen via event bus
             if song_folder and os.path.exists(song_folder):
@@ -2050,6 +2059,8 @@ Viktig: Snakk om dette som kroppen din, ikke "systemet". Si "nebbet mitt" ikke "
             "name": function_name,
             "content": result
         })
+    
+    return force_end
 
 
 def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manager=None, sms_manager=None, hunger_manager=None, vision_service=None, source=None, source_user_id=None, enable_tools=True):
@@ -2153,7 +2164,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         final_messages.append(message)
         
         # Håndter alle tool calls
-        _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager, vision_service)
+        force_end = _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager, vision_service)
         
         # Kall API igjen med all tool data
         data["messages"] = final_messages
@@ -2188,7 +2199,7 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         user_message = messages[-1]["content"].lower() if messages else ""
         is_thank_you = any(word in user_message for word in ["takk", "tusen takk", "mange takk", "takker"])
         
-        return (reply_content, is_thank_you)
+        return (reply_content, is_thank_you, force_end)
     
     # Ingen function call, returner vanlig svar
     user_message = messages[-1]["content"].lower() if messages else ""

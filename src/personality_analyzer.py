@@ -13,6 +13,7 @@ from dataclasses import dataclass, asdict
 import os
 from dotenv import load_dotenv
 from src.duck_database import get_db
+from src.duck_config import DB_PATH
 
 # AI clients
 from openai import OpenAI
@@ -81,8 +82,8 @@ class PersonalityProfile:
 class PersonalityAnalyzer:
     """Analyserer samtaler og oppdaterer personlighetsprofil"""
     
-    def __init__(self, db_path: str = "/home/admog/Code/chatgpt-and/duck_memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or DB_PATH
         self.db = get_db(db_path)
         self._init_personality_table()
         self.user_manager = UserManager(db_path=db_path)
