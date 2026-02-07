@@ -80,8 +80,8 @@
 - [x] Fjern 13+ hardkodede `/home/admog/Code/chatgpt-and/`-stier — bruk `BASE_PATH`/`DB_PATH` fra duck_config.py *(commit pending, 7. feb 2026)*
 - [x] Fiks 9x `sys.path.insert`-hacks — én `sys.path` per entry point, fiks pakkestruktur *(commit pending, 7. feb 2026)*
 - [ ] Splitt `duck_ai.py` (2074 linjer) — flytt tool-definisjoner til `duck_tool_definitions.py`, bryt opp `_build_system_prompt()`
-- [ ] Splitt `duck-control.py` (1925 linjer) — flytt inline SQL til DuckAPIHandlers, vurder Flask
-- [ ] Fiks requirements.txt — `audioop-lts` er klebet til `requests`-kommentaren, mangler `paho-mqtt`, `twilio`
+- [ ] Splitt `duck-control.py` (1879 linjer) — flytt ~30 inline SQL-operasjoner til DuckAPIHandlers (connection management allerede fikset via DatabaseManager)
+- [x] Fiks requirements.txt — `audioop-lts` var klebet til `requests`-kommentaren, la til `paho-mqtt`, `twilio` *(commit pending, 7. feb 2026)*
 - [ ] Dokumentere PYTHONPATH-kravet i README/INSTALL.md
 - [x] Vurder dynamisk BASE_PATH i service-filer *(løst: alle stier bruker nå BASE_PATH/DB_PATH/MUSIKK_DIR fra duck_config.py)*
 - [ ] Legg til mer omfattende error handling

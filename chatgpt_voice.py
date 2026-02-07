@@ -1324,6 +1324,11 @@ def main():
                 announcement = external_message.replace('__HOTSPOT_ANNOUNCEMENT__', '', 1)
                 speak(announcement, speech_config, beak)
                 continue  # Gå tilbake til wake word
+            elif external_message.startswith('__REMINDER__'):
+                # Påminnelse/alarm announcement
+                announcement = external_message.replace('__REMINDER__', '', 1)
+                speak(announcement, speech_config, beak)
+                continue  # Gå tilbake til wake word
             elif external_message.startswith('__PLAY_SONG__'):
                 # Spill av en sang
                 song_path = external_message.replace('__PLAY_SONG__', '', 1)

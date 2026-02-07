@@ -169,6 +169,13 @@ def wait_for_wake_word():
                             elif event_type == Event.HOTSPOT_ANNOUNCEMENT:
                                 print(f"📡 Hotspot announcement: {str(data)[:50]}...", flush=True)
                                 return f"__HOTSPOT_ANNOUNCEMENT__{data}"
+                            elif event_type == Event.REMINDER:
+                                announcement = data.get('announcement') if isinstance(data, dict) else data
+                                is_alarm = data.get('is_alarm', False) if isinstance(data, dict) else False
+                                if announcement:
+                                    emoji = "⏰" if is_alarm else "🔔"
+                                    print(f"{emoji} Reminder mottatt i wake word loop: {announcement[:50]}...", flush=True)
+                                    return f"__REMINDER__{announcement}"
                             elif event_type == Event.PLAY_SONG:
                                 song_path = data.get('path') if isinstance(data, dict) else data
                                 if song_path:

@@ -20,6 +20,11 @@ adafruit-circuitpython-servokit>=1.3.0 # PCA9685 servo control
 
 # Utilities
 python-dotenv>=1.0.0                   # Environment variable management
-requests>=2.31.0                       # HTTP requests for web featuresaudioop-lts>=0.2.2                      # Python 3.13+ audioop replacement
+requests>=2.31.0                       # HTTP requests for web features
+audioop-lts>=0.2.2                     # Python 3.13+ audioop replacement
 beautifulsoup4>=4.12.0                 # HTML parsing for web scraping
-Pillow
+Pillow                                 # Image processing
+
+# Communication
+twilio>=9.0.0                          # SMS sending/receiving via Twilio
+paho-mqtt>=2.0.0                       # MQTT for Duck-Vision (Pi 5 camera)
