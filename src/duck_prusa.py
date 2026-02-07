@@ -34,6 +34,12 @@ class PrusaLinkManager:
         # Polling thread
         self.polling_thread = None
         self.stop_polling = False
+        self._monitoring_active = False
+    
+    @property
+    def is_monitoring(self) -> bool:
+        """Check if monitoring is currently active"""
+        return self._monitoring_active
     
     def is_configured(self) -> bool:
         """Check if PrusaLink is properly configured"""
@@ -211,6 +217,7 @@ class PrusaLinkManager:
         
         self.polling_thread = threading.Thread(target=self._monitoring_loop, args=(poll_interval,), daemon=True)
         self.polling_thread.start()
+        self._monitoring_active = True
         
         logger.info("🖨️ PrusaLink monitoring started")
         return True
@@ -251,7 +258,65 @@ class PrusaLinkManager:
         self.stop_polling = True
         if self.polling_thread:
             self.polling_thread.join(timeout=5)
+        self._monitoring_active = False
+        self.last_state = None
         logger.info("🖨️ PrusaLink monitoring stopped")
+
+
+def toggle_3d_printer(action: str, 
+                      on_print_finished=None, 
+                      on_print_failed=None) -> str:
+    """
+    Turn 3D printer on/off via Hue smart plug and manage monitoring.
+    
+    Args:
+        action: "on" or "off"
+        on_print_finished: Callback when print finishes (only for "on")
+        on_print_failed: Callback when print fails (only for "on")
+    
+    Returns:
+        Human-readable status message in Norwegian
+    """
+    from src.duck_tools import control_hue_lights
+    
+    prusa = get_prusa_manager()
+    
+    if not prusa.is_configured():
+        return "3D-printeren er ikke konfigurert. PRUSALINK_API_KEY og PRUSALINK_HOST mangler i .env."
+    
+    if action == "on":
+        if prusa.is_monitoring:
+            return "3D-printeren er allerede på og overvåkes."
+        
+        # Turn on smart plug via Hue
+        plug_result = control_hue_lights("on", "3D printer")
+        logger.info(f"🖨️ Smart plug result: {plug_result}")
+        
+        # Wait for printer to boot up
+        logger.info("🖨️ Waiting 20 seconds for printer to boot...")
+        time.sleep(20)
+        
+        # Start monitoring
+        prusa.start_monitoring(
+            on_print_finished=on_print_finished,
+            on_print_failed=on_print_failed
+        )
+        
+        return "Jeg har skrudd på 3D-printeren og startet overvåking. Det tar litt tid før den er helt klar."
+    
+    elif action == "off":
+        # Stop monitoring first
+        if prusa.is_monitoring:
+            prusa.stop_monitoring()
+        
+        # Turn off smart plug via Hue
+        plug_result = control_hue_lights("off", "3D printer")
+        logger.info(f"🖨️ Smart plug off result: {plug_result}")
+        
+        return "Jeg har skrudd av 3D-printeren og stoppet overvåking."
+    
+    else:
+        return f"Ugyldig handling: {action}. Bruk 'on' eller 'off'."
 
 
 # Global singleton instance

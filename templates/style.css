@@ -472,6 +472,14 @@ button:active { transform: translateY(0); }
 }
 
 .printer-panel { padding: 12px; background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80; text-align: center; }
+.printer-toggle-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
+.printer-power-btn { min-width: 120px; font-size: 1em; padding: 8px 16px; border-radius: 8px; border: 2px solid; cursor: pointer; transition: all 0.3s; }
+.printer-power-btn.printer-off { background: #f5f5f5; color: #666; border-color: #ccc; }
+.printer-power-btn.printer-off:hover { background: #e8f5e9; border-color: #4caf50; color: #388e3c; }
+.printer-power-btn.printer-on { background: #e8f5e9; color: #388e3c; border-color: #4caf50; }
+.printer-power-btn.printer-on:hover { background: #ffebee; border-color: #f44336; color: #d32f2f; }
+.printer-power-btn:disabled { opacity: 0.6; cursor: wait; }
+.printer-toggle-status { font-weight: bold; font-size: 0.9em; }
 .printer-emoji-row { font-size: 1.5em; margin: 8px 0; }
 .printer-state { font-weight: bold; color: #e65100; margin: 6px 0; }
 .printer-job { font-size: 0.85em; color: #666; }

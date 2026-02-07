@@ -885,32 +885,17 @@ def main():
     hunger_timer_thread.start()
     print("✅ Hunger timer started (Tamagotchi mode activated! 🍪🍕)", flush=True)
     
-    # Start 3D printer monitoring thread
+    # Initialize 3D printer manager (on-demand monitoring - activated via voice or control panel)
     try:
         from src.duck_prusa import get_prusa_manager
         
-        def on_print_finished(job_name):
-            """Callback når 3D-print er ferdig"""
-            try:
-                message = f"🖨️ 3D-printen din er ferdig! {job_name} er klar til å plukkes opp."
-                # Post prusa event til main loop
-                bus = get_event_bus()
-                bus.post(Event.PRUSA_ANNOUNCEMENT, message)
-                print(f"✅ Prusa: Print ferdig - {job_name}", flush=True)
-            except Exception as e:
-                print(f"⚠️ Prusa callback feilet: {e}", flush=True)
-        
         prusa = get_prusa_manager()
         if prusa.is_configured():
-            prusa.start_monitoring(
-                on_print_finished=on_print_finished,
-                on_print_failed=lambda job: print(f"⚠️ Prusa: Print feilet - {job}", flush=True)
-            )
-            print("✅ 3D printer monitoring started", flush=True)
+            print("✅ 3D printer configured (on-demand monitoring - say 'skru på 3D-printeren' to activate)", flush=True)
         else:
-            print("ℹ️ 3D printer not configured (PRUSA_API_TOKEN/PRUSA_PRINTER_UUID missing)", flush=True)
+            print("ℹ️ 3D printer not configured (PRUSALINK_API_KEY/PRUSALINK_HOST missing)", flush=True)
     except Exception as e:
-        print(f"⚠️ 3D printer monitoring kunne ikke startes: {e}", flush=True)
+        print(f"⚠️ 3D printer init feilet: {e}", flush=True)
     
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")

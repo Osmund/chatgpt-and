@@ -1839,6 +1839,17 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json_response({'status': 'error', 'message': str(e)}, 400)
         
+        elif self.path == '/api/printer/toggle':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                action = data.get('action', 'on')  # "on" or "off"
+                response = api_handlers.handle_printer_toggle(action)
+                self.send_json_response(response, 200 if response.get('success') else 500)
+            except Exception as e:
+                self.send_json_response({'success': False, 'message': str(e)}, 400)
+        
         else:
             self.send_response(404)
             self.end_headers()

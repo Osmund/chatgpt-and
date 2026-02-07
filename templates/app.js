@@ -1642,7 +1642,10 @@ async function feedAnda(foodType) {
     }
 }
 
-// 3D Printer Status
+// 3D Printer Status & Toggle
+let printerMonitoring = false;
+let printerPollingInterval = null;
+
 async function loadPrinterStatus() {
     try {
         const response = await fetch('/api/printer/status');
@@ -1651,27 +1654,46 @@ async function loadPrinterStatus() {
         const loadingEl = document.getElementById('printer-loading');
         const statusEl = document.getElementById('printer-status');
         const errorEl = document.getElementById('printer-error');
+        const offMsgEl = document.getElementById('printer-off-message');
         
         // Hide loading
         loadingEl.style.display = 'none';
         
+        // Update toggle button state
+        printerMonitoring = data.monitoring || false;
+        updatePrinterToggleButton();
+        
         if (data.status === 'not_configured') {
             errorEl.style.display = 'block';
             statusEl.style.display = 'none';
+            offMsgEl.style.display = 'none';
             document.getElementById('printer-error-text').textContent = 'PrusaLink ikke konfigurert';
+            return;
+        }
+        
+        if (data.status === 'off') {
+            statusEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            offMsgEl.style.display = 'block';
+            stopPrinterPolling();
             return;
         }
         
         if (data.status === 'error') {
             errorEl.style.display = 'block';
             statusEl.style.display = 'none';
+            offMsgEl.style.display = 'none';
             document.getElementById('printer-error-text').textContent = data.message || 'Ukjent feil';
             return;
         }
         
         // Show printer status
         errorEl.style.display = 'none';
+        offMsgEl.style.display = 'none';
         statusEl.style.display = 'block';
+        
+        // Auto-start polling if printer is on
+        startPrinterPolling();
         
         const printer = data.printer;
         const state = printer.state;
@@ -1745,6 +1767,81 @@ async function loadPrinterStatus() {
         document.getElementById('printer-loading').style.display = 'none';
         document.getElementById('printer-error').style.display = 'block';
         document.getElementById('printer-error-text').textContent = 'Kunne ikke hente status: ' + error.message;
+    }
+}
+
+function updatePrinterToggleButton() {
+    const btn = document.getElementById('printer-toggle-btn');
+    const label = document.getElementById('printer-power-label');
+    const statusText = document.getElementById('printer-toggle-status');
+    
+    if (printerMonitoring) {
+        btn.classList.remove('printer-off');
+        btn.classList.add('printer-on');
+        label.textContent = 'Skru av';
+        statusText.textContent = 'På';
+        statusText.style.color = '#4caf50';
+    } else {
+        btn.classList.remove('printer-on');
+        btn.classList.add('printer-off');
+        label.textContent = 'Skru på';
+        statusText.textContent = 'Av';
+        statusText.style.color = '#999';
+    }
+}
+
+async function togglePrinter() {
+    const btn = document.getElementById('printer-toggle-btn');
+    const label = document.getElementById('printer-power-label');
+    const action = printerMonitoring ? 'off' : 'on';
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    label.textContent = action === 'on' ? 'Skrur på...' : 'Skrur av...';
+    
+    try {
+        const response = await fetch('/api/printer/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            printerMonitoring = data.monitoring;
+            updatePrinterToggleButton();
+            
+            if (printerMonitoring) {
+                // Start polling status every 30s when printer is on
+                startPrinterPolling();
+            } else {
+                stopPrinterPolling();
+                // Hide status, show off message
+                document.getElementById('printer-status').style.display = 'none';
+                document.getElementById('printer-off-message').style.display = 'block';
+            }
+            
+            // Reload status after a short delay
+            setTimeout(loadPrinterStatus, 2000);
+        } else {
+            alert('Feil: ' + (data.message || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Kunne ikke toggle printer: ' + error.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function startPrinterPolling() {
+    if (printerPollingInterval) return;
+    printerPollingInterval = setInterval(loadPrinterStatus, 30000);
+}
+
+function stopPrinterPolling() {
+    if (printerPollingInterval) {
+        clearInterval(printerPollingInterval);
+        printerPollingInterval = null;
     }
 }
 

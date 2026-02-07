@@ -764,7 +764,17 @@ class DuckAPIHandlers:
             if not prusa.is_configured():
                 return {
                     'status': 'not_configured',
+                    'monitoring': False,
                     'message': 'PrusaLink ikke konfigurert'
+                }
+            
+            monitoring = prusa.is_monitoring
+            
+            if not monitoring:
+                return {
+                    'status': 'off',
+                    'monitoring': False,
+                    'message': 'Printeren er avslått. Skru den på for å se status.'
                 }
             
             printer_status = prusa.get_printer_status()
@@ -772,11 +782,13 @@ class DuckAPIHandlers:
             if not printer_status:
                 return {
                     'status': 'error',
+                    'monitoring': True,
                     'message': 'Kunne ikke hente printerstatus'
                 }
             
             return {
                 'status': 'success',
+                'monitoring': True,
                 'printer': {
                     'state': printer_status['state'],
                     'progress': printer_status.get('progress', 0),
@@ -791,6 +803,46 @@ class DuckAPIHandlers:
         except Exception as e:
             return {
                 'status': 'error',
+                'monitoring': False,
+                'message': f'Feil: {str(e)}'
+            }
+    
+    def handle_printer_toggle(self, action: str) -> Dict[str, Any]:
+        """Toggle 3D printer on/off via smart plug and monitoring"""
+        try:
+            from duck_prusa import toggle_3d_printer, get_prusa_manager
+            from duck_event_bus import get_event_bus, Event
+            
+            prusa = get_prusa_manager()
+            if not prusa.is_configured():
+                return {
+                    'success': False,
+                    'message': 'PrusaLink ikke konfigurert'
+                }
+            
+            # Set up callbacks for print events
+            def _on_print_finished(job_name):
+                try:
+                    message = f"🖨️ 3D-printen er ferdig! {job_name} er klar."
+                    bus = get_event_bus()
+                    bus.post(Event.PRUSA_ANNOUNCEMENT, message)
+                except Exception:
+                    pass
+            
+            result_msg = toggle_3d_printer(
+                action,
+                on_print_finished=_on_print_finished,
+                on_print_failed=lambda job: print(f"⚠️ Prusa: Print feilet - {job}", flush=True)
+            )
+            
+            return {
+                'success': True,
+                'monitoring': prusa.is_monitoring,
+                'message': result_msg
+            }
+        except Exception as e:
+            return {
+                'success': False,
                 'message': f'Feil: {str(e)}'
             }
     

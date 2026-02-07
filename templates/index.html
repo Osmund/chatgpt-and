@@ -481,8 +481,14 @@
                     <div class="settings-group">
                         <h3 class="settings-group-title">🖨️ 3D Printer</h3>
                         <div id="printer-panel" class="printer-panel">
+                            <div class="printer-toggle-row">
+                                <button id="printer-toggle-btn" class="btn printer-power-btn printer-off" onclick="togglePrinter()">
+                                    <span id="printer-power-icon">⏻</span> <span id="printer-power-label">Skru på</span>
+                                </button>
+                                <span id="printer-toggle-status" class="printer-toggle-status">Av</span>
+                            </div>
                             <div id="printer-status-container">
-                                <div id="printer-loading" class="loading-text"><span style="font-size:1.5em;">⏳</span><br>Henter status...</div>
+                                <div id="printer-loading" class="loading-text" style="display:none;"><span style="font-size:1.5em;">⏳</span><br>Henter status...</div>
                                 <div id="printer-status" style="display:none;">
                                     <div class="printer-emoji-row"><span id="printer-emoji">🖨️</span></div>
                                     <div class="printer-state"><span id="printer-state-text">IDLE</span></div>
@@ -499,6 +505,7 @@
                                     </div>
                                     <div id="printer-message" class="printer-message"></div>
                                 </div>
+                                <div id="printer-off-message" style="display:block;"><span style="font-size:0.9em; color:#888;">Printeren er avslått. Trykk knappen for å skru på.</span></div>
                                 <div id="printer-error" style="display:none; color:#d32f2f;">❌ <span id="printer-error-text"></span></div>
                             </div>
                         </div>

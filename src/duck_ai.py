@@ -369,7 +369,7 @@ def _check_sms_authorization(function_name: str, source: str, source_user_id: in
     protected_functions = [
         "control_hue_lights", "control_tv", "launch_tv_app", 
         "control_ac", "control_vacuum", "control_twinkly", 
-        "control_blinds", "activate_scene"
+        "control_blinds", "activate_scene", "toggle_3d_printer"
     ]
     
     # Kun sjekk for SMS-kall til beskyttede funksjoner
@@ -1254,11 +1254,29 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "check_3d_printer",
-                "description": "Sjekk 3D-printer status via PrusaLink. Progress, estimert tid, hva som printes.",
+                "description": "Sjekk 3D-printer status via PrusaLink. Progress, estimert tid, hva som printes. Printeren må være skrudd på først (toggle_3d_printer).",
                 "parameters": {
                     "type": "object",
                     "properties": {},
                     "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "toggle_3d_printer",
+                "description": "Skru 3D-printeren PÅ eller AV via smartplugg (Philips Hue). Når den skrus på starter også overvåking automatisk. Bruk denne når brukeren vil skru på/av printeren.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["on", "off"],
+                            "description": "'on' = skru på printeren og start overvåking, 'off' = skru av og stopp overvåking"
+                        }
+                    },
+                    "required": ["action"]
                 }
             }
         },
@@ -1866,12 +1884,33 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             prusa = get_prusa_manager()
             if not prusa.is_configured():
                 result = "3D-printeren er ikke konfigurert. Be Osmund om å sette opp PRUSALINK_API_KEY og PRUSALINK_HOST i .env filen."
+            elif not prusa.is_monitoring:
+                result = "3D-printeren er ikke skrudd på. Bruk toggle_3d_printer for å skru den på først."
             else:
                 status = prusa.get_printer_status()
                 if status:
                     result = prusa.get_human_readable_status(status)
                 else:
-                    result = "Kunne ikke hente status fra 3D-printeren. Sjekk internettforbindelse eller at printeren er på."
+                    result = "Kunne ikke hente status fra 3D-printeren. Sjekk at den er på og koblet til nettverket."
+        elif function_name == "toggle_3d_printer":
+            from src.duck_prusa import toggle_3d_printer as _toggle_printer
+            from src.duck_event_bus import get_event_bus, Event
+            action = function_args.get("action", "on")
+            
+            # Set up callbacks for print finished/failed events
+            def _on_print_finished(job_name):
+                try:
+                    message = f"🖨️ 3D-printen din er ferdig! {job_name} er klar til å plukkes opp."
+                    bus = get_event_bus()
+                    bus.post(Event.PRUSA_ANNOUNCEMENT, message)
+                except Exception as e:
+                    print(f"⚠️ Prusa callback feilet: {e}", flush=True)
+            
+            result = _toggle_printer(
+                action, 
+                on_print_finished=_on_print_finished,
+                on_print_failed=lambda job: print(f"⚠️ Prusa: Print feilet - {job}", flush=True)
+            )
         elif function_name == "web_search":
             query = function_args.get("query", "")
             count = function_args.get("count", 5)
