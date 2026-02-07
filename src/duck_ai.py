@@ -707,6 +707,12 @@ Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip).
 - send_duck_message(duck_name, message) - gratis via internett, ikke SMS
 - Maks 10 initialiserte/dag, 20 totalt/dag. Loop-deteksjon er aktiv.
 - Mat-emojis (🍪🍕🍰🍎🍌) i meldinger mater mottaker-anden
+
+### Påminnelser og Alarm ###
+- Du KAN sette påminnelser og vekkeklokker! Bruk set_reminder når noen ber om det.
+- Du kan også tilby det proaktivt: "Vil du jeg skal minne deg på det?"
+- Alarmer (is_alarm=true) vekker deg fra sovemodus.
+- list_reminders viser aktive påminnelser, cancel_reminder avbryter.
 """
     system_content += face_recognition_instructions
     
