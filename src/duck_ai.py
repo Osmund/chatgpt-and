@@ -2002,10 +2002,11 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             query_type = function_args.get("query_type", "standings")
             team_name = function_args.get("team_name", "")
             count = function_args.get("count", 10)
-            if query_type == "standings":
-                result = get_pl_standings(top_n=min(count, 20))
-            elif query_type == "team" and team_name:
+            # Hvis team_name er oppgitt, bruk alltid lag-oppslag uansett query_type
+            if team_name:
                 result = get_pl_matches(match_type=team_name, count=count)
+            elif query_type == "standings":
+                result = get_pl_standings(top_n=min(count, 20))
             elif query_type == "recent":
                 result = get_pl_matches(match_type="recent", count=count)
             elif query_type == "upcoming":

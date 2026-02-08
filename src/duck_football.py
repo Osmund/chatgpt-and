@@ -6,7 +6,7 @@ Gir tabell, resultater og kommende kamper for Samantha/Anda.
 import requests
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -233,38 +233,66 @@ def _get_team_matches(team_name: str, count: int) -> str:
     if not team_id:
         return f"Fant ikke laget '{team_name}' i Premier League."
     
-    # Hent lagets kamper
+    # Hent lagets kamper med datoperiode (siste 30 dager + neste 30 dager)
+    now = datetime.now(timezone.utc)
+    date_from = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    date_to = (now + timedelta(days=30)).strftime("%Y-%m-%d")
+    
     resp = requests.get(
         f"{BASE_URL}/teams/{team_id}/matches",
         headers=HEADERS,
-        params={"competitions": "PL", "limit": count},
+        params={"competitions": "PL", "dateFrom": date_from, "dateTo": date_to},
         timeout=10
     )
     resp.raise_for_status()
     data = resp.json()
     
     matches = data.get("matches", [])
+    matches.sort(key=lambda m: m["utcDate"])
     
     if not matches:
         return f"Ingen kamper funnet for {team_display}."
     
-    lines = [f"Kamper for {team_display}:", ""]
+    # Finn lagets tabellposisjon
+    team_pos = None
+    team_points = None
+    for entry in total["table"]:
+        if entry["team"]["id"] == team_id:
+            team_pos = entry["position"]
+            team_points = entry["points"]
+            break
     
-    for match in matches:
-        date = datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00"))
-        date_str = date.strftime("%d. %b")
-        
-        home = _short_name(match["homeTeam"]["name"])
-        away = _short_name(match["awayTeam"]["name"])
-        status = match["status"]
-        
-        if status == "FINISHED":
+    header = f"Kamper for {team_display}"
+    if team_pos:
+        header += f" ({team_pos}. plass, {team_points} poeng)"
+    lines = [f"{header}:", ""]
+    
+    # Del opp i resultater og kommende
+    finished = [m for m in matches if m["status"] == "FINISHED"]
+    upcoming = [m for m in matches if m["status"] in ("TIMED", "SCHEDULED")]
+    
+    if finished:
+        lines.append("Siste resultater:")
+        for match in finished[-5:]:  # Siste 5 resultater
+            date = datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00"))
+            date_str = date.strftime("%d. %b")
+            home = _short_name(match["homeTeam"]["name"])
+            away = _short_name(match["awayTeam"]["name"])
             score = match.get("score", {}).get("fullTime", {})
             home_goals = score.get("home", "?")
             away_goals = score.get("away", "?")
             lines.append(f"  {date_str}: {home} {home_goals}-{away_goals} {away}")
-        else:
+    
+    if upcoming:
+        if finished:
+            lines.append("")
+        lines.append("Kommende kamper:")
+        for match in upcoming[:5]:  # Neste 5 kamper
+            date = datetime.fromisoformat(match["utcDate"].replace("Z", "+00:00"))
+            date_str = date.strftime("%d. %b")
             time_str = date.strftime("%H:%M")
+            home = _short_name(match["homeTeam"]["name"])
+            away = _short_name(match["awayTeam"]["name"])
             lines.append(f"  {date_str}: {home} vs {away} kl. {time_str}")
     
     return "\n".join(lines)
