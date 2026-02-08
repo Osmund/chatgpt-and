@@ -14,9 +14,10 @@ from src.duck_database import get_db
 
 from src.duck_config import (
     DEFAULT_MODEL, MESSAGES_FILE,
-    LOCATIONS_FILE, PERSONALITIES_FILE, SAMANTHA_IDENTITY_FILE,
+    LOCATIONS_FILE, PERSONALITIES_FILE, DUCK_IDENTITY_FILE,
     OPENAI_API_KEY_ENV, HA_TOKEN_ENV, HA_URL_ENV,
-    DB_PATH, BASE_PATH, MUSIKK_DIR
+    DB_PATH, BASE_PATH, MUSIKK_DIR, DUCK_NAME as CONFIG_DUCK_NAME,
+    OWNER_NAME, OWNER_ALIASES
 )
 from src.duck_settings import get_settings
 from src.duck_tools import get_weather, control_hue_lights, get_ip_address_tool, get_netatmo_temperature
@@ -572,19 +573,19 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
             elif 'kollega' in relation or 'colleague' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
                 perspective_context += f"- {current_user['display_name']} er {primary_user['username']}s kollega, ikke familiemedlem.\n"
-                perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
-                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
+                perspective_context += f"- Fakta om familie er {OWNER_NAME}s familie, ikke {current_user['display_name']} sin.\n"
+                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om {OWNER_NAME}s familie.\n"
                 perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
             elif 'venn' in relation or 'kamerat' in relation or 'friend' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
                 perspective_context += f"- {current_user['display_name']} er {primary_user['username']}s venn, ikke familiemedlem.\n"
-                perspective_context += f"- Fakta om familie er Osmunds familie, ikke {current_user['display_name']} sin.\n"
-                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om OSMUNDS familie.\n"
+                perspective_context += f"- Fakta om familie er {OWNER_NAME}s familie, ikke {current_user['display_name']} sin.\n"
+                perspective_context += f"- Når {current_user['display_name']} spør om familie, snakker vedkommende om {OWNER_NAME}s familie.\n"
                 perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin private familie med mindre det er eksplisitt lagret.\n"
             elif 'gjest' in relation or 'guest' in relation:
                 perspective_context += f"VIKTIG PERSPEKTIV:\n"
                 perspective_context += f"- {current_user['display_name']} er gjest, ikke familiemedlem.\n"
-                perspective_context += f"- Alle fakta om familie er Osmunds familie.\n"
+                perspective_context += f"- Alle fakta om familie er {OWNER_NAME}s familie.\n"
                 perspective_context += f"- Du kjenner ikke {current_user['display_name']} sin bakgrunn med mindre det er eksplisitt lagret.\n"
             
             perspective_context += f"\nHvis du er usikker på perspektiv: Si 'Jeg har ikke nok informasjon om det' i stedet for å gjette.\n"
@@ -668,12 +669,12 @@ def _build_system_prompt(user_manager, memory_manager, hunger_manager, sms_manag
         except Exception as e:
             print(f"⚠️ Kunne ikke bygge memory context: {e}", flush=True)
     
-    # Legg til Samanthas identitet fra konfigurasjonsfil (mtime-cached)
+    # Legg til andas identitet fra konfigurasjonsfil (mtime-cached)
     try:
-        identity = _read_cached_json(SAMANTHA_IDENTITY_FILE)
+        identity = _read_cached_json(DUCK_IDENTITY_FILE)
         if identity:
             
-            samantha_identity = f"""
+            duck_identity = f"""
 
 ### Din identitet ###
 Du er {identity['name']} - {identity['type']}.
@@ -684,30 +685,30 @@ Du er {identity['name']} - {identity['type']}.
 Dine fysiske egenskaper:
 """
             for feature in identity.get('physical_features', []):
-                samantha_identity += f"- {feature}\n"
+                duck_identity += f"- {feature}\n"
             
-            samantha_identity += "\nDin personlighet:\n"
+            duck_identity += "\nDin personlighet:\n"
             for trait in identity.get('personality_traits', []):
-                samantha_identity += f"- {trait}\n"
+                duck_identity += f"- {trait}\n"
             
-            samantha_identity += "\nDine preferanser:\n"
+            duck_identity += "\nDine preferanser:\n"
             for pref in identity.get('preferences', []):
-                samantha_identity += f"- {pref}\n"
+                duck_identity += f"- {pref}\n"
             
             if identity.get('additional_info'):
-                samantha_identity += "\nEkstra info:\n"
+                duck_identity += "\nEkstra info:\n"
                 for info in identity['additional_info']:
-                    samantha_identity += f"- {info}\n"
+                    duck_identity += f"- {info}\n"
             
             # Kort teknisk kontekst (detaljer tilgjengelig via get_technical_info tool)
-            creator_name = primary_user['username'] if primary_user else 'Osmund'
-            samantha_identity += f"""
+            creator_name = primary_user['username'] if primary_user else identity.get('creator', 'eieren')
+            duck_identity += f"""
 
 Du er en fysisk and med RPi4-hjerne, servo-nebb, RGB LED og mikrofon. Skapt av {creator_name}.
 Når folk spør hvordan du fungerer, kall get_technical_info() for detaljer. Snakk om kroppen din, ikke "systemet".
 """
             
-            system_content += samantha_identity
+            system_content += duck_identity
     except Exception as e:
         print(f"⚠️ Kunne ikke laste identitet: {e}", flush=True)
     
@@ -787,10 +788,46 @@ Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip) med mikrofon.
 def _get_function_tools():
     """
     Returnerer liste over alle tilgjengelige function tools for ChatGPT.
+    Filtrerer basert på feature flags i duck_config.
     
     Returns:
         list: Liste med tool definitions
     """
+    from src.duck_audio import control_beak
+    from src.duck_config import ENABLE_HOME_ASSISTANT, ENABLE_PRUSALINK, ENABLE_DUCK_VISION
+    
+    # Tools som krever Home Assistant
+    HA_TOOLS = {
+        'control_tv', 'launch_tv_app', 'control_ac', 'control_vacuum',
+        'control_twinkly', 'control_blinds', 'get_email_status',
+        'get_calendar_events', 'get_teams_status', 'activate_scene',
+        'trigger_backup',
+    }
+    
+    # Tools som krever PrusaLink
+    PRUSA_TOOLS = {'check_3d_printer', 'toggle_3d_printer'}
+    
+    # Tools som krever Duck-Vision
+    VISION_TOOLS = {'look_around', 'analyze_scene', 'check_face_recognition', 'start_face_learning'}
+    
+    all_tools = _get_all_function_tools()
+    
+    filtered = []
+    for tool in all_tools:
+        name = tool['function']['name']
+        if name in HA_TOOLS and not ENABLE_HOME_ASSISTANT:
+            continue
+        if name in PRUSA_TOOLS and not ENABLE_PRUSALINK:
+            continue
+        if name in VISION_TOOLS and not ENABLE_DUCK_VISION:
+            continue
+        filtered.append(tool)
+    
+    return filtered
+
+
+def _get_all_function_tools():
+    """Alle tool-definisjoner (ufiltrert)."""
     from src.duck_audio import control_beak
     
     return [
@@ -1845,7 +1882,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                         # Log in database (non-critical)
                         try:
                             duck_messenger.log_message(
-                                from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                                from_duck=CONFIG_DUCK_NAME.lower(),
                                 to_duck=duck_name.lower(),
                                 message=message,
                                 direction='sent',
@@ -2181,10 +2218,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                     found, name, confidence = vision_service.check_person(timeout=2.0)
                     
                     # Name mapping
-                    face_name_mapping = {
-                        'åsmund': 'Osmund',
-                        'Åsmund': 'Osmund'
-                    }
+                    face_name_mapping = dict(OWNER_ALIASES)
                     
                     if found and name:
                         mapped_name = face_name_mapping.get(name, name)
@@ -2225,7 +2259,7 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 primary = None
                 if 'user_manager' in dir():
                     pass  # user_manager not available in this scope
-                creator_name = 'Osmund'  # Default
+                creator_name = OWNER_NAME  # From config
                 result = f"""Andas tekniske oppbygning:
 
 Hardware (kroppen din):
@@ -2283,7 +2317,7 @@ Viktig: Snakk om dette som kroppen din, ikke "systemet". Si "nebbet mitt" ikke "
                         message=message,
                         remind_at=remind_at,
                         reminder_type=reminder_type,
-                        user_name='Osmund'
+                        user_name=OWNER_NAME
                     )
                     type_name = "alarm" if is_alarm else "påminnelse"
                     result = f"✅ {type_name.capitalize()} satt! Jeg minner deg på '{message}' kl {set_result['remind_at_formatted']}."

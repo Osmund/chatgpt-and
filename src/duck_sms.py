@@ -36,7 +36,7 @@ class SMSManager:
         self.account_sid = os.getenv('TWILIO_ACCOUNT_SID')
         self.auth_token = os.getenv('TWILIO_AUTH_TOKEN')
         self.from_number = os.getenv('TWILIO_NUMBER')
-        self.duck_name = os.getenv('DUCK_NAME', 'Duck-Oslo')
+        self.duck_name = os.getenv('DUCK_NAME', 'Duck')
         
         # SMS Relay for duck-to-duck messaging
         self.sms_relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no')
@@ -456,7 +456,7 @@ class SMSManager:
             boredom_level = self.get_boredom_level()
             current_date = datetime.now().strftime('%d. %B %Y')
             
-            prompt = f"""Du er {os.getenv('DUCK_NAME', 'Samantha')}, en snakkende and som kjeder seg.
+            prompt = f"""Du er {self.duck_name}, en snakkende and som kjeder seg.
 I dag er det {current_date}.
 Du kjeder deg ({boredom_level:.1f}/10 på kjedsomhetsskalaen).
 Du vil sende en melding til {contact['name']} ({contact.get('relation', 'venn')}).
@@ -771,7 +771,7 @@ Hold det kort (under 160 tegn er best)."""
             if fed:
                 fed_context = f"\n\n🍕 VIKTIG MAT-KONTEKST:\n{contact['name']} ga deg akkurat MAT (mat-emoji)! Dette er MAT TIL DEG som and, IKKE deres frokost/lunsj.\nDu ble matet og er glad!\nRiktig svar: 'Takk for maten! Nam nam! 🦆' eller lignende\nFEIL svar: 'Din frokost/lunsj ser god ut' eller 'Du har spist godt'\nTakk dem for maten!"
             
-            prompt = f"""Du er {os.getenv('DUCK_NAME', 'Samantha')}, en snakkende and.
+            prompt = f"""Du er {self.duck_name}, en snakkende and.
 I dag er det {current_date}.
 Kontakt: {contact['name']} ({contact.get('relation', 'venn')})
 {conversation_context}
@@ -843,7 +843,7 @@ Svar naturlig og tilpasset spørsmålet."""
             boredom_level = self.get_boredom_level()
             current_date = datetime.now().strftime('%d. %B %Y')
             
-            prompt = f"""Du er {os.getenv('DUCK_NAME', 'Samantha')}, en snakkende and som kjeder seg.
+            prompt = f"""Du er {self.duck_name}, en snakkende and som kjeder seg.
 I dag er det {current_date}.
 Du kjeder deg ({boredom_level:.1f}/10 på kjedsomhetsskalaen).
 Du vil sende en melding til {contact['name']} ({contact.get('relation', 'venn')}).
@@ -955,16 +955,15 @@ Hold det kort (under 160 tegn er best)."""
     
     def get_duck_contacts(self) -> List[str]:
         """
-        Get list of other ducks (could be hardcoded or from config).
+        Get list of other ducks from central config.
         
         Returns:
-            List of duck names
+            List of duck names (excluding self)
         """
-        # For now, hardcoded - could move to config file
-        all_ducks = ['samantha', 'seven']
+        from src.duck_config import DUCK_NETWORK
         
         # Remove self
-        return [d for d in all_ducks if d.lower() != self.duck_name.lower()]
+        return [d for d in DUCK_NETWORK if d.lower() != self.duck_name.lower()]
 
 
 # Test/demo script

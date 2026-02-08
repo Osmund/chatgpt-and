@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from pathlib import Path
-from src.duck_config import DB_PATH
+from src.duck_config import DB_PATH, OWNER_NAME
 from src.duck_database import get_db
 
 SESSION_FILE = "/tmp/duck_current_user.json"
@@ -18,7 +18,7 @@ class UserManager:
     Håndter bruker-sessions og brukerbytte
     
     Funksjoner:
-    - Hent nåværende bruker (default Osmund)
+    - Hent nåværende bruker (default owner)
     - Bytt bruker med smart name matching
     - Timeout management (30 min)
     - Find user by name (match mot profile_facts)
@@ -53,7 +53,7 @@ class UserManager:
         session_path = Path(self.session_file)
         
         if not session_path.exists():
-            # Default til Osmund
+            # Default til owner
             return self._create_default_session()
         
         try:
@@ -61,28 +61,28 @@ class UserManager:
                 session = json.load(f)
             
             # Sjekk timeout
-            if session.get('username') != 'Osmund':
+            if session.get('username') != OWNER_NAME:
                 timeout_at = datetime.fromisoformat(session['timeout_at'])
                 if datetime.now() > timeout_at:
-                    # Timeout - bytt tilbake til Osmund
-                    print("⏰ User timeout - bytter tilbake til Osmund", flush=True)
+                    # Timeout - bytt tilbake til owner
+                    print(f"⏰ User timeout - bytter tilbake til {OWNER_NAME}", flush=True)
                     return self._create_default_session()
             
             return session
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"⚠️ Ugyldig session fil, resetter til Osmund: {e}", flush=True)
+            print(f"⚠️ Ugyldig session fil, resetter til {OWNER_NAME}: {e}", flush=True)
             return self._create_default_session()
     
     def _create_default_session(self) -> Dict:
-        """Opprett default session for Osmund"""
+        """Opprett default session for owner"""
         now = datetime.now()
         session = {
-            'username': 'Osmund',
-            'display_name': 'Osmund',
+            'username': OWNER_NAME,
+            'display_name': OWNER_NAME,
             'relation': 'owner',
             'switched_at': now.isoformat(),
-            'timeout_at': (now + timedelta(days=365)).isoformat(),  # Osmund har ingen timeout
+            'timeout_at': (now + timedelta(days=365)).isoformat(),  # Owner har ingen timeout
             'last_activity': now.isoformat()
         }
         self._save_session(session)
@@ -146,8 +146,8 @@ class UserManager:
         now = datetime.now()
         timeout_at = now + timedelta(minutes=self.timeout_minutes)
         
-        # Hvis vi bytter til Osmund, ingen timeout
-        if username == 'Osmund':
+        # Hvis vi bytter til owner, ingen timeout
+        if username == OWNER_NAME:
             timeout_at = now + timedelta(days=365)
         
         session = {
@@ -217,8 +217,8 @@ class UserManager:
         """
         session = self.get_current_user()
         
-        # Osmund har aldri timeout
-        if session['username'] == 'Osmund':
+        # Owner har aldri timeout
+        if session['username'] == OWNER_NAME:
             return False
         
         # Sjekk om vi har passert timeout_at
@@ -244,7 +244,7 @@ class UserManager:
         """
         session = self.get_current_user()
         
-        if session['username'] == 'Osmund':
+        if session['username'] == OWNER_NAME:
             return None
         
         timeout_at = datetime.fromisoformat(session['timeout_at'])

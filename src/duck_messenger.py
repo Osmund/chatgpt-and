@@ -46,7 +46,7 @@ class DuckMessenger:
     def __init__(self, db_path: str = None):
         self.db_path = db_path or DB_PATH
         self.db = get_db(db_path)
-        self.duck_name = os.getenv('DUCK_NAME', 'Samantha')
+        self.duck_name = os.getenv('DUCK_NAME', 'Duck')
         self._init_database()
     
     def _init_database(self):
@@ -146,7 +146,7 @@ class DuckMessenger:
         conn = self.db.connection()
         c = conn.cursor()
         
-        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        our_duck_name = os.getenv('DUCK_NAME', 'Duck').lower()
         
         # Hent siste meldinger FRA from_duck TIL oss (ikke våre egne svar)
         # Ekskluder meldinger fra siste 5 sekunder (for å unngå å sammenligne med seg selv)
@@ -214,7 +214,7 @@ class DuckMessenger:
         conn = self.db.connection()
         c = conn.cursor()
         
-        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        our_duck_name = os.getenv('DUCK_NAME', 'Duck').lower()
         
         c.execute("""
             SELECT from_duck, message, timestamp

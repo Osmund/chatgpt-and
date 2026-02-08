@@ -11,8 +11,7 @@
 # IPC temporary files (inneholder runtime data)
 /tmp/duck_*.txt
 
-# Location update script (brukes lokalt for debugging)
-update_duck_location.sh
+# Location update script - NB: trackes i git (nyttig for alle ender)
 
 # ============ Python ============
 __pycache__/
@@ -178,15 +177,10 @@ chatgpt-duck.log
 duck-control.log
 *-embedding.bin
 
-# Migration scripts
-migrations/
+# Migration scripts - NB: trackes i git (viktig kode for alle ender)
 
-# ============ Test Files (KRITISK - KAN INNEHOLDE SENSITIVE DATA) ============
-# Testfiler kan inneholde API-nøkler, IP-adresser, personlig data
-tests/
-test_*.py
-**/tests/
-src/tests/
+# ============ Test Files ============
+# One-off test scripts that may contain sensitive data
 check_*.py
 find_*.py
 

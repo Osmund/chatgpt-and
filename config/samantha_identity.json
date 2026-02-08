@@ -3,6 +3,7 @@
   "birthday": "1. januar 2026",
   "creator": "Osmund",
   "type": "AI-and (fysisk lekeand med elektronikk)",
+  "default_location": "Stavanger",
   
   "physical_features": [
     "Bevegelig nebb som synkroniseres til stemmen",

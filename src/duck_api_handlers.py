@@ -65,16 +65,16 @@ class DuckAPIHandlers:
             return {'running': False, 'error': str(e)}
     
     def handle_ha_status(self) -> Dict[str, Any]:
-        """Check Home Assistant availability (local and cloud) - only for Samantha"""
+        """Check Home Assistant availability (local and cloud)"""
         try:
             import requests
             from dotenv import load_dotenv
             load_dotenv()
             
-            # Only Samantha has Home Assistant
-            duck_name = os.getenv('DUCK_NAME', '').lower()
-            if duck_name != 'samantha':
-                return {'available': False, 'error': 'Home Assistant kun tilgjengelig for Samantha'}
+            # Check feature flag instead of duck name
+            from src.duck_config import ENABLE_HOME_ASSISTANT
+            if not ENABLE_HOME_ASSISTANT:
+                return {'available': False, 'error': 'Home Assistant er ikke aktivert for denne anda'}
             
             HA_LOCAL_URL = os.getenv("HA_URL", "http://homeassistant.local:8123")
             HA_CLOUD_URL = os.getenv("HA_CLOUD_URL", "")
@@ -124,14 +124,15 @@ class DuckAPIHandlers:
             if row:
                 return {'location': row[0]}
             
-            # Fallback to default location based on DUCK_NAME
-            duck_name = os.getenv('DUCK_NAME', '').lower()
-            default_locations = {
-                'samantha': 'Sokndal (Åmot)',
-                'seven': 'Stavanger (Hundvåg)'
-            }
-            
-            location = default_locations.get(duck_name, 'Ukjent')
+            # Fallback to default location from identity config
+            from src.duck_config import DUCK_IDENTITY_FILE
+            try:
+                import json
+                with open(DUCK_IDENTITY_FILE, 'r') as f:
+                    identity = json.load(f)
+                location = identity.get('default_location', 'Ukjent')
+            except Exception:
+                location = 'Ukjent'
             return {'location': location}
             
         except Exception as e:
@@ -333,7 +334,8 @@ class DuckAPIHandlers:
     
     def handle_wake_words(self) -> Dict[str, Any]:
         """Get list of wake words"""
-        wake_words = ['quack quack', 'hey duck', 'samantha']
+        from src.duck_config import DUCK_NAME
+        wake_words = ['quack quack', 'hey duck', DUCK_NAME.lower()]
         return {'wake_words': wake_words}
     
     def handle_get_sensitivity(self) -> Dict[str, Any]:
@@ -690,7 +692,7 @@ class DuckAPIHandlers:
         """Get backup status and list of backups"""
         try:
             result = subprocess.run(
-                ['rclone', 'lsf', 'anda-backup:duck-backups/Samantha/', '--dirs-only'],
+                ['rclone', 'lsf', f'anda-backup:duck-backups/{os.getenv("DUCK_NAME", "Duck")}/', '--dirs-only'],
                 capture_output=True,
                 text=True,
                 timeout=10

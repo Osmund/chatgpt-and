@@ -193,7 +193,7 @@ class DuckControlHandler(BaseHTTPRequestHandler):
         
         elif self.path == '/duck-name':
             # Return duck name from environment
-            duck_name = os.getenv('DUCK_NAME', 'Samantha')
+            duck_name = os.getenv('DUCK_NAME', 'Duck')
             self.send_json_response({'name': duck_name}, 200)
         
         elif self.path == '/ha-status':

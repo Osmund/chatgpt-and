@@ -1,14 +1,65 @@
 """
 Duck Configuration Constants
 All configuration constants and file paths for the duck assistant.
+Supports multiple duck instances via environment variables.
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load .env early so all config can use env vars
+load_dotenv()
 
 # ============ Base Path ============
 # Automatically detect the project root directory
 # src/duck_config.py -> go up one level to get project root
 BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# ============ Duck Instance Configuration ============
+# Central source for duck name - all modules should import from here
+DUCK_NAME = os.getenv('DUCK_NAME', 'Duck')
+
+# Wake word engine: 'porcupine' or 'openwakeword'
+WAKE_WORD_ENGINE = os.getenv('WAKE_WORD_ENGINE', 'porcupine')
+
+# Wake word model path (relative to BASE_PATH or absolute)
+_wake_word_model = os.getenv('WAKE_WORD_MODEL', '')
+if _wake_word_model:
+    WAKE_WORD_MODEL_PATH = _wake_word_model if os.path.isabs(_wake_word_model) else os.path.join(BASE_PATH, _wake_word_model)
+else:
+    # Default per engine
+    if WAKE_WORD_ENGINE == 'openwakeword':
+        WAKE_WORD_MODEL_PATH = os.path.join(BASE_PATH, "openwakeword_models", f"{DUCK_NAME}.onnx")
+    else:
+        WAKE_WORD_MODEL_PATH = os.path.join(BASE_PATH, "porcupine", f"{DUCK_NAME.lower()}_en_raspberry-pi_v4_0_0.ppn")
+
+# Wake word sensitivity/threshold
+WAKE_WORD_SENSITIVITY = float(os.getenv('WAKE_WORD_SENSITIVITY', '0.9'))  # Porcupine default
+WAKE_WORD_THRESHOLD = float(os.getenv('WAKE_WORD_THRESHOLD', '0.25'))  # OpenWakeWord default
+
+# Feature flags - control which smart home features are available
+ENABLE_HOME_ASSISTANT = os.getenv('ENABLE_HOME_ASSISTANT', 'true').lower() == 'true'
+ENABLE_PRUSALINK = os.getenv('ENABLE_PRUSALINK', 'true').lower() == 'true'
+ENABLE_DUCK_VISION = os.getenv('ENABLE_DUCK_VISION', 'true').lower() == 'true'
+ENABLE_MQTT = os.getenv('ENABLE_MQTT', 'true').lower() == 'true'
+
+# Duck network - comma-separated list of all ducks for inter-duck communication
+DUCK_NETWORK = [d.strip().lower() for d in os.getenv('DUCK_NETWORK', 'samantha,seven').split(',')]
+
+# Identity file - per duck
+DUCK_IDENTITY_FILE = os.path.join(BASE_PATH, "config", f"{DUCK_NAME.lower()}_identity.json")
+
+# Owner configuration — loaded from identity JSON if available, else env var
+_OWNER_NAME_DEFAULT = 'Osmund'
+try:
+    import json as _json
+    with open(DUCK_IDENTITY_FILE, 'r') as _f:
+        _identity = _json.load(_f)
+    _OWNER_NAME_DEFAULT = _identity.get('creator', 'Osmund')
+except Exception:
+    pass
+OWNER_NAME = os.getenv('OWNER_NAME', _OWNER_NAME_DEFAULT)
+OWNER_ALIASES = {a.lower(): OWNER_NAME for a in os.getenv('OWNER_ALIASES', 'åsmund,Åsmund').split(',')}
 
 # ============ File Paths ============
 MESSAGE_FILE = "/tmp/duck_message.txt"
@@ -28,13 +79,14 @@ SONG_STOP_FILE = "/tmp/duck_song_stop.txt"
 CONFIG_DIR = os.path.join(BASE_PATH, "config")
 LOCATIONS_FILE = os.path.join(CONFIG_DIR, "locations.json")
 PERSONALITIES_FILE = os.path.join(CONFIG_DIR, "personalities.json")
-SAMANTHA_IDENTITY_FILE = os.path.join(CONFIG_DIR, "samantha_identity.json")
+# Backward compatibility aliases
+SAMANTHA_IDENTITY_FILE = DUCK_IDENTITY_FILE
 
 # Database path
 DB_PATH = os.path.join(BASE_PATH, "duck_memory.db")
 
-# Wake word path
-WAKE_WORD_PATH = os.path.join(BASE_PATH, "Quack-quack.ppn")
+# Wake word path (backward compat)
+WAKE_WORD_PATH = WAKE_WORD_MODEL_PATH
 
 # ============ AI Model Configuration ============
 # Les fra .env, fallback til gpt-4.1-mini
@@ -76,9 +128,11 @@ BEAK_PRE_START_MS = 0  # Start nebb før aplay (negativ = etter aplay starter)
 # Music directory
 MUSIKK_DIR = os.path.join(BASE_PATH, "musikk")
 
+# Music directory
+MUSIKK_DIR = os.path.join(BASE_PATH, "musikk")
+
 # ============ Porcupine Configuration ============
 PORCUPINE_ACCESS_KEY_ENV = "PORCUPINE_ACCESS_KEY"
-# WAKE_WORD_PATH is already defined above using BASE_PATH (line 40)
 
 # ============ Azure Configuration ============
 AZURE_SPEECH_KEY_ENV = "AZURE_SPEECH_KEY"

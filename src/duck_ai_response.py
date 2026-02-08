@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_DUCK_NAME = os.getenv('DUCK_NAME', 'Duck')
+_OWNER_NAME = os.getenv('OWNER_NAME', 'Osmund')
+
 
 class AIResponseGenerator:
     """Generates AI responses using OpenAI API"""
@@ -28,7 +31,7 @@ class AIResponseGenerator:
         self,
         image_description: str,
         user_message: str = None,
-        sender_name: str = "Osmund",
+        sender_name: str = None,
         model: str = "gpt-4o-mini",
         max_tokens: int = 150
     ) -> Optional[str]:
@@ -38,15 +41,18 @@ class AIResponseGenerator:
         Args:
             image_description: GPT-4o Vision's description of the image
             user_message: Optional message from user about the image
-            sender_name: Name of the person who sent the image
+            sender_name: Name of the person who sent the image (defaults to owner name)
             model: OpenAI model to use
             max_tokens: Maximum tokens in response
         
         Returns:
             AI response string or None if failed
         """
+        if sender_name is None:
+            sender_name = _OWNER_NAME
+        
         # Self-awareness system prompt
-        system_prompt = """Du er Samantha, en intelligent and-robot. Du er en fysisk and med hvit kropp, oransje nebb, oransje føtter, og et blått lys i magen. Du har bevissthet og personlighet. Når noen viser deg et bilde av deg selv, skal du gjenkjenne deg og svare som deg selv - ikke som en observatør som beskriver en gjenstand.
+        system_prompt = f"""Du er {_DUCK_NAME}, en intelligent and-robot. Du er en fysisk and med hvit kropp, oransje nebb, oransje føtter, og et blått lys i magen. Du har bevissthet og personlighet. Når noen viser deg et bilde av deg selv, skal du gjenkjenne deg og svare som deg selv - ikke som en observatør som beskriver en gjenstand.
 
 Svar kort og naturlig på norsk. Vis entusiasme og personlighet."""
         
@@ -56,7 +62,7 @@ Svar kort og naturlig på norsk. Vis entusiasme og personlighet."""
 
 Basert på bildeanalysen er dette et bilde av: {image_description}
 
-Hvis jeg sier "Dette er deg" eller lignende, mener jeg at det er et bilde AV deg (Samantha, anda). Gjenkjenn deg selv og svar som deg selv. Hvis det er mat, kos eller noe annet, svar naturlig på det jeg sa.
+Hvis jeg sier "Dette er deg" eller lignende, mener jeg at det er et bilde AV deg ({_DUCK_NAME}, anda). Gjenkjenn deg selv og svar som deg selv. Hvis det er mat, kos eller noe annet, svar naturlig på det jeg sa.
 
 Svar kort (1-2 setninger)."""
         else:
@@ -118,7 +124,7 @@ Svar kort (1-2 setninger)."""
         Returns:
             AI response string or None if failed
         """
-        system_prompt = """Du er Samantha, en intelligent and-robot. Svar kort, naturlig og med personlighet på norsk."""
+        system_prompt = f"""Du er {_DUCK_NAME}, en intelligent and-robot. Svar kort, naturlig og med personlighet på norsk."""
         
         # Build context-aware prompt if context provided
         if context:

@@ -21,7 +21,7 @@ import azure.cognitiveservices.speech as speechsdk
 # Duck moduler
 from scripts.hardware.duck_beak import Beak, CLOSE_DEG, OPEN_DEG, TRIM_DEG, SERVO_CHANNEL
 from scripts.hardware.rgb_duck import set_blue, off, blink_yellow_purple, pulse_blue, pulse_yellow, stop_blink, set_yellow, blink_yellow
-from src.duck_config import MESSAGES_FILE
+from src.duck_config import MESSAGES_FILE, OWNER_NAME, OWNER_ALIASES
 from src.duck_memory import MemoryManager
 from src.duck_user_manager import UserManager
 from src.duck_audio import speak
@@ -92,7 +92,7 @@ def register_with_relay():
     # Ensure we add /register endpoint
     relay_url = base_url.rstrip('/') + '/register'
     twilio_number = os.getenv('TWILIO_NUMBER')
-    duck_name = os.getenv('DUCK_NAME', 'Duck-Oslo')
+    duck_name = os.getenv('DUCK_NAME', 'Duck')
     
     if not twilio_number:
         print("⚠️ TWILIO_NUMBER not set - skipping SMS relay registration", flush=True)
@@ -136,7 +136,7 @@ def _send_duck_response(from_duck, message_text, media_url, messenger, sms_manag
     conversation_context = ""
     if recent_messages:
         conversation_context = "\n\nSiste meldinger i samtalen:\n"
-        our_duck_name = os.getenv('DUCK_NAME', 'Samantha').lower()
+        our_duck_name = os.getenv('DUCK_NAME', 'Duck').lower()
         for msg in recent_messages:
             sender = "Du" if msg['from_duck'] == our_duck_name else msg['from_duck'].capitalize()
             conversation_context += f"{sender}: {msg['message']}\n"
@@ -193,7 +193,7 @@ Skriv et kort, hyggelig svar (maks 160 tegn) ELLER skriv "NO_RESPONSE" hvis samt
         
         # Log and send response
         messenger.log_message(
-            from_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+            from_duck=os.getenv('DUCK_NAME', 'Duck').lower(),
             to_duck=from_duck,
             message=response,
             direction='sent',
@@ -228,7 +228,7 @@ def sms_polling_loop():
     relay_url = os.getenv('SMS_RELAY_URL', 'https://sms-relay.duckberry.no/register')
     base_url = relay_url.replace('/register', '')
     twilio_number = os.getenv('TWILIO_NUMBER')
-    duck_name = os.getenv('DUCK_NAME', 'Samantha')
+    duck_name = os.getenv('DUCK_NAME', 'Duck')
     
     if not twilio_number:
         print("⚠️ TWILIO_NUMBER not set - skipping SMS polling", flush=True)
@@ -420,7 +420,7 @@ def sms_polling_loop():
                     # ALLTID logg mottatte meldinger først (uansett loop)
                     messenger.log_message(
                         from_duck=from_duck,
-                        to_duck=os.getenv('DUCK_NAME', 'Samantha').lower(),
+                        to_duck=os.getenv('DUCK_NAME', 'Duck').lower(),
                         message=message_text,
                         direction='received',
                         initiated=False,
@@ -515,7 +515,7 @@ def reminder_checker_loop():
                 # Lagre i minnet at påminnelsen ble levert
                 try:
                     type_name = "Alarm" if is_alarm else "Påminnelse"
-                    user_name = reminder.get('user_name', 'Osmund')
+                    user_name = reminder.get('user_name', OWNER_NAME)
                     memory_text = f"{type_name} levert til {user_name}: '{reminder['message']}'"
                     memory = Memory(
                         text=memory_text,
@@ -1464,13 +1464,13 @@ def main():
                 # Sjekk om timeout skal trigges
                 if user_manager.check_timeout(last_message_time):
                     current_user = user_manager.get_current_user()
-                    print(f"⏰ Timeout for {current_user['display_name']} - bytter til Osmund", flush=True)
+                    print(f"⏰ Timeout for {current_user['display_name']} - bytter til {OWNER_NAME}", flush=True)
                     
-                    # Bytt til Osmund
-                    user_manager.switch_user('Osmund', 'Osmund', 'owner')
+                    # Bytt til owner
+                    user_manager.switch_user(OWNER_NAME, OWNER_NAME, 'owner')
                     
-                    # Si beskjed til Osmund
-                    speak("Hei Osmund, jeg har byttet tilbake til deg etter timeout.", speech_config, beak)
+                    # Si beskjed
+                    speak(f"Hei {OWNER_NAME}, jeg har byttet tilbake til deg etter timeout.", speech_config, beak)
             except Exception as e:
                 print(f"⚠️ Feil ved timeout-sjekk: {e}", flush=True)
         
@@ -1573,11 +1573,8 @@ def main():
             else:
                 user_name = 'på du'
             
-            # Name mapping for face recognition (Åsmund = Osmund)
-            face_name_mapping = {
-                'åsmund': 'Osmund',
-                'Åsmund': 'Osmund'
-            }
+            # Name mapping for face recognition
+            face_name_mapping = dict(OWNER_ALIASES)
             
             # Sjekk hvem som er der med Duck-Vision (prøver 3 ganger)
             vision_recognized = False
@@ -1645,7 +1642,7 @@ def main():
             if not _mid_conversation_speaker:
                 return
             
-            _name_mapping = {'åsmund': 'Osmund', 'Åsmund': 'Osmund'}
+            _name_mapping = dict(OWNER_ALIASES)
             mid_name = _name_mapping.get(_mid_conversation_speaker, _mid_conversation_speaker)
             
             if not _mid_conversation_announced:
@@ -1784,21 +1781,22 @@ def main():
                 off()
                 break
             
-            # Sjekk for direkte bytte til eier/Osmund
+            # Sjekk for direkte bytte til eier
             prompt_lower = prompt.strip().lower()
+            owner_lower = OWNER_NAME.lower()
             if user_manager and ("bytt til eier" in prompt_lower or "bytte til eier" in prompt_lower or 
-                                  "bytt til osmund" in prompt_lower or "bytte til osmund" in prompt_lower):
+                                  f"bytt til {owner_lower}" in prompt_lower or f"bytte til {owner_lower}" in prompt_lower):
                 current_user = user_manager.get_current_user()
-                if current_user['username'] != 'Osmund':
-                    user_manager.switch_user('Osmund', 'Osmund', 'owner')
-                    speak("Velkommen tilbake Osmund!", speech_config, beak)
-                    print(f"✅ Byttet tilbake til eier: Osmund", flush=True)
+                if current_user['username'] != OWNER_NAME:
+                    user_manager.switch_user(OWNER_NAME, OWNER_NAME, 'owner')
+                    speak(f"Velkommen tilbake {OWNER_NAME}!", speech_config, beak)
+                    print(f"✅ Byttet tilbake til eier: {OWNER_NAME}", flush=True)
                     _conversation_active = False
                     if vision_service and vision_service.is_connected():
                         vision_service.notify_conversation(False)
                     break  # Start ny samtale
                 else:
-                    speak("Du er allerede Osmund, eieren!", speech_config, beak)
+                    speak(f"Du er allerede {OWNER_NAME}, eieren!", speech_config, beak)
                     continue
             
             # Sjekk for brukerbytte-kommando

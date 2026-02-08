@@ -10,7 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-HEADERS = {"User-Agent": "Samantha-Duck/1.0 (anda@oduckberry.local)"}
+HEADERS = {"User-Agent": "oDuckberry/1.0 (anda@oduckberry.local)"}
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 
 # IOC-koder til norske/vanlige landnavn

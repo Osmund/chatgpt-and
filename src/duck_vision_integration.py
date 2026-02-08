@@ -30,7 +30,8 @@ class DuckVisionHandler:
     """
     
     # LWT topic - brokeren publiserer dette automatisk når klienten forsvinner
-    STATUS_TOPIC = "duck/samantha/status"
+    from src.duck_config import DUCK_NAME as _DUCK_NAME
+    STATUS_TOPIC = f"duck/{_DUCK_NAME.lower()}/status"
     
     # Reconnect settings
     RECONNECT_MIN_DELAY = 1    # sekunder
@@ -318,7 +319,7 @@ class DuckVisionHandler:
             logger.debug(f"Duck-Vision publisher offline, dropper kommando: {command.get('command')}")
             return False
         self.client.publish(
-            "duck/samantha/commands",
+            f"duck/{self._DUCK_NAME.lower()}/commands",
             json.dumps(command),
             qos=QOS_AT_LEAST_ONCE
         )
@@ -460,12 +461,12 @@ class DuckVisionHandler:
         })
     
     def notify_speaking(self, speaking: bool):
-        """Mute/unmute Duck-Vision mikrofon når Samantha snakker/er ferdig"""
+        """Mute/unmute Duck-Vision mikrofon når anda snakker/er ferdig"""
         if not self.connected:
             return
         try:
             self.client.publish(
-                "duck/samantha/speaking",
+                f"duck/{self._DUCK_NAME.lower()}/speaking",
                 json.dumps({"speaking": speaking}),
                 qos=QOS_FIRE_AND_FORGET
             )
@@ -484,7 +485,7 @@ class DuckVisionHandler:
             return
         try:
             self.client.publish(
-                "duck/samantha/conversation",
+                f"duck/{self._DUCK_NAME.lower()}/conversation",
                 json.dumps({"active": active}),
                 qos=QOS_FIRE_AND_FORGET
             )

@@ -5,7 +5,7 @@ Handles conversation flow, user switching, and external message checks.
 
 import os
 import time
-from src.duck_config import AI_QUERY_FILE, AI_RESPONSE_FILE
+from src.duck_config import AI_QUERY_FILE, AI_RESPONSE_FILE, OWNER_NAME
 from src.duck_speech import recognize_speech_from_mic
 from src.duck_audio import speak
 
@@ -83,13 +83,13 @@ def ask_for_user_switch(speech_config, beak, user_manager):
             speak("Jeg hørte ikke navnet ditt. Prøv igjen ved å si mitt navn først.", speech_config, beak)
             return False
         
-        # Sjekk om brukeren vil bytte til eier (Osmund)
+        # Sjekk om brukeren vil bytte til eier
         name_lower = name_response.strip().lower()
         if 'eier' in name_lower or 'owner' in name_lower:
-            # Bytt direkte til Osmund
-            user_manager.switch_user('Osmund', 'Osmund', 'owner')
-            speak("Velkommen tilbake Osmund!", speech_config, beak)
-            print(f"✅ Byttet tilbake til eier: Osmund", flush=True)
+            # Bytt direkte til owner
+            user_manager.switch_user(OWNER_NAME, OWNER_NAME, 'owner')
+            speak(f"Velkommen tilbake {OWNER_NAME}!", speech_config, beak)
+            print(f"✅ Byttet tilbake til eier: {OWNER_NAME}", flush=True)
             return True
         
         # Ekstraher navnet (fjern "jeg er", "dette er", etc.)
@@ -108,7 +108,7 @@ def ask_for_user_switch(speech_config, beak, user_manager):
             # Bruker funnet - bekreft
             relation_text = found_user['relation']
             if found_user['matched_key']:
-                speak(f"Er du {found_user['display_name']}, Osmunds {relation_text}?", speech_config, beak)
+                speak(f"Er du {found_user['display_name']}, {OWNER_NAME}s {relation_text}?", speech_config, beak)
             else:
                 speak(f"Er du {found_user['display_name']}?", speech_config, beak)
             
@@ -129,7 +129,7 @@ def ask_for_user_switch(speech_config, beak, user_manager):
                 return False
         else:
             # Ny bruker - spør om relasjon
-            speak(f"Hei {name_clean}! Jeg kjenner deg ikke fra før. Hva er din relasjon til Osmund?", speech_config, beak)
+            speak(f"Hei {name_clean}! Jeg kjenner deg ikke fra før. Hva er din relasjon til {OWNER_NAME}?", speech_config, beak)
             
             relation_response = recognize_speech_from_mic()
             if not relation_response:
@@ -172,7 +172,7 @@ def ask_for_user_switch(speech_config, beak, user_manager):
             
     except Exception as e:
         print(f"⚠️ Feil under brukerbytte: {e}", flush=True)
-        speak("Beklager, det oppstod en feil. Jeg fortsetter som Osmund.", speech_config, beak)
+        speak(f"Beklager, det oppstod en feil. Jeg fortsetter som {OWNER_NAME}.", speech_config, beak)
         return False
 
 
