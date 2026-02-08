@@ -726,6 +726,7 @@ _last_speaker_time = 0.0
 _conversation_active = False
 _mid_conversation_speaker = None  # Navn gjenkjent under pågående samtale
 _mid_conversation_announced = False  # Har vi allerede sagt hei?
+_current_speaker = None  # Hvem som snakker akkurat nå (for å detektere bytte)
 
 # Onboarding av ukjent person (voice learning)
 _onboarding_voice_active = False
@@ -741,10 +742,14 @@ def on_speaker_recognized(name: str, confidence: float):
     _last_speaker_time = time.time()
     print(f"🔊 Stemme gjenkjent: {name} ({confidence:.0%})", flush=True)
     
-    # Hvis samtale pågår og vi ikke har identifisert noen ennå, lagre for bruk i loop
-    if _conversation_active and not _mid_conversation_announced:
-        _mid_conversation_speaker = name
-        print(f"💬 Mid-conversation stemme: {name} - vil oppdatere bruker i samtaleloop", flush=True)
+    if _conversation_active:
+        # Alltid oppdater - enten det er første gjenkjenning eller et person-bytte
+        if not _mid_conversation_announced or (name != _current_speaker):
+            _mid_conversation_speaker = name
+            if _current_speaker and name != _current_speaker:
+                print(f"💬 Mid-conversation BYTTE: {_current_speaker} -> {name}", flush=True)
+            else:
+                print(f"💬 Mid-conversation stemme: {name} - vil oppdatere bruker i samtaleloop", flush=True)
 
 
 def on_voice_learned(name: str, success: bool):
@@ -1541,10 +1546,11 @@ def main():
                 continue
         else:
             # Normal wake word - signal samtalestart til Duck-Vision
-            global _conversation_active, _mid_conversation_speaker, _mid_conversation_announced
+            global _conversation_active, _mid_conversation_speaker, _mid_conversation_announced, _current_speaker
             _conversation_active = True
             _mid_conversation_speaker = None
             _mid_conversation_announced = False
+            _current_speaker = None
             if vision_service and vision_service.is_connected():
                 vision_service.notify_conversation(True)
             
@@ -1594,11 +1600,11 @@ def main():
             
             # Generer adaptiv hilsen basert på personlighetsprofil
             if vision_recognized:
-                # Enklere hilsen når face recognition gjenkjenner
+                _current_speaker = user_name
                 greeting_msg = f"Hei, {user_name}! Hyggelig å se deg igjen!"
                 print(f"🎭 Face recognition greeting: {greeting_msg}", flush=True)
             elif voice_recognized:
-                # Gjenkjent via stemme - litt annerledes hilsen
+                _current_speaker = user_name
                 greeting_msg = f"Hei, {user_name}! Jeg kjente deg igjen på stemmen!"
                 print(f"🎭 Voice recognition greeting: {greeting_msg}", flush=True)
             else:
@@ -1621,20 +1627,26 @@ def main():
         no_response_count = 0  # Teller antall ganger uten svar
         
         def _check_mid_conversation_recognition():
-            """Sjekk om stemme ble gjenkjent under STT og hilse med navn."""
-            global _mid_conversation_announced
+            """Sjekk om stemme ble gjenkjent under STT. Håndterer både første gjenkjenning og person-bytte."""
+            global _mid_conversation_announced, _current_speaker, _mid_conversation_speaker
             nonlocal user_name, voice_recognized
-            if _mid_conversation_speaker and not _mid_conversation_announced:
+            if not _mid_conversation_speaker:
+                return
+            
+            _name_mapping = {'åsmund': 'Osmund', 'Åsmund': 'Osmund'}
+            mid_name = _name_mapping.get(_mid_conversation_speaker, _mid_conversation_speaker)
+            
+            if not _mid_conversation_announced:
+                # Første gjenkjenning i denne samtalen
                 _mid_conversation_announced = True
-                _name_mapping = {'åsmund': 'Osmund', 'Åsmund': 'Osmund'}
-                mid_name = _name_mapping.get(_mid_conversation_speaker, _mid_conversation_speaker)
+                _current_speaker = mid_name
+                _mid_conversation_speaker = None
+                
                 if not vision_recognized and not voice_recognized:
-                    # Vi visste ikke hvem det var - nå vet vi!
                     user_name = mid_name
-                    voice_recognized = True  # Marker som gjenkjent så onboarding ikke trigges
-                    print(f"💬 Mid-conversation gjenkjenning: {_mid_conversation_speaker} -> {mid_name}", flush=True)
+                    voice_recognized = True
+                    print(f"💬 Mid-conversation gjenkjenning: {mid_name}", flush=True)
                     
-                    # Bytt til gjenkjent bruker som aktiv bruker
                     if user_manager:
                         try:
                             user_manager.switch_user(mid_name, mid_name, 'recognized')
@@ -1643,6 +1655,27 @@ def main():
                             print(f"⚠️ Kunne ikke bytte bruker mid-conversation: {e}", flush=True)
                     
                     speak(f"Å, hei {mid_name}! Nå kjente jeg deg igjen på stemmen!", speech_config, beak)
+            
+            elif mid_name != _current_speaker:
+                # Person-bytte! En annen kjent person snakker nå
+                old_speaker = _current_speaker
+                _current_speaker = mid_name
+                user_name = mid_name
+                _mid_conversation_speaker = None
+                print(f"🔄 Person-bytte: {old_speaker} -> {mid_name}", flush=True)
+                
+                if user_manager:
+                    try:
+                        user_manager.switch_user(mid_name, mid_name, 'recognized')
+                        print(f"✅ Byttet aktiv bruker til {mid_name}", flush=True)
+                    except Exception as e:
+                        print(f"⚠️ Kunne ikke bytte bruker: {e}", flush=True)
+                
+                speak(f"Å, hei {mid_name}!", speech_config, beak)
+            
+            else:
+                # Samme person som allerede er gjenkjent - bare nullstill
+                _mid_conversation_speaker = None
         
         while True:
             # Sjekk FØRST om stemme ble gjenkjent (f.eks. fra forrige iterasjon)
