@@ -1,7 +1,7 @@
 """
-DuckSettings — Thread-safe in-memory settings manager.
+DuckSettings — Thread-safe in-memory settings manager med JSON-persistens.
 
-Erstatter /tmp/duck_*.txt-filer for voice, beak, speed, volume, model, personality.
+Lagrer settings til config/duck_settings.json slik at de overlever restart og reboot.
 Beskyttet med threading.Lock for atomisk lesing/skriving.
 
 Bruk:
@@ -9,22 +9,27 @@ Bruk:
 
     settings = get_settings()
     voice = settings.voice          # Lese
-    settings.voice = "nb-NO-FinnNeural"  # Skrive
+    settings.voice = "nb-NO-FinnNeural"  # Skrive (auto-lagret til JSON)
 
     # Atomisk snapshot av alle TTS-settings:
     tts = settings.get_tts_settings()
     # → {'voice': '...', 'beak': True, 'speed': 40, 'volume': 50}
 
 duck-control.py sender settings via HTTP til intern API-server (port 5111)
-som oppdaterer dette objektet. Ingen filer involvert.
+som oppdaterer dette objektet. Endringer persisteres automatisk.
 """
 
 import json
+import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Dict, Any
 
 from src.duck_config import DEFAULT_MODEL, DEFAULT_VOICE
+
+# Persistent settings-fil (overlever restart og reboot)
+SETTINGS_FILE = Path(__file__).parent.parent / 'config' / 'duck_settings.json'
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -74,6 +79,7 @@ class DuckSettings:
     def voice(self, value: str):
         with self._lock:
             self._data['voice'] = value
+            self._save_locked()
 
     @property
     def beak(self) -> str:
@@ -85,6 +91,7 @@ class DuckSettings:
     def beak(self, value: str):
         with self._lock:
             self._data['beak'] = value
+            self._save_locked()
 
     @property
     def beak_enabled(self) -> bool:
@@ -101,6 +108,7 @@ class DuckSettings:
     def speed(self, value: int):
         with self._lock:
             self._data['speed'] = max(0, min(100, int(value)))
+            self._save_locked()
 
     @property
     def volume(self) -> int:
@@ -111,6 +119,7 @@ class DuckSettings:
     def volume(self, value: int):
         with self._lock:
             self._data['volume'] = max(0, min(100, int(value)))
+            self._save_locked()
 
     @property
     def model(self) -> str:
@@ -121,6 +130,7 @@ class DuckSettings:
     def model(self, value: str):
         with self._lock:
             self._data['model'] = value
+            self._save_locked()
 
     @property
     def personality(self) -> str:
@@ -131,6 +141,89 @@ class DuckSettings:
     def personality(self, value: str):
         with self._lock:
             self._data['personality'] = value
+            self._save_locked()
+
+    # ── Persistens ───────────────────────────────────────────
+
+    def _save_locked(self):
+        """Skriv settings til JSON-fil. MÅ kalles med self._lock holdt."""
+        try:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = SETTINGS_FILE.with_suffix('.tmp')
+            tmp.write_text(json.dumps(self._data, indent=2, ensure_ascii=False))
+            tmp.replace(SETTINGS_FILE)  # Atomisk rename
+        except Exception as e:
+            print(f"⚠️ Kunne ikke lagre settings: {e}", flush=True)
+
+    def save(self):
+        """Eksplisitt lagring (tar lock selv)."""
+        with self._lock:
+            self._save_locked()
+
+    def load(self):
+        """Last settings fra JSON-fil, med fallback til /tmp-filer for migrasjon."""
+        loaded = False
+
+        # 1. Prøv JSON-fil først
+        if SETTINGS_FILE.exists():
+            try:
+                saved = json.loads(SETTINGS_FILE.read_text())
+                with self._lock:
+                    for key, value in saved.items():
+                        if key in self._data:
+                            if key in ('speed', 'volume'):
+                                value = max(0, min(100, int(value)))
+                            self._data[key] = value
+                loaded = True
+                print(f"📋 DuckSettings lastet fra {SETTINGS_FILE.name}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Feil ved lasting av {SETTINGS_FILE}: {e}", flush=True)
+
+        # 2. Fallback: migrer fra /tmp-filer (engangs)
+        if not loaded:
+            self._migrate_from_tmp_files()
+
+        settings = self.get_all()
+        print(f"📋 DuckSettings: model={settings['model']}, "
+              f"voice={settings['voice']}, speed={settings['speed']}, "
+              f"volume={settings['volume']}, beak={settings['beak']}, "
+              f"personality={settings['personality']}", flush=True)
+
+    def _migrate_from_tmp_files(self):
+        """Engangs-migrasjon fra gamle /tmp-filer → JSON."""
+        from src.duck_config import (
+            VOICE_FILE, BEAK_FILE, SPEED_FILE, VOLUME_FILE,
+            MODEL_CONFIG_FILE, PERSONALITY_FILE
+        )
+
+        file_map = {
+            'voice': (VOICE_FILE, str),
+            'beak': (BEAK_FILE, str),
+            'speed': (SPEED_FILE, int),
+            'volume': (VOLUME_FILE, int),
+            'model': (MODEL_CONFIG_FILE, str),
+            'personality': (PERSONALITY_FILE, str),
+        }
+
+        found_any = False
+        with self._lock:
+            for key, (filepath, cast) in file_map.items():
+                try:
+                    if os.path.exists(filepath):
+                        with open(filepath, 'r') as f:
+                            raw = f.read().strip()
+                            if raw:
+                                value = cast(raw)
+                                if key in ('speed', 'volume'):
+                                    value = max(0, min(100, value))
+                                self._data[key] = value
+                                found_any = True
+                except Exception:
+                    pass
+            # Lagre til JSON så vi ikke trenger /tmp neste gang
+            if found_any:
+                self._save_locked()
+                print("🔄 Migrerte settings fra /tmp-filer til JSON", flush=True)
 
     # ── Bulk-operasjoner (atomiske) ──────────────────────────
 
@@ -152,51 +245,19 @@ class DuckSettings:
     def update(self, updates: Dict[str, Any]):
         """Atomisk oppdatering av flere settings samtidig."""
         with self._lock:
+            changed = False
             for key, value in updates.items():
                 if key in self._data:
                     if key in ('speed', 'volume'):
                         value = max(0, min(100, int(value)))
                     self._data[key] = value
+                    changed = True
+            if changed:
+                self._save_locked()
 
     def load_from_tmp_files(self):
-        """
-        Migrasjon: Les eksisterende /tmp-filer og last inn.
-        Kalles kun ved oppstart for bakoverkompatibilitet.
-        """
-        import os
-        from src.duck_config import (
-            VOICE_FILE, BEAK_FILE, SPEED_FILE, VOLUME_FILE,
-            MODEL_CONFIG_FILE, PERSONALITY_FILE
-        )
-
-        file_map = {
-            'voice': (VOICE_FILE, str),
-            'beak': (BEAK_FILE, str),
-            'speed': (SPEED_FILE, int),
-            'volume': (VOLUME_FILE, int),
-            'model': (MODEL_CONFIG_FILE, str),
-            'personality': (PERSONALITY_FILE, str),
-        }
-
-        with self._lock:
-            for key, (filepath, cast) in file_map.items():
-                try:
-                    if os.path.exists(filepath):
-                        with open(filepath, 'r') as f:
-                            raw = f.read().strip()
-                            if raw:
-                                value = cast(raw)
-                                if key in ('speed', 'volume'):
-                                    value = max(0, min(100, value))
-                                self._data[key] = value
-                except Exception:
-                    pass  # Behold default
-
-        print(f"📋 DuckSettings lastet: model={self._data['model']}, "
-              f"voice={self._data['voice']}, speed={self._data['speed']}, "
-              f"volume={self._data['volume']}, beak={self._data['beak']}, "
-              f"personality={self._data['personality']}", flush=True)
-
+        """DEPRECATED: Bruk load() i stedet. Beholdt for bakoverkompatibilitet."""
+        self.load()
 
 # ═══════════════════════════════════════════════════════════════
 # Intern HTTP-server for settings (port 5111, kun localhost)

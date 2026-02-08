@@ -12,9 +12,10 @@ import sounddevice as sd
 
 from scripts.hardware.rgb_duck import set_red, stop_blink, set_intensity
 from src.duck_config import (
-    BEAK_FILE, VOLUME_FILE, BEAK_CHUNK_MS, SONG_STOP_FILE
+    BEAK_CHUNK_MS, SONG_STOP_FILE
 )
 from src.duck_audio import find_hifiberry_output
+from src.duck_settings import get_settings
 
 
 def play_song(song_path, beak, speech_config, announce=True):
@@ -67,26 +68,10 @@ def play_song(song_path, beak, speech_config, announce=True):
     
     set_red()  # LED rød når anda synger
     
-    # Les nebbet-status
-    beak_enabled = True
-    try:
-        if os.path.exists(BEAK_FILE):
-            with open(BEAK_FILE, 'r') as f:
-                beak_status = f.read().strip()
-                beak_enabled = (beak_status != 'off')
-    except Exception as e:
-        print(f"Feil ved lesing av nebbet-konfigurasjon: {e}, nebbet aktivert", flush=True)
-    
-    # Les volum (0-100, 50 = normal)
-    volume_value = 50
-    try:
-        if os.path.exists(VOLUME_FILE):
-            with open(VOLUME_FILE, 'r') as f:
-                vol = f.read().strip()
-                if vol:
-                    volume_value = int(vol)
-    except Exception as e:
-        print(f"Feil ved lesing av volum-konfigurasjon: {e}, bruker normal volum", flush=True)
+    # Les nebb og volum fra DuckSettings
+    settings = get_settings()
+    beak_enabled = settings.beak_enabled
+    volume_value = settings.volume
     
     volume_gain = volume_value / 50.0
     

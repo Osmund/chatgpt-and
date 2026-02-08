@@ -117,6 +117,20 @@ AVAILABLE_MODELS = {
 
 DEFAULT_VOICE = "nb-NO-IselinNeural"
 
+# ============ TTS Engine Configuration ============
+# TTS engine: 'azure' or 'openai'
+TTS_ENGINE = os.getenv('TTS_ENGINE', 'azure')
+
+# OpenAI TTS settings (only used when TTS_ENGINE='openai')
+OPENAI_TTS_VOICE = os.getenv('OPENAI_TTS_VOICE', 'nova')  # nova, shimmer, alloy, echo, fable, onyx, coral, sage, ash
+OPENAI_TTS_MODEL = os.getenv('OPENAI_TTS_MODEL', 'tts-1-hd')  # tts-1 or tts-1-hd
+
+# Duck voice pitch shift (octaves up). Higher = more "duck-like" but less intelligible.
+# Azure default: 0.5 (needs more shift since base voices are neutral)
+# OpenAI default: 0.2 (voices are already more expressive)
+_default_pitch = '0.2' if TTS_ENGINE == 'openai' else '0.5'
+DUCK_PITCH_OCTAVES = float(os.getenv('DUCK_PITCH_OCTAVES', _default_pitch))
+
 # ============ Audio Configuration ============
 # Fade in/out lengde i millisekunder (for å redusere knepp ved start/slutt)
 FADE_MS = 150  # 150ms fade in/out

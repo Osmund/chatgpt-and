@@ -132,6 +132,7 @@ site/
 # User-specific configurations
 config.local.json
 settings.local.json
+config/duck_settings.json
 
 # Messages (inneholder samtalehistorikk - må være i gitignore)
 config/messages.json

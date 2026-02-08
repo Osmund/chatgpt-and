@@ -206,6 +206,7 @@ def is_conversation_ending(user_text: str) -> bool:
     # Eksakte/korte avslutningsfraser (hele setningen må matche)
     exact_endings = [
         "stopp",
+        "stop",
         "slutt",
         "avslutt",
         "ha det",
@@ -236,6 +237,11 @@ def is_conversation_ending(user_text: str) -> bool:
         "nei det holder",
         "det holder",
         "nei takk",
+        "kan du stoppe",
+        "vær så snill å stoppe",
+        "hold kjeft",
+        "vær stille",
+        "ti stille",
     ]
     
     for phrase in context_endings:

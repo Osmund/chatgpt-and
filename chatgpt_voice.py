@@ -1055,7 +1055,7 @@ def main():
     # Initialiser DuckSettings (thread-safe in-memory settings)
     from src.duck_settings import get_settings, start_settings_server
     settings = get_settings()
-    settings.load_from_tmp_files()
+    settings.load()
     start_settings_server()
 
     # Initialiser ServiceManager (delt state med kontrollpanel)
@@ -1478,6 +1478,7 @@ def main():
         vision_recognized = False
         voice_recognized = False
         conversation_ended_naturally = False
+        recognition_context = None  # For AI-integrert hilsen ved gjenkjenning
         if external_message:
             if external_message == '__START_CONVERSATION__':
                 # Start samtale direkte med en kort hilsen
@@ -1607,21 +1608,25 @@ def main():
             else:
                 print("⚠️ Duck-Vision not available or not connected", flush=True)
             
-            # Generer adaptiv hilsen basert på personlighetsprofil
+            # Generer recognition context for AI (inkorporeres naturlig i første svar)
+            recognition_context = None
             if vision_recognized:
                 _current_speaker = user_name
-                greeting_msg = f"Hei, {user_name}! Hyggelig å se deg igjen!"
-                print(f"🎭 Face recognition greeting: {greeting_msg}", flush=True)
+                recognition_context = f"(Du har nettopp gjenkjent {user_name} på ansiktet. Inkorporer en naturlig, kort hilsen til {user_name} i starten av svaret ditt.)"
+                print(f"🎭 Face recognition: {user_name}", flush=True)
+                # Kort bekreftelse så brukeren vet anda lytter (uten navn - AI inkluderer hilsen)
+                speak("Ja?", speech_config, beak)
             elif voice_recognized:
                 _current_speaker = user_name
-                greeting_msg = f"Hei, {user_name}! Jeg kjente deg igjen på stemmen!"
-                print(f"🎭 Voice recognition greeting: {greeting_msg}", flush=True)
+                recognition_context = f"(Du har nettopp gjenkjent {user_name} på stemmen. Inkorporer en naturlig, kort hilsen til {user_name} i starten av svaret ditt.)"
+                print(f"🎭 Voice recognition: {user_name}", flush=True)
+                # Kort bekreftelse så brukeren vet anda lytter (uten navn - AI inkluderer hilsen)
+                speak("Ja?", speech_config, beak)
             else:
-                # Ikke gjenkjent - bruk generisk hilsen uten navn
+                # Ikke gjenkjent - bruk generisk hilsen
                 greeting_msg = get_adaptive_greeting(user_name="du")
                 print(f"🎭 Generic greeting (ukjent person): {greeting_msg}", flush=True)
-            
-            speak(greeting_msg, speech_config, beak)
+                speak(greeting_msg, speech_config, beak)
         
         # Reduce boredom when conversation starts
         try:
@@ -1638,7 +1643,7 @@ def main():
         def _check_mid_conversation_recognition():
             """Sjekk om stemme ble gjenkjent under STT. Håndterer både første gjenkjenning og person-bytte."""
             global _mid_conversation_announced, _current_speaker, _mid_conversation_speaker
-            nonlocal user_name, voice_recognized
+            nonlocal user_name, voice_recognized, recognition_context
             if not _mid_conversation_speaker:
                 return
             
@@ -1675,8 +1680,9 @@ def main():
                         except Exception as e:
                             print(f"⚠️ Kunne ikke reassigne meldinger: {e}", flush=True)
                     
-                    speak(f"Hei, {mid_name}!", speech_config, beak)
-                    blink_yellow_purple()  # Restart LED etter hilsen
+                    # Sett context for AI å inkorporere hilsen naturlig (i stedet for egen TTS)
+                    recognition_context = f"(Du har akkurat nå gjenkjent at det er {mid_name} som snakker. Du visste ikke hvem det var før, så dette er første gang du hilser på {mid_name} i denne samtalen. Si 'Hei {mid_name}' naturlig i starten av svaret - ikke si 'hei igjen'.)"
+                    print(f"💬 Mid-conversation gjenkjenning kontekst satt for {mid_name}", flush=True)
             
             elif mid_name != _current_speaker:
                 # Person-bytte! En annen kjent person snakker nå
@@ -1697,8 +1703,9 @@ def main():
                 # personen snakker, så meldingen er ennå ikke lagret.
                 # Neste save_message() vil bruke riktig user_name automatisk.
                 
-                speak(f"Hei, {mid_name}!", speech_config, beak)
-                blink_yellow_purple()  # Restart LED etter hilsen
+                # Sett context for AI å inkorporere hilsen naturlig (i stedet for egen TTS)
+                recognition_context = f"(En ny person har overtatt samtalen. Du har akkurat gjenkjent at det nå er {mid_name} som snakker i stedet for {old_speaker}. Si 'Hei {mid_name}' naturlig i starten av svaret.)"
+                print(f"💬 Person-bytte kontekst satt: {old_speaker} -> {mid_name}", flush=True)
             
             else:
                 # Samme person som allerede er gjenkjent - bare nullstill
@@ -1812,6 +1819,12 @@ def main():
                     continue
             
             messages.append({"role": "user", "content": prompt})
+            
+            # Injiser recognition context som system-melding når det finnes
+            # (ved første gjenkjenning eller mid-conversation gjenkjenning)
+            if recognition_context:
+                messages.insert(len(messages) - 1, {"role": "system", "content": recognition_context})
+                recognition_context = None  # Bruk bare én gang
             
             # Sliding window: behold maks 20 meldinger for å spare tokens
             # Memory worker har allerede lagret viktige fakta fra eldre meldinger
