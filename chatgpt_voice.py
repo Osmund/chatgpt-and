@@ -1625,11 +1625,12 @@ def main():
         # Start samtale (enten fra wake word eller samtale-trigger)
         messages = []
         no_response_count = 0  # Teller antall ganger uten svar
+        _speaker_switch_time = None  # Tidspunkt da gjenkjent bruker ble bekreftet
         
         def _check_mid_conversation_recognition():
             """Sjekk om stemme ble gjenkjent under STT. Håndterer både første gjenkjenning og person-bytte."""
             global _mid_conversation_announced, _current_speaker, _mid_conversation_speaker
-            nonlocal user_name, voice_recognized
+            nonlocal user_name, voice_recognized, _speaker_switch_time
             if not _mid_conversation_speaker:
                 return
             
@@ -1639,6 +1640,7 @@ def main():
             if not _mid_conversation_announced:
                 # Første gjenkjenning i denne samtalen
                 _mid_conversation_announced = True
+                old_user = _current_speaker or user_name  # fallback-bruker før gjenkjenning
                 _current_speaker = mid_name
                 _mid_conversation_speaker = None
                 
@@ -1654,6 +1656,18 @@ def main():
                         except Exception as e:
                             print(f"⚠️ Kunne ikke bytte bruker mid-conversation: {e}", flush=True)
                     
+                    # Reassign tidligere meldinger i denne sesjonen til riktig bruker
+                    if memory_manager and current_session_id and old_user != mid_name:
+                        try:
+                            memory_manager.reassign_messages(
+                                session_id=current_session_id,
+                                old_user=old_user,
+                                new_user=mid_name
+                            )
+                        except Exception as e:
+                            print(f"⚠️ Kunne ikke reassigne meldinger: {e}", flush=True)
+                    
+                    _speaker_switch_time = datetime.now().isoformat()
                     speak(f"Å, hei {mid_name}! Nå kjente jeg deg igjen på stemmen!", speech_config, beak)
             
             elif mid_name != _current_speaker:
@@ -1671,6 +1685,20 @@ def main():
                     except Exception as e:
                         print(f"⚠️ Kunne ikke bytte bruker: {e}", flush=True)
                 
+                # Reassign meldinger fra forrige bytte-tidspunkt til nå
+                # Disse ble lagret under old_speaker men var egentlig mid_name
+                if memory_manager and current_session_id and _speaker_switch_time:
+                    try:
+                        memory_manager.reassign_messages(
+                            session_id=current_session_id,
+                            old_user=old_speaker,
+                            new_user=mid_name,
+                            after_timestamp=_speaker_switch_time
+                        )
+                    except Exception as e:
+                        print(f"⚠️ Kunne ikke reassigne meldinger: {e}", flush=True)
+                
+                _speaker_switch_time = datetime.now().isoformat()
                 speak(f"Å, hei {mid_name}!", speech_config, beak)
             
             else:

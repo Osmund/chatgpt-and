@@ -416,6 +416,42 @@ class MemoryManager:
         
         return message_id
     
+    def reassign_messages(self, session_id: str, old_user: str, new_user: str, after_timestamp: str = None) -> int:
+        """Flytt meldinger fra en bruker til en annen innenfor en session.
+        
+        Args:
+            session_id: Session-ID å oppdatere
+            old_user: Nåværende user_name på meldingene
+            new_user: Ny user_name å sette
+            after_timestamp: Hvis satt, bare oppdater meldinger etter dette tidspunktet
+            
+        Returns:
+            Antall oppdaterte meldinger
+        """
+        conn = self._get_connection()
+        c = conn.cursor()
+        
+        if after_timestamp:
+            c.execute("""
+                UPDATE messages 
+                SET user_name = ? 
+                WHERE session_id = ? AND user_name = ? AND timestamp >= ?
+            """, (new_user, session_id, old_user, after_timestamp))
+        else:
+            c.execute("""
+                UPDATE messages 
+                SET user_name = ? 
+                WHERE session_id = ? AND user_name = ?
+            """, (new_user, session_id, old_user))
+        
+        updated = c.rowcount
+        conn.commit()
+        
+        if updated > 0:
+            print(f"🔄 Reassigned {updated} melding(er) fra {old_user} til {new_user} i session {session_id[:8]}...", flush=True)
+        
+        return updated
+
     def get_unprocessed_messages(self, limit: int = 10) -> List[Message]:
         """Hent meldinger som ikke er prosessert av worker"""
         conn = self._get_connection()
