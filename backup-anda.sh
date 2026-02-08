@@ -106,19 +106,22 @@ if [ -f "$SCRIPT_DIR/sleep_mode.json" ]; then
     echo -e "  ${GREEN}✓${NC} sleep_mode.json"
 fi
 
-# Backup voice profiles from Duck-Vision (if accessible)
-VISION_VOICES="/home/admog/Code/Duck-Vision/data/known_voices"
-VISION_FACES="/home/admog/Code/Duck-Vision/data/known_faces"
-if [ -d "$VISION_VOICES" ] || [ -d "$VISION_FACES" ]; then
+# Backup voice/face profiles from Duck-Vision Pi 5 (remote)
+VISION_HOST="${DUCK_VISION_HOST:-192.168.10.197}"
+VISION_USER="${DUCK_VISION_USER:-admog}"
+VISION_DATA="/home/admog/Code/Duck-Vision/data"
+
+if ssh -o ConnectTimeout=5 -o BatchMode=yes "${VISION_USER}@${VISION_HOST}" "test -d ${VISION_DATA}" 2>/dev/null; then
     mkdir -p "$TEMP_DIR/duck-vision"
-    if [ -d "$VISION_VOICES" ]; then
-        cp -r "$VISION_VOICES" "$TEMP_DIR/duck-vision/"
-        echo -e "  ${GREEN}✓${NC} duck-vision/known_voices"
+    echo -e "  📡 Duck-Vision Pi 5 tilgjengelig, henter profiler..."
+    if scp -r -o ConnectTimeout=5 "${VISION_USER}@${VISION_HOST}:${VISION_DATA}/known_voices" "$TEMP_DIR/duck-vision/" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} duck-vision/known_voices (fra Pi 5)"
     fi
-    if [ -d "$VISION_FACES" ]; then
-        cp -r "$VISION_FACES" "$TEMP_DIR/duck-vision/"
-        echo -e "  ${GREEN}✓${NC} duck-vision/known_faces"
+    if scp -r -o ConnectTimeout=5 "${VISION_USER}@${VISION_HOST}:${VISION_DATA}/known_faces" "$TEMP_DIR/duck-vision/" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} duck-vision/known_faces (fra Pi 5)"
     fi
+else
+    echo -e "  ${YELLOW}⚠${NC} Duck-Vision Pi 5 ikke tilgjengelig - hopper over stemme/ansiktsprofiler"
 fi
 
 # Backup systemd services
