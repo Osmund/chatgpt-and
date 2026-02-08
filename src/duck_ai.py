@@ -28,7 +28,7 @@ from src.duck_news import get_nrk_news, get_news_headlines
 from src.duck_transport import get_departures, plan_journey
 from src.duck_wikipedia import wikipedia_lookup, wikipedia_random
 from src.duck_football import get_pl_standings, get_pl_matches
-from src.duck_olympics import get_olympics_medals
+from src.duck_olympics import get_olympics_medals, get_olympics_medal_details
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1612,7 +1612,7 @@ def _get_function_tools():
             "type": "function",
             "function": {
                 "name": "get_olympics_medals",
-                "description": "Hent medaljeoversikt for pågående eller siste OL (olympiske leker). Bruk denne når brukeren spør om OL-medaljer, medaljetabell, hvordan Norge/et land gjør det i OL, olympiske leker. Data hentes fra Wikipedia og oppdateres i nær-sanntid.",
+                "description": "Hent medaljeoversikt for pågående eller siste OL (olympiske leker). Bruk denne når brukeren spør om OL-medaljer, medaljetabell, hvordan Norge/et land gjør det i OL, olympiske leker. Data hentes fra Wikipedia og oppdateres i nær-sanntid. Bruk detail_level='details' for å se hvilke øvelser og utøvere som har tatt medaljer for et spesifikt land.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1623,7 +1623,13 @@ def _get_function_tools():
                         },
                         "country": {
                             "type": "string",
-                            "description": "Spesifikt land å fremheve i tabellen (f.eks. 'Norge', 'Sverige', 'USA')"
+                            "description": "Spesifikt land å fremheve/hente detaljer for (f.eks. 'Norge', 'Sverige', 'USA')"
+                        },
+                        "detail_level": {
+                            "type": "string",
+                            "enum": ["table", "details"],
+                            "description": "'table' for medaljeoversikt/tabell (default), 'details' for å se hvilke øvelser og utøvere som har tatt medaljer. Bruk 'details' når brukeren spør om spesifikke medaljer, gullmedaljer, øvelser osv.",
+                            "default": "table"
                         }
                     },
                     "required": []
@@ -2039,7 +2045,11 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
         elif function_name == "get_olympics_medals":
             top_n = function_args.get("top_n", 15)
             country = function_args.get("country", None)
-            result = get_olympics_medals(top_n=top_n, country=country)
+            detail_level = function_args.get("detail_level", "table")
+            if detail_level == "details" and country:
+                result = get_olympics_medal_details(country=country)
+            else:
+                result = get_olympics_medals(top_n=top_n, country=country)
         elif function_name == "set_led_color":
             color = function_args.get("color", "")
             color_map = {
@@ -2433,34 +2443,52 @@ def chatgpt_query(messages, api_key, model=None, memory_manager=None, user_manag
         # Håndter alle tool calls
         force_end = _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_manager, vision_service)
         
-        # Kall API igjen med all tool data
-        data["messages"] = final_messages
-        response2 = requests.post(url, headers=headers, json=data)
-        
-        # Retry for tool follow-up call
-        for attempt in range(max_retries):
-            if response2.ok:
-                break
-            if response2.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
-                import time as _time
-                wait = 2 ** attempt
-                print(f"⚠️ OpenAI API {response2.status_code} (tool follow-up), retry {attempt+1}/{max_retries} om {wait}s...", flush=True)
-                _time.sleep(wait)
-                response2 = requests.post(url, headers=headers, json=data)
+        # Loop for å håndtere kjede av tool calls (maks 5 runder)
+        max_tool_rounds = 5
+        for tool_round in range(max_tool_rounds):
+            # Kall API igjen med all tool data
+            data["messages"] = final_messages
+            response2 = requests.post(url, headers=headers, json=data)
+            
+            # Retry for tool follow-up call
+            for attempt in range(max_retries):
+                if response2.ok:
+                    break
+                if response2.status_code in (429, 500, 502, 503) and attempt < max_retries - 1:
+                    import time as _time
+                    wait = 2 ** attempt
+                    print(f"⚠️ OpenAI API {response2.status_code} (tool follow-up runde {tool_round+1}), retry {attempt+1}/{max_retries} om {wait}s...", flush=True)
+                    _time.sleep(wait)
+                    response2 = requests.post(url, headers=headers, json=data)
+                else:
+                    break
+            
+            # Bedre error-håndtering for debugging
+            if not response2.ok:
+                print(f"❌ OpenAI API error {response2.status_code}: {response2.text[:500]}", flush=True)
+                for msg in final_messages:
+                    if msg.get("role") == "tool":
+                        tool_content = msg.get("content", "")
+                        print(f"📤 Tool '{msg.get('name')}' result: {len(tool_content)} chars - {tool_content[:200]}", flush=True)
+            
+            response2.raise_for_status()
+            message2 = response2.json()["choices"][0]["message"]
+            
+            # Sjekk om modellen vil kalle enda en funksjon (chained tool calls)
+            if message2.get("tool_calls"):
+                print(f"🔗 Chained tool call (runde {tool_round+2}): {[tc['function']['name'] for tc in message2['tool_calls']]}", flush=True)
+                final_messages.append(message2)
+                force_end2 = _handle_tool_calls(message2["tool_calls"], final_messages, source, source_user_id, sms_manager, vision_service)
+                force_end = force_end or force_end2
+                continue  # Gå til neste runde
             else:
+                # Vi har et vanlig text-svar
+                reply_content = message2.get("content")
                 break
-        
-        # Bedre error-håndtering for debugging
-        if not response2.ok:
-            print(f"❌ OpenAI API error {response2.status_code}: {response2.text[:500]}", flush=True)
-            # Log alle tool results for debugging
-            for msg in final_messages:
-                if msg.get("role") == "tool":
-                    tool_content = msg.get("content", "")
-                    print(f"📤 Tool '{msg.get('name')}' result: {len(tool_content)} chars - {tool_content[:200]}", flush=True)
-        
-        response2.raise_for_status()
-        reply_content = response2.json()["choices"][0]["message"]["content"]
+        else:
+            # Maks runder nådd
+            print(f"⚠️ Maks {max_tool_rounds} tool call-runder nådd", flush=True)
+            reply_content = message2.get("content", "Beklager, jeg måtte gjøre for mange oppslag. Kan du prøve igjen?")
         
         # Sjekk om brukerens opprinnelige melding var en takk
         user_message = messages[-1]["content"].lower() if messages else ""

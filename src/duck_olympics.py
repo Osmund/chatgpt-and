@@ -249,3 +249,162 @@ def _extract_olympics_name(page_title: str) -> str:
         season = "Vinter-OL" if match.group(2) == "Winter" else "Sommer-OL"
         return f"{season} {year}"
     return page_title.replace(" medal table", "")
+
+
+def get_olympics_medal_details(country: str = "Norge") -> str:
+    """Hent detaljerte medaljevinnere for et spesifikt land.
+    
+    Parser 'List of YYYY Winter/Summer Olympics medal winners' fra Wikipedia
+    for å finne hvilke øvelser et land har tatt medaljer i.
+    
+    Args:
+        country: Landnavn (norsk eller IOC-kode)
+    
+    Returns:
+        Formatert liste med medaljevinnere per øvelse
+    """
+    try:
+        page_title = _find_olympics_medal_page()
+        if not page_title:
+            return "Kunne ikke finne OL-medaljetabell."
+        
+        # Finn winners-siden
+        winners_page = page_title.replace("medal table", "medal winners")
+        winners_page = "List of " + winners_page
+        
+        # Finn IOC-kode(r) for landet
+        country_lower = country.lower()
+        target_codes = set()
+        for code, name in IOC_TO_NAME.items():
+            if country_lower in name.lower() or country_lower == code.lower():
+                target_codes.add(code)
+        
+        if not target_codes:
+            # Prøv med koden direkte
+            target_codes.add(country.upper())
+        
+        # Hent wikitext
+        resp = requests.get(WIKI_API, params={
+            "action": "parse",
+            "page": winners_page,
+            "prop": "wikitext",
+            "format": "json",
+        }, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
+        
+        if not wikitext:
+            return f"Kunne ikke hente medaljevinnere fra Wikipedia."
+        
+        # Parse medaljister fra wikitext
+        medal_winners = _parse_medal_winners(wikitext, target_codes)
+        
+        if not medal_winners:
+            return f"Ingen medaljevinnere funnet for {country} ennå."
+        
+        olympics_name = _extract_olympics_name(page_title)
+        country_display = IOC_TO_NAME.get(list(target_codes)[0], country)
+        
+        lines = [f"Medaljevinnere for {country_display} - {olympics_name}:", ""]
+        
+        medal_emoji = {"gold": "🥇", "silver": "🥈", "bronze": "🥉"}
+        
+        for winner in medal_winners:
+            emoji = medal_emoji.get(winner["medal"], "🏅")
+            names = ", ".join(winner["athletes"])
+            lines.append(f"  {emoji} {winner['sport']} - {winner['event']}: {names}")
+        
+        # Oppsummering
+        golds = sum(1 for w in medal_winners if w["medal"] == "gold")
+        silvers = sum(1 for w in medal_winners if w["medal"] == "silver")
+        bronzes = sum(1 for w in medal_winners if w["medal"] == "bronze")
+        lines.append(f"\nTotalt: {golds}🥇 {silvers}🥈 {bronzes}🥉 = {golds + silvers + bronzes} medaljer")
+        
+        return "\n".join(lines)
+    
+    except Exception as e:
+        logger.error(f"Feil ved henting av medaljedetaljer: {e}")
+        return f"Kunne ikke hente medaljedetaljer: {e}"
+
+
+def _parse_medal_winners(wikitext: str, target_codes: set) -> list:
+    """Parse medaljevinnere fra Wikipedia 'List of medal winners' wikitext.
+    
+    Wikitext tabellformat:
+    - Rad separator: |-
+    - Cell 0: event-navn (med DetailsLink)
+    - Cell 1: gull-vinner  (flagIOCmedalist)
+    - Cell 2: sølv-vinner
+    - Cell 3: bronse-vinner
+    """
+    medal_types = {1: "gold", 2: "silver", 3: "bronze"}
+    current_sport = ""
+    winners = []
+    row_cells = []
+    
+    for line in wikitext.split("\n"):
+        line = line.strip()
+        
+        # Sport headers (== Sport ==)
+        sport_match = re.match(r"^==([^=]+)==$", line)
+        if sport_match:
+            current_sport = sport_match.group(1).strip()
+            continue
+        
+        # Ny rad - prosesser forrige
+        if line.startswith("|-"):
+            if row_cells:
+                _process_medal_row(row_cells, current_sport, target_codes, medal_types, winners)
+            row_cells = []
+            continue
+        
+        # Samle celler
+        if line.startswith("|") and not line.startswith("|}") and not line.startswith("{|"):
+            parts = line.split("||")
+            row_cells.extend(parts)
+    
+    # Prosesser siste rad
+    if row_cells:
+        _process_medal_row(row_cells, current_sport, target_codes, medal_types, winners)
+    
+    return winners
+
+
+def _process_medal_row(row_cells: list, sport: str, target_codes: set, medal_types: dict, winners: list):
+    """Prosesser en tabellrad og legg til medaljister for target-landet."""
+    # Finn event-navn
+    event_name = ""
+    for cell in row_cells:
+        if "DetailsLink" in cell:
+            event_match = re.search(r"\|(.+?)(?:<br|$)", cell)
+            if event_match:
+                event_name = re.sub(r"{{.*?}}", "", event_match.group(1)).strip()
+                event_name = re.sub(r"\s*<br\s*/?>.*", "", event_name).strip()
+            break
+    
+    if not event_name:
+        return
+    
+    # Sjekk celle 1 (gull), 2 (sølv), 3 (bronse)
+    for cell_idx in range(1, min(4, len(row_cells))):
+        cell = row_cells[cell_idx]
+        medal_type = medal_types.get(cell_idx, "unknown")
+        
+        # Finn alle athletes for target-landet i denne cellen
+        # Format: flagIOCmedalist|[[name]]|CODE|2026 Winter
+        # Eller:  flagIOCmedalist|[[display|name]]|CODE|2026 Winter
+        athletes = re.findall(
+            r"flagIOCmedalist\|\[\[(?:[^\]|]+\|)?([^\]]+)\]\]\|(\w+)",
+            cell
+        )
+        
+        country_athletes = [name for name, code in athletes if code in target_codes]
+        
+        if country_athletes:
+            winners.append({
+                "sport": sport,
+                "event": event_name,
+                "medal": medal_type,
+                "athletes": country_athletes,
+            })
