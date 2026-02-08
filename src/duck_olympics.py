@@ -56,6 +56,20 @@ IOC_TO_NAME = {
     "MGL": "Mongolia",
 }
 
+# Engelsk → IOC-kode for vanlige land (for å støtte engelske søk)
+ENGLISH_TO_IOC = {
+    "norway": "NOR", "sweden": "SWE", "germany": "GER", "austria": "AUT",
+    "switzerland": "SUI", "france": "FRA", "italy": "ITA", "canada": "CAN",
+    "finland": "FIN", "japan": "JPN", "china": "CHN", "south korea": "KOR",
+    "netherlands": "NED", "czech republic": "CZE", "czechia": "CZE",
+    "slovenia": "SLO", "slovakia": "SVK", "poland": "POL", "australia": "AUS",
+    "great britain": "GBR", "united kingdom": "GBR", "uk": "GBR",
+    "new zealand": "NZL", "spain": "ESP", "belgium": "BEL", "ukraine": "UKR",
+    "russia": "ROC", "romania": "ROU", "belarus": "BLR", "estonia": "EST",
+    "latvia": "LAT", "lithuania": "LTU", "bulgaria": "BUL", "croatia": "CRO",
+    "denmark": "DEN", "kazakhstan": "KAZ", "uzbekistan": "UZB", "georgia": "GEO",
+}
+
 
 def _get_country_name(ioc_code: str) -> str:
     """Konverter IOC-kode til norsk landnavn."""
@@ -275,9 +289,15 @@ def get_olympics_medal_details(country: str = "Norge") -> str:
         # Finn IOC-kode(r) for landet
         country_lower = country.lower()
         target_codes = set()
+        
+        # Sjekk norske navn i IOC_TO_NAME
         for code, name in IOC_TO_NAME.items():
             if country_lower in name.lower() or country_lower == code.lower():
                 target_codes.add(code)
+        
+        # Sjekk engelske navn
+        if not target_codes and country_lower in ENGLISH_TO_IOC:
+            target_codes.add(ENGLISH_TO_IOC[country_lower])
         
         if not target_codes:
             # Prøv med koden direkte
@@ -315,11 +335,26 @@ def get_olympics_medal_details(country: str = "Norge") -> str:
             names = ", ".join(winner["athletes"])
             lines.append(f"  {emoji} {winner['sport']} - {winner['event']}: {names}")
         
-        # Oppsummering
-        golds = sum(1 for w in medal_winners if w["medal"] == "gold")
-        silvers = sum(1 for w in medal_winners if w["medal"] == "silver")
-        bronzes = sum(1 for w in medal_winners if w["medal"] == "bronze")
-        lines.append(f"\nTotalt: {golds}🥇 {silvers}🥈 {bronzes}🥉 = {golds + silvers + bronzes} medaljer")
+        # Oppsummering fra vinner-listen
+        detail_golds = sum(1 for w in medal_winners if w["medal"] == "gold")
+        detail_silvers = sum(1 for w in medal_winners if w["medal"] == "silver")
+        detail_bronzes = sum(1 for w in medal_winners if w["medal"] == "bronze")
+        
+        # Kryss-sjekk med medaljetabellen for nøyaktig totaltall
+        # Bruk det norske visningsnavnet for å sikre ⬅️-markør i resultatet
+        table_result = get_olympics_medals(top_n=1, country=country_display)
+        # Format: " 1. Norge                    3   1   2    6 ⬅️"
+        table_match = re.search(r"(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*⬅️", table_result)
+        if table_match:
+            table_g, table_s, table_b = int(table_match.group(1)), int(table_match.group(2)), int(table_match.group(3))
+            table_total = table_g + table_s + table_b
+            detail_total = detail_golds + detail_silvers + detail_bronzes
+            
+            lines.append(f"\nTotalt: {table_g}🥇 {table_s}🥈 {table_b}🥉 = {table_total} medaljer")
+            if detail_total < table_total:
+                lines.append(f"(Viser {detail_total} av {table_total} - noen øvelser er ikke detaljert ennå)")
+        else:
+            lines.append(f"\nTotalt fra detaljer: {detail_golds}🥇 {detail_silvers}🥈 {detail_bronzes}🥉 = {detail_golds + detail_silvers + detail_bronzes} medaljer")
         
         return "\n".join(lines)
     
@@ -379,7 +414,11 @@ def _process_medal_row(row_cells: list, sport: str, target_codes: set, medal_typ
         if "DetailsLink" in cell:
             event_match = re.search(r"\|(.+?)(?:<br|$)", cell)
             if event_match:
-                event_name = re.sub(r"{{.*?}}", "", event_match.group(1)).strip()
+                event_name = event_match.group(1)
+                # Unwrap templates som {{Nowrap|text}} → text (behold innholdet)
+                event_name = re.sub(r"{{[^|{}]+\|([^{}]+)}}", r"\1", event_name)
+                # Fjern enkle templates uten innhold som {{Something}}
+                event_name = re.sub(r"{{[^{}]*}}", "", event_name)
                 event_name = re.sub(r"\s*<br\s*/?>.*", "", event_name).strip()
             break
     
