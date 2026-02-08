@@ -1602,9 +1602,9 @@ def main():
                 greeting_msg = f"Hei, {user_name}! Jeg kjente deg igjen på stemmen!"
                 print(f"🎭 Voice recognition greeting: {greeting_msg}", flush=True)
             else:
-                # Full adaptiv hilsen når ikke gjenkjent visuelt
-                greeting_msg = get_adaptive_greeting(user_name=user_name)
-                print(f"🎭 Adaptive greeting (via user_manager fallback): {greeting_msg}", flush=True)
+                # Ikke gjenkjent - bruk generisk hilsen uten navn
+                greeting_msg = get_adaptive_greeting(user_name="du")
+                print(f"🎭 Generic greeting (ukjent person): {greeting_msg}", flush=True)
             
             speak(greeting_msg, speech_config, beak)
         
@@ -1629,12 +1629,14 @@ def main():
                 if not vision_recognized and not voice_recognized:
                     # Vi visste ikke hvem det var - nå vet vi!
                     user_name = mid_name
+                    voice_recognized = True  # Marker som gjenkjent så onboarding ikke trigges
                     print(f"💬 Mid-conversation gjenkjenning: {_mid_conversation_speaker} -> {mid_name}", flush=True)
                     
-                    # Oppdater user_manager hvis mulig
+                    # Bytt til gjenkjent bruker som aktiv bruker
                     if user_manager:
                         try:
                             user_manager.switch_user(mid_name, mid_name, 'recognized')
+                            print(f"✅ Byttet aktiv bruker til {mid_name}", flush=True)
                         except Exception as e:
                             print(f"⚠️ Kunne ikke bytte bruker mid-conversation: {e}", flush=True)
                     
