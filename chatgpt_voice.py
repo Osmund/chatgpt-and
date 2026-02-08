@@ -539,10 +539,16 @@ def reminder_checker_loop():
 def boredom_timer_loop():
     """Increase boredom gradually every hour and check for triggers"""
     from src.duck_sms import SMSManager
+    from src.duck_sleep import is_sleeping
     
     while True:
         time.sleep(3600)  # Every hour
         try:
+            # Ikke akkumuler kjedsomhet mens Samantha sover
+            if is_sleeping():
+                print("💤 Boredom pauset - Samantha sover", flush=True)
+                continue
+            
             sms_manager = SMSManager()
             
             # Increase boredom
@@ -627,6 +633,11 @@ def hunger_timer_loop():
     while True:
         time.sleep(60)  # Check every minute
         try:
+            # Ikke akkumuler sult mens Samantha sover
+            from src.duck_sleep import is_sleeping
+            if is_sleeping():
+                continue
+            
             current_time = datetime.now()
             current_hour = current_time.hour
             

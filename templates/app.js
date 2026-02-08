@@ -1,3 +1,16 @@
+function formatRemainingTime(minutes) {
+    if (minutes >= 1440) {
+        const days = Math.floor(minutes / 1440);
+        const hours = Math.floor((minutes % 1440) / 60);
+        return hours > 0 ? `${days}d ${hours}t` : `${days} dag${days > 1 ? 'er' : ''}`;
+    } else if (minutes >= 60) {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return mins > 0 ? `${hours}t ${mins}m` : `${hours} time${hours > 1 ? 'r' : ''}`;
+    }
+    return `${minutes} min`;
+}
+
 async function changeBeak() {
     const select = document.getElementById('beak-select');
     const statusElement = document.getElementById('beak-status');
@@ -1453,7 +1466,7 @@ async function pollDashboard() {
                     toggleBtn.style.background = '#ff9800';
                     countdownDiv.style.display = 'block';
                     if (endTimeSpan) endTimeSpan.textContent = s.end_time_formatted || '';
-                    if (remainingSpan) remainingSpan.textContent = s.remaining_minutes || 0;
+                    if (remainingSpan) remainingSpan.textContent = formatRemainingTime(s.remaining_minutes || 0);
                 } else {
                     statusDiv.textContent = '✅ Anda er våken';
                     statusDiv.style.color = '#4caf50';
@@ -2030,6 +2043,7 @@ async function updateSleepModeStatus() {
         const countdownDiv = document.getElementById('sleep-countdown');
         const endTimeSpan = document.getElementById('sleep-end-time');
         const remainingSpan = document.getElementById('sleep-remaining');
+        const durationSelect = document.getElementById('sleep-duration');
         
         if (data.is_sleeping) {
             statusDiv.textContent = '💤 Anda sover';
@@ -2037,14 +2051,16 @@ async function updateSleepModeStatus() {
             toggleBtn.textContent = '⏰ Våkn opp';
             toggleBtn.style.background = '#ff9800';
             countdownDiv.style.display = 'block';
+            if (durationSelect) durationSelect.style.display = 'none';
             endTimeSpan.textContent = data.end_time_formatted || '';
-            remainingSpan.textContent = data.remaining_minutes || 0;
+            remainingSpan.textContent = formatRemainingTime(data.remaining_minutes || 0);
         } else {
             statusDiv.textContent = '✅ Anda er våken';
             statusDiv.style.color = '#4caf50';
             toggleBtn.textContent = '💤 Aktiver søvn';
             toggleBtn.style.background = '#42a5f5';
             countdownDiv.style.display = 'none';
+            if (durationSelect) durationSelect.style.display = '';
         }
     } catch (error) {
         console.error('Feil ved henting av sleep mode status:', error);
