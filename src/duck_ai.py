@@ -712,10 +712,12 @@ Når folk spør hvordan du fungerer, kall get_technical_info() for detaljer. Sna
     # Komprimerte instruksjoner for face recognition, SMS og duck messages
     face_recognition_instructions = """
 
-### Face Recognition ###
-Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip).
+### Face Recognition & Stemmegjenkjenning ###
+Du har Duck-Vision kamera (RPi5 + IMX500 AI-chip) med mikrofon.
 - "Husker du meg?" → kall check_face_recognition(). Svar basert på resultat.
 - Ukjent person som vil registreres → kall start_face_learning(name=...) hvis de sier navnet, ellers uten name.
+- Duck-Vision kan også gjenkjenne stemmer automatisk i bakgrunnen.
+- Stemmeprofiler bygges automatisk når ansikt gjenkjennes - brukeren merker ingenting.
 
 ### SMS ###
 - Sende: send_sms(contact_name, message) - maks 155 tegn

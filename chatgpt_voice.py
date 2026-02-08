@@ -717,6 +717,217 @@ def on_learning_progress(name: str, step: int, total: int, instruction: str):
         print(f"⚠️ Error in learning_progress callback: {e}", flush=True)
 
 
+# Siste stemmegjenkjenning fra Duck-Vision (brukes som fallback ved wake word)
+_last_speaker_name = None
+_last_speaker_confidence = 0.0
+_last_speaker_time = 0.0
+
+# Mid-conversation stemmegjenkjenning
+_conversation_active = False
+_mid_conversation_speaker = None  # Navn gjenkjent under pågående samtale
+_mid_conversation_announced = False  # Har vi allerede sagt hei?
+
+# Onboarding av ukjent person (voice learning)
+_onboarding_voice_active = False
+_onboarding_voice_event = threading.Event()
+_onboarding_voice_success = False
+
+def on_speaker_recognized(name: str, confidence: float):
+    """Callback når Duck-Vision gjenkjenner en stemme i bakgrunnen"""
+    global _last_speaker_name, _last_speaker_confidence, _last_speaker_time
+    global _mid_conversation_speaker
+    _last_speaker_name = name
+    _last_speaker_confidence = confidence
+    _last_speaker_time = time.time()
+    print(f"🔊 Stemme gjenkjent: {name} ({confidence:.0%})", flush=True)
+    
+    # Hvis samtale pågår og vi ikke har identifisert noen ennå, lagre for bruk i loop
+    if _conversation_active and not _mid_conversation_announced:
+        _mid_conversation_speaker = name
+        print(f"💬 Mid-conversation stemme: {name} - vil oppdatere bruker i samtaleloop", flush=True)
+
+
+def on_voice_learned(name: str, success: bool):
+    """Callback når Duck-Vision har opprettet en stemmeprofil"""
+    global _onboarding_voice_success
+    
+    # Hvis vi er i onboarding-modus, signal til onboarding-funksjonen
+    if _onboarding_voice_active:
+        _onboarding_voice_success = success
+        _onboarding_voice_event.set()
+        if success:
+            print(f"✅ Onboarding: Stemmeprofil opprettet for {name}", flush=True)
+        else:
+            print(f"❌ Onboarding: Stemmeprofil feilet for {name}", flush=True)
+        return
+    
+    # Normal oppførsel (automatisk stemmeprofil i bakgrunnen)
+    if success:
+        print(f"✅ Stemmeprofil opprettet for {name}", flush=True)
+        try:
+            if hasattr(on_learning_progress, 'speech_config') and hasattr(on_learning_progress, 'beak'):
+                from src.duck_audio import speak
+                speak(f"Nå kjenner jeg også stemmen din, {name}!", on_learning_progress.speech_config, on_learning_progress.beak)
+                # Sett LED tilbake til idle-modus etter speak
+                set_idle_led()
+        except Exception as e:
+            print(f"⚠️ Kunne ikke si stemmeprofil-beskjed: {e}", flush=True)
+    else:
+        print(f"❌ Kunne ikke opprette stemmeprofil for {name}", flush=True)
+
+
+def extract_name_from_response(text: str) -> str:
+    """Ekstraher et personnavn fra et naturlig språk-svar.
+    
+    Håndterer svar som 'Arvid', 'Jeg heter Arvid', 'Det er Arvid', etc.
+    """
+    text = text.strip().rstrip('.,!?')
+    
+    # Fjern vanlige norske og engelske prefiks
+    prefixes = [
+        "jeg heter ", "mitt navn er ", "det er ", "navnet mitt er ",
+        "de kaller meg ", "jeg er ", "folk kaller meg ",
+        "my name is ", "i am ", "i'm ", "it's ", "call me ",
+    ]
+    text_lower = text.lower()
+    for prefix in prefixes:
+        if text_lower.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    
+    # Fjern ev. fyllord på slutten
+    suffixes = [" da", " altså", " liksom", " ass", " vet du", " skjønner du"]
+    for suffix in suffixes:
+        if text.lower().endswith(suffix):
+            text = text[:-len(suffix)].strip()
+            break
+    
+    # Ta maks 2 ord (fornavn + eventuelt etternavn), kapitaliser
+    words = text.split()
+    if not words:
+        return ""
+    
+    name_words = words[:2] if len(words) <= 3 else words[:1]
+    return ' '.join(w.capitalize() for w in name_words)
+
+
+def handle_unknown_person_onboarding(speech_config, beak, vision_service, user_manager):
+    """Spør ukjent person om navn og samtykke til å huske stemme/ansikt.
+    
+    Kalles etter en naturlig samtaleslutt med en ugjenkjent person.
+    Returns: Personens navn hvis onboarding lykkes, None ellers.
+    """
+    global _onboarding_voice_active, _onboarding_voice_success
+    
+    from src.duck_audio import speak
+    from src.duck_speech import recognize_speech_from_mic
+    
+    print("🤝 Starter onboarding av ukjent person", flush=True)
+    
+    positive_words = ["ja", "jada", "selvfølgelig", "klart", "ok", "okei", 
+                      "greit", "gjerne", "absolutt", "sikkert", "sure", "yes",
+                      "det kan du", "det er greit", "kjør på", "fint"]
+    
+    # Steg 1: Spør om navn
+    speak("Forresten, vi har ikke blitt ordentlig kjent ennå! Hva heter du?",
+          speech_config, beak)
+    
+    name_response = recognize_speech_from_mic()
+    if not name_response:
+        speak("Jeg hørte deg ikke, men hyggelig å snakke med deg!",
+              speech_config, beak)
+        set_idle_led()
+        return None
+    
+    name = extract_name_from_response(name_response)
+    if not name or len(name) < 2:
+        speak("Beklager, jeg fikk ikke med meg navnet. Men hyggelig å snakke med deg!",
+              speech_config, beak)
+        set_idle_led()
+        return None
+    
+    print(f"🤝 Ekstrahert navn: '{name}' fra svar: '{name_response}'", flush=True)
+    
+    # Steg 2: Spør om samtykke til å huske stemme
+    speak(f"Hyggelig å møte deg, {name}! Er det greit at jeg husker stemmen din, "
+          f"så jeg kjenner deg igjen neste gang?", speech_config, beak)
+    
+    consent_response = recognize_speech_from_mic()
+    if not consent_response:
+        speak(f"Ingen problem! Hyggelig å snakke med deg, {name}!",
+              speech_config, beak)
+        set_idle_led()
+        return name
+    
+    consent_lower = consent_response.lower()
+    if not any(word in consent_lower for word in positive_words):
+        speak(f"Helt i orden, {name}! Hyggelig å snakke med deg!",
+              speech_config, beak)
+        set_idle_led()
+        return name
+    
+    # Steg 3: Lagre stemmeprofil fra samtaledata
+    # Duck-Vision har allerede samlet stemmedata under samtalen.
+    # Vi bruker save_conversation_voice som lager profil fra det som allerede er samlet.
+    # VIKTIG: notify_conversation(False) må IKKE ha blitt kalt ennå, ellers er audioen slettet.
+    
+    _onboarding_voice_active = True
+    _onboarding_voice_event.clear()
+    _onboarding_voice_success = False
+    
+    voice_learning_ok = False
+    if vision_service and vision_service.is_connected():
+        vision_service.save_conversation_voice(name)
+        print(f"🎤 Sendt save_conversation_voice for {name}", flush=True)
+        
+        # Vent på resultat (profilen lages fra allerede samlet audio, bør gå raskt)
+        got_result = _onboarding_voice_event.wait(timeout=10.0)
+        if got_result and _onboarding_voice_success:
+            voice_learning_ok = True
+    
+    _onboarding_voice_active = False
+    
+    if voice_learning_ok:
+        speak(f"Flott, {name}! Nå husker jeg stemmen din.", speech_config, beak)
+        print(f"✅ Onboarding ferdig: {name} - stemmeprofil OK", flush=True)
+    else:
+        speak(f"Hyggelig å møte deg, {name}! "
+              f"Jeg klarte dessverre ikke å lagre stemmen din denne gangen, men vi prøver igjen neste gang!",
+              speech_config, beak)
+        print(f"⚠️ Onboarding: stemmelæring feilet for {name}", flush=True)
+    
+    # Steg 4: Spør om ansiktslæring
+    if vision_service and vision_service.is_connected():
+        speak(f"Vil du at jeg også skal kunne kjenne deg igjen på utseendet? "
+              f"Da tar jeg noen raske bilder.", speech_config, beak)
+        
+        face_response = recognize_speech_from_mic()
+        if face_response and any(word in face_response.lower() for word in positive_words):
+            speak("Fint! Se mot meg, og beveg hodet litt mellom bildene.", speech_config, beak)
+            try:
+                vision_service.learn_person(name, num_samples=5)
+                # Vent på at bildene tas (5 bilder * ~2.5s + buffer)
+                time.sleep(15)
+                speak(f"Perfekt, {name}! Nå kjenner jeg både stemmen og ansiktet ditt!", speech_config, beak)
+                print(f"✅ Ansiktslæring fullført for {name}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Ansiktslæring feilet for {name}: {e}", flush=True)
+                speak(f"Hmm, bildene ble ikke helt bra, men stemmen din har jeg i alle fall!", speech_config, beak)
+        else:
+            speak(f"Ingen problem! Stemmen din er nok til at jeg kjenner deg igjen.", speech_config, beak)
+    
+    # Registrer brukeren i user_manager
+    if user_manager:
+        try:
+            user_manager.switch_user(name, name, 'new_person')
+            print(f"✅ Registrert ny bruker: {name}", flush=True)
+        except Exception as e:
+            print(f"⚠️ Kunne ikke registrere ny bruker {name}: {e}", flush=True)
+    
+    set_idle_led()
+    return name
+
+
 def check_if_waiting_for_name():
     """Check if we're waiting for user to give their name"""
     print(f"🔍 check_if_waiting_for_name() returning: {_waiting_for_name}", flush=True)
@@ -916,7 +1127,9 @@ def main():
             vision_connected = vision_service.start(
                 on_face_detected=on_face_recognized,
                 on_unknown_face=on_unknown_face,
-                on_learning_progress=on_learning_progress
+                on_learning_progress=on_learning_progress,
+                on_speaker_recognized=on_speaker_recognized,
+                on_voice_learned=on_voice_learned
             )
             if vision_connected:
                 # Wait briefly for MQTT on_connect callback to set connected flag
@@ -1245,6 +1458,9 @@ def main():
                 print(f"⚠️ Feil ved timeout-sjekk: {e}", flush=True)
         
         # Hvis det er en ekstern melding, sjekk type
+        vision_recognized = False
+        voice_recognized = False
+        conversation_ended_naturally = False
         if external_message:
             if external_message == '__START_CONVERSATION__':
                 # Start samtale direkte med en kort hilsen
@@ -1324,7 +1540,14 @@ def main():
                 speak(external_message, speech_config, beak)
                 continue
         else:
-            # Normal wake word - si adaptiv hilsen
+            # Normal wake word - signal samtalestart til Duck-Vision
+            global _conversation_active, _mid_conversation_speaker, _mid_conversation_announced
+            _conversation_active = True
+            _mid_conversation_speaker = None
+            _mid_conversation_announced = False
+            if vision_service and vision_service.is_connected():
+                vision_service.notify_conversation(True)
+            
             # Hent nåværende bruker fra user_manager
             if user_manager:
                 current_user = user_manager.get_current_user()
@@ -1340,6 +1563,7 @@ def main():
             
             # Sjekk hvem som er der med Duck-Vision (prøver 3 ganger)
             vision_recognized = False
+            voice_recognized = False
             if vision_service and vision_service.is_connected():
                 try:
                     found, name, confidence = vision_service.check_person(timeout=2.0)
@@ -1351,9 +1575,17 @@ def main():
                         user_name = mapped_name
                         vision_recognized = True
                     else:
-                        # Unknown or no person - use generic greeting
-                        # Learning will be initiated by user during conversation if desired
-                        print(f"👤 Ukjent eller ingen person - bruker fallback: {user_name}", flush=True)
+                        # Unknown or no person - try voice recognition as fallback
+                        voice_recognized = False
+                        # Sjekk om vi har en fersk stemmegjenkjenning (siste 30 sek)
+                        if _last_speaker_name and (time.time() - _last_speaker_time) < 30.0:
+                            mapped_voice = face_name_mapping.get(_last_speaker_name, _last_speaker_name)
+                            print(f"🔊 Stemme-fallback: {_last_speaker_name} ({_last_speaker_confidence:.0%}) -> {mapped_voice}", flush=True)
+                            user_name = mapped_voice
+                            voice_recognized = True
+                        
+                        if not voice_recognized:
+                            print(f"👤 Ukjent person (hverken ansikt eller stemme) - bruker fallback: {user_name}", flush=True)
                     
                 except Exception as e:
                     print(f"⚠️ Error checking person: {e}", flush=True)
@@ -1365,6 +1597,10 @@ def main():
                 # Enklere hilsen når face recognition gjenkjenner
                 greeting_msg = f"Hei, {user_name}! Hyggelig å se deg igjen!"
                 print(f"🎭 Face recognition greeting: {greeting_msg}", flush=True)
+            elif voice_recognized:
+                # Gjenkjent via stemme - litt annerledes hilsen
+                greeting_msg = f"Hei, {user_name}! Jeg kjente deg igjen på stemmen!"
+                print(f"🎭 Voice recognition greeting: {greeting_msg}", flush=True)
             else:
                 # Full adaptiv hilsen når ikke gjenkjent visuelt
                 greeting_msg = get_adaptive_greeting(user_name=user_name)
@@ -1385,6 +1621,25 @@ def main():
         no_response_count = 0  # Teller antall ganger uten svar
         
         while True:
+            # Sjekk om Duck-Vision har gjenkjent en stemme mid-conversation
+            if _mid_conversation_speaker and not _mid_conversation_announced:
+                _mid_conversation_announced = True
+                _name_mapping = {'åsmund': 'Osmund', 'Åsmund': 'Osmund'}
+                mid_name = _name_mapping.get(_mid_conversation_speaker, _mid_conversation_speaker)
+                if not vision_recognized and not voice_recognized:
+                    # Vi visste ikke hvem det var - nå vet vi!
+                    user_name = mid_name
+                    print(f"💬 Mid-conversation gjenkjenning: {_mid_conversation_speaker} -> {mid_name}", flush=True)
+                    
+                    # Oppdater user_manager hvis mulig
+                    if user_manager:
+                        try:
+                            user_manager.switch_user(mid_name, mid_name, 'recognized')
+                        except Exception as e:
+                            print(f"⚠️ Kunne ikke bytte bruker mid-conversation: {e}", flush=True)
+                    
+                    speak(f"Å, hei {mid_name}! Nå kjente jeg deg igjen på stemmen!", speech_config, beak)
+            
             prompt = recognize_speech_from_mic()
             blink_yellow_purple()  # Start blinking umiddelbart etter STT (Anda tenker!)
             
@@ -1392,6 +1647,10 @@ def main():
                 no_response_count += 1
                 if no_response_count >= 2:
                     speak(messages_config['conversation']['no_response_timeout'], speech_config, beak)
+                    # Signal samtaleslutt til Duck-Vision
+                    _conversation_active = False
+                    if vision_service and vision_service.is_connected():
+                        vision_service.notify_conversation(False)
                     break
                 speak(messages_config['conversation']['no_response_retry'], speech_config, beak)
                 continue
@@ -1446,6 +1705,8 @@ def main():
             # Avslutt umiddelbart hvis brukeren sier en avslutningsfrase
             if should_end_conversation:
                 print("🔚 Samtale avsluttet (bruker sa avslutningsfrase)", flush=True)
+                conversation_ended_naturally = True
+                _conversation_active = False
                 off()
                 break
             
@@ -1458,6 +1719,9 @@ def main():
                     user_manager.switch_user('Osmund', 'Osmund', 'owner')
                     speak("Velkommen tilbake Osmund!", speech_config, beak)
                     print(f"✅ Byttet tilbake til eier: Osmund", flush=True)
+                    _conversation_active = False
+                    if vision_service and vision_service.is_connected():
+                        vision_service.notify_conversation(False)
                     break  # Start ny samtale
                 else:
                     speak("Du er allerede Osmund, eieren!", speech_config, beak)
@@ -1467,6 +1731,9 @@ def main():
             if user_manager and ("bytt bruker" in prompt_lower or "skifte bruker" in prompt_lower or "bytte bruker" in prompt_lower):
                 if ask_for_user_switch(speech_config, beak, user_manager):
                     # Vellykket brukerbytte - start ny samtale
+                    _conversation_active = False
+                    if vision_service and vision_service.is_connected():
+                        vision_service.notify_conversation(False)
                     break
                 else:
                     # Mislykket - fortsett samtale
@@ -1565,12 +1832,19 @@ def main():
                 # Sjekk om samtalen skal avsluttes
                 if force_end:
                     print("🔚 Samtale tvunget avsluttet (enable_sleep_mode el.l.)", flush=True)
+                    _conversation_active = False
+                    if vision_service and vision_service.is_connected():
+                        vision_service.notify_conversation(False)
                     break
                 elif ai_wants_to_end:
                     print("🔚 Samtale avsluttet av AI", flush=True)
+                    conversation_ended_naturally = True
+                    _conversation_active = False
                     break
                 elif is_thank_you:
                     print("🔚 Samtale avsluttet (bruker takket)", flush=True)
+                    conversation_ended_naturally = True
+                    _conversation_active = False
                     break
             except Exception as e:
                 off()
@@ -1578,6 +1852,24 @@ def main():
                 speak("Beklager, det oppstod en feil.", speech_config, beak)
             
             set_idle_led()  # Gul blinkende hvis hotspot, ellers blå
+        
+        # Etter samtale: sjekk om vi bør spørre ukjent person om å bli kjent
+        # Krav: naturlig samtaleslutt, personen er ukjent, minst 3 meldingsutvekslinger (6 meldinger)
+        if (conversation_ended_naturally 
+                and not vision_recognized 
+                and not voice_recognized 
+                and not _mid_conversation_announced
+                and len(messages) >= 6):
+            print(f"🤝 Ukjent person etter {len(messages)} meldinger - spør om onboarding", flush=True)
+            try:
+                handle_unknown_person_onboarding(speech_config, beak, vision_service, user_manager)
+            except Exception as e:
+                print(f"⚠️ Feil i onboarding: {e}", flush=True)
+        
+        # Send conversation end til Duck-Vision (frigjør audio-buffer)
+        # Gjøres ETTER onboarding så save_conversation_voice har tilgang til audioen
+        if conversation_ended_naturally and vision_service and vision_service.is_connected():
+            vision_service.notify_conversation(False)
 
 
 if __name__ == "__main__":

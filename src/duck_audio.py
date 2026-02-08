@@ -118,6 +118,28 @@ def speak(text, speech_config, beak):
     # La gul/lilla blinking fortsette under TTS-prosessering
     # set_red() vil stoppe blinking når lyden starter
     
+    # Mute Duck-Vision mikrofon mens Samantha snakker
+    try:
+        from src.duck_services import get_services
+        vision_svc = get_services().get_vision_service()
+        vision_svc.notify_speaking(True)
+    except Exception:
+        pass
+    
+    try:
+        _speak_internal(text, speech_config, beak)
+    finally:
+        # Unmute Duck-Vision mikrofon når Samantha er ferdig
+        try:
+            from src.duck_services import get_services
+            vision_svc = get_services().get_vision_service()
+            vision_svc.notify_speaking(False)
+        except Exception:
+            pass
+
+
+def _speak_internal(text, speech_config, beak):
+    """Internal TTS implementation."""
     # Fjern Markdown-formatering før TTS
     text = clean_markdown_for_tts(text)
     

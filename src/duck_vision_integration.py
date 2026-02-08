@@ -42,7 +42,9 @@ class DuckVisionHandler:
                  on_face_detected: Optional[Callable] = None,
                  on_unknown_face: Optional[Callable] = None,
                  on_object_detected: Optional[Callable] = None,
-                 on_learning_progress: Optional[Callable] = None):
+                 on_learning_progress: Optional[Callable] = None,
+                 on_speaker_recognized: Optional[Callable] = None,
+                 on_voice_learned: Optional[Callable] = None):
         """
         Args:
             broker_host: MQTT broker adresse (default: localhost)
@@ -51,6 +53,8 @@ class DuckVisionHandler:
             on_unknown_face: Callback når ukjent ansikt detekteres
             on_object_detected: Callback når objekter detekteres (object_name, confidence)
             on_learning_progress: Callback under face learning (name, step, total, instruction)
+            on_speaker_recognized: Callback når stemme gjenkjennes (name, confidence)
+            on_voice_learned: Callback når stemmeprofil opprettet (name, success)
         """
         self.broker_host = broker_host
         self.broker_port = broker_port
@@ -60,6 +64,8 @@ class DuckVisionHandler:
         self.on_unknown_face = on_unknown_face
         self.on_object_detected = on_object_detected
         self.on_learning_progress = on_learning_progress
+        self.on_speaker_recognized = on_speaker_recognized
+        self.on_voice_learned = on_voice_learned
         
         # MQTT client setup
         self.client = mqtt.Client(client_id="samantha-vision-client")
@@ -135,6 +141,8 @@ class DuckVisionHandler:
             self.connected = True
             # Subscribe til alle Duck-Vision events (QoS 1 for pålitelig levering)
             self.client.subscribe("duck/vision/#", qos=QOS_AT_LEAST_ONCE)
+            # Subscribe til stemmegjenkjenning fra Duck-Vision
+            self.client.subscribe("duck/audio/#", qos=QOS_AT_LEAST_ONCE)
             # Publiser online-status (retained slik at nye subscribere ser den)
             self.client.publish(
                 self.STATUS_TOPIC,
@@ -168,11 +176,36 @@ class DuckVisionHandler:
                 self._handle_object_event(payload)
             elif topic in ("duck/vision/event", "duck/vision/events"):
                 self._handle_generic_event(payload)
+            elif topic == "duck/audio/speaker":
+                self._handle_speaker_recognized(payload)
+            elif topic == "duck/audio/voice_learned":
+                self._handle_voice_learned(payload)
                 
         except json.JSONDecodeError as e:
             logger.error(f"Ugyldig JSON fra {msg.topic}: {e}")
         except Exception as e:
             logger.error(f"Feil ved håndtering av MQTT-melding på {msg.topic}: {e}")
+    
+    def _handle_speaker_recognized(self, data: dict):
+        """Håndter stemmegjenkjenning fra Duck-Vision"""
+        name = data.get("name")
+        confidence = data.get("confidence", 0.0)
+        duration = data.get("speech_duration", 0.0)
+        logger.info(f"🔊 Stemme gjenkjent: {name} ({confidence:.2%}, {duration:.1f}s tale)")
+        if self.on_speaker_recognized:
+            self.on_speaker_recognized(name, confidence)
+    
+    def _handle_voice_learned(self, data: dict):
+        """Håndter at ny stemmeprofil er opprettet"""
+        name = data.get("name")
+        success = data.get("success", False)
+        duration = data.get("speech_duration", 0.0)
+        if success:
+            logger.info(f"✅ Stemmeprofil opprettet for {name} ({duration:.1f}s tale)")
+        else:
+            logger.warning(f"❌ Kunne ikke opprette stemmeprofil for {name}")
+        if self.on_voice_learned:
+            self.on_voice_learned(name, success)
     
     def _handle_publisher_status(self, data: dict):
         """Håndter status fra Duck-Vision publisher på Pi 5 (retained LWT)"""
@@ -411,9 +444,61 @@ class DuckVisionHandler:
         logger.info(f"Starter learning av {name} med {num_samples} bilder...")
     
     def forget_person(self, name: str):
-        """Be Duck-Vision om å glemme en person"""
+        """Be Duck-Vision om å glemme en person (sletter også stemmeprofil)"""
         self._publish_command({"command": "forget_person", "name": name})
     
     def list_known_people(self):
         """Be Duck-Vision om liste over kjente personer"""
         self._publish_command({"command": "list_people"})
+    
+    def learn_voice(self, name: str, duration: float = 10.0):
+        """Be Duck-Vision om å lære en persons stemme manuelt"""
+        self._publish_command({
+            "command": "learn_voice",
+            "name": name,
+            "duration": duration
+        })
+    
+    def notify_speaking(self, speaking: bool):
+        """Mute/unmute Duck-Vision mikrofon når Samantha snakker/er ferdig"""
+        if not self.connected:
+            return
+        try:
+            self.client.publish(
+                "duck/samantha/speaking",
+                json.dumps({"speaking": speaking}),
+                qos=QOS_FIRE_AND_FORGET
+            )
+        except Exception as e:
+            logger.debug(f"Kunne ikke sende speaking-status: {e}")
+
+    def notify_conversation(self, active: bool):
+        """Signal til Duck-Vision at en samtale er aktiv/avsluttet.
+        
+        Under samtale prioriterer Duck-Vision stemmegjenkjenning:
+        - Senker cooldown (raskere matching)
+        - Samler tale for bedre identifisering
+        - Sender speaker_recognized event så fort match er funnet
+        """
+        if not self.connected:
+            return
+        try:
+            self.client.publish(
+                "duck/samantha/conversation",
+                json.dumps({"active": active}),
+                qos=QOS_FIRE_AND_FORGET
+            )
+            logger.info(f"{'💬 Samtale startet' if active else '💬 Samtale avsluttet'} (sendt til Duck-Vision)")
+        except Exception as e:
+            logger.debug(f"Kunne ikke sende conversation-status: {e}")
+
+    def save_conversation_voice(self, name: str):
+        """Be Duck-Vision om å lagre en stemmeprofil fra samtale-audio.
+        
+        Bruker audio som allerede er samlet under samtale-modus.
+        MÅ kalles FØR notify_conversation(False), ellers er audioen slettet.
+        """
+        self._publish_command({
+            "command": "save_conversation_voice",
+            "name": name
+        })

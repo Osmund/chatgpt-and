@@ -37,13 +37,17 @@ class DuckVisionService:
         self.on_face_detected_callback = None
         self.on_unknown_face_callback = None
         self.on_learning_progress_callback = None
+        self.on_speaker_recognized_callback = None
+        self.on_voice_learned_callback = None
         
         logger.info(f"DuckVisionService initialized (broker: {broker_host}:{broker_port})")
     
     def start(self, 
               on_face_detected: Optional[Callable] = None,
               on_unknown_face: Optional[Callable] = None,
-              on_learning_progress: Optional[Callable] = None) -> bool:
+              on_learning_progress: Optional[Callable] = None,
+              on_speaker_recognized: Optional[Callable] = None,
+              on_voice_learned: Optional[Callable] = None) -> bool:
         """
         Start the Duck-Vision service and connect to MQTT broker
         
@@ -51,6 +55,8 @@ class DuckVisionService:
             on_face_detected: Callback when known face is detected (name, confidence)
             on_unknown_face: Callback when unknown face is detected ()
             on_learning_progress: Callback during face learning (name, step, total, instruction)
+            on_speaker_recognized: Callback when voice is recognized (name, confidence)
+            on_voice_learned: Callback when voice profile is created (name, success)
         
         Returns:
             bool: True if successfully connected, False otherwise
@@ -59,6 +65,8 @@ class DuckVisionService:
         self.on_face_detected_callback = on_face_detected
         self.on_unknown_face_callback = on_unknown_face
         self.on_learning_progress_callback = on_learning_progress
+        self.on_speaker_recognized_callback = on_speaker_recognized
+        self.on_voice_learned_callback = on_voice_learned
         
         try:
             # Initialize handler with callbacks
@@ -68,7 +76,9 @@ class DuckVisionService:
                 on_face_detected=self._on_face_detected_internal,
                 on_unknown_face=self._on_unknown_face_internal,
                 on_object_detected=self._on_object_detected_internal,
-                on_learning_progress=on_learning_progress  # Pass through to handler
+                on_learning_progress=on_learning_progress,  # Pass through to handler
+                on_speaker_recognized=self._on_speaker_recognized_internal,
+                on_voice_learned=self._on_voice_learned_internal
             )
             
             # Connect to MQTT broker
@@ -107,6 +117,21 @@ class DuckVisionService:
         logger.debug("Unknown face detected")
         if self.on_unknown_face_callback:
             self.on_unknown_face_callback()
+    
+    def _on_speaker_recognized_internal(self, name: str, confidence: float):
+        """Internal callback for speaker recognition - forwards to external callback."""
+        logger.info(f"🔊 Speaker recognized: {name} ({confidence:.2%})")
+        if self.on_speaker_recognized_callback:
+            self.on_speaker_recognized_callback(name, confidence)
+    
+    def _on_voice_learned_internal(self, name: str, success: bool):
+        """Internal callback for voice profile creation - forwards to external callback."""
+        if success:
+            logger.info(f"✅ Voice profile created for {name}")
+        else:
+            logger.warning(f"❌ Voice profile creation failed for {name}")
+        if self.on_voice_learned_callback:
+            self.on_voice_learned_callback(name, success)
     
     # Commands to Duck-Vision
     
@@ -203,6 +228,32 @@ class DuckVisionService:
             return
         self.vision_handler.list_known_people()
         logger.info("Requested list of known people")
+    
+    def learn_voice(self, name: str, duration: float = 10.0):
+        """Tell Duck-Vision to learn a person's voice manually"""
+        if not self.is_connected():
+            logger.warning("Duck-Vision not connected, cannot learn voice")
+            return
+        self.vision_handler.learn_voice(name, duration)
+        logger.info(f"Requested Duck-Vision to learn voice: {name} ({duration}s)")
+    
+    def notify_speaking(self, speaking: bool):
+        """Mute/unmute Duck-Vision mic when Samantha speaks/stops speaking"""
+        if self.vision_handler:
+            self.vision_handler.notify_speaking(speaking)
+
+    def notify_conversation(self, active: bool):
+        """Signal to Duck-Vision that a conversation is active/ended"""
+        if self.vision_handler:
+            self.vision_handler.notify_conversation(active)
+
+    def save_conversation_voice(self, name: str):
+        """Ask Duck-Vision to save a voice profile from conversation audio"""
+        if not self.is_connected():
+            logger.warning("Duck-Vision not connected, cannot save conversation voice")
+            return
+        self.vision_handler.save_conversation_voice(name)
+        logger.info(f"Requested Duck-Vision to save conversation voice for: {name}")
     
     def is_connected(self) -> bool:
         """Check if Duck-Vision on Pi 5 is actually online and reachable"""
