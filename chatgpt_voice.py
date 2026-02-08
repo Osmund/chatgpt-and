@@ -1666,7 +1666,8 @@ def main():
                         except Exception as e:
                             print(f"⚠️ Kunne ikke reassigne meldinger: {e}", flush=True)
                     
-                    speak(f"Å, hei {mid_name}! Nå kjente jeg deg igjen på stemmen!", speech_config, beak)
+                    speak(f"Hei, {mid_name}!", speech_config, beak)
+                    blink_yellow_purple()  # Restart LED etter hilsen
             
             elif mid_name != _current_speaker:
                 # Person-bytte! En annen kjent person snakker nå
@@ -1687,7 +1688,8 @@ def main():
                 # personen snakker, så meldingen er ennå ikke lagret.
                 # Neste save_message() vil bruke riktig user_name automatisk.
                 
-                speak(f"Å, hei {mid_name}!", speech_config, beak)
+                speak(f"Hei, {mid_name}!", speech_config, beak)
+                blink_yellow_purple()  # Restart LED etter hilsen
             
             else:
                 # Samme person som allerede er gjenkjent - bare nullstill
