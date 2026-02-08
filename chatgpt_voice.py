@@ -1387,6 +1387,7 @@ def main():
                 set_idle_led()  # Gul blinkende hvis hotspot, ellers blå
                 sleep_led_active = False
                 print("⏰ Sleep mode deaktivert - våkner opp", flush=True)
+                speak("Gææææsp! Nå er jeg våken igjen!", speech_config, beak)
         
         # Sjekk events fra bus UTENFOR sleep mode (før wake word)
         bus = get_event_bus()
