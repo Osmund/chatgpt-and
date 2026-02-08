@@ -27,6 +27,7 @@ from src.duck_web_search import web_search
 from src.duck_news import get_nrk_news, get_news_headlines
 from src.duck_transport import get_departures, plan_journey
 from src.duck_wikipedia import wikipedia_lookup, wikipedia_random
+from src.duck_football import get_pl_standings, get_pl_matches
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1578,6 +1579,33 @@ def _get_function_tools():
                     "required": ["query"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_football_info",
+                "description": "Hent Premier League fotballdata: tabell (standings), siste resultater, eller kommende kamper. Bruk denne når brukeren spør om Premier League, fotball, tabellen, resultater, kamper, eller spesifikke lag som Liverpool, Arsenal, Man City osv.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query_type": {
+                            "type": "string",
+                            "enum": ["standings", "recent", "upcoming", "team"],
+                            "description": "Type spørring: 'standings' for tabell, 'recent' for siste resultater, 'upcoming' for kommende kamper, 'team' for info om et spesifikt lag"
+                        },
+                        "team_name": {
+                            "type": "string",
+                            "description": "Lagnavn (kun nødvendig når query_type='team'), f.eks. 'Liverpool', 'Arsenal', 'Man City'"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Antall elementer å vise (default 10 for kamper, 20 for tabell)",
+                            "default": 10
+                        }
+                    },
+                    "required": ["query_type"]
+                }
+            }
         }
     ]
 
@@ -1970,6 +1998,20 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
             sentences = function_args.get("sentences", 5)
             language = function_args.get("language", "no")
             result = wikipedia_lookup(query, sentences, language)
+        elif function_name == "get_football_info":
+            query_type = function_args.get("query_type", "standings")
+            team_name = function_args.get("team_name", "")
+            count = function_args.get("count", 10)
+            if query_type == "standings":
+                result = get_pl_standings(top_n=min(count, 20))
+            elif query_type == "team" and team_name:
+                result = get_pl_matches(match_type=team_name, count=count)
+            elif query_type == "recent":
+                result = get_pl_matches(match_type="recent", count=count)
+            elif query_type == "upcoming":
+                result = get_pl_matches(match_type="upcoming", count=count)
+            else:
+                result = get_pl_standings()
         elif function_name == "set_led_color":
             color = function_args.get("color", "")
             color_map = {
