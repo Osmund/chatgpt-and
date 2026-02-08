@@ -1789,7 +1789,7 @@ def main():
                 # (AI glemmer ofte [AVSLUTT] men bruker farvel-språk)
                 if not ai_wants_to_end:
                     reply_lower = reply.lower()
-                    ai_farewell_phrases = ["vi snakkes", "ha det bra", "kvakk for nå", "bare si ifra"]
+                    ai_farewell_phrases = ["vi snakkes", "ha det bra", "kvakk for nå"]
                     if any(phrase in reply_lower for phrase in ai_farewell_phrases):
                         ai_wants_to_end = True
                 

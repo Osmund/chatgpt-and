@@ -179,6 +179,7 @@ def ask_for_user_switch(speech_config, beak, user_manager):
 def is_conversation_ending(user_text: str) -> bool:
     """
     Detekter om bruker vil avslutte samtalen basert på fraser.
+    Sjekker at frasen ikke etterfølges av et oppfølgingsspørsmål (med "men", "kan du", osv).
     
     Args:
         user_text: Brukerens tekst
@@ -186,31 +187,70 @@ def is_conversation_ending(user_text: str) -> bool:
     Returns:
         True hvis samtalen skal avsluttes
     """
-    user_lower = user_text.lower()
+    user_lower = user_text.lower().strip().rstrip(".")
     
-    # Avslutningsfraser
-    ending_phrases = [
+    # Ord/fraser som indikerer at brukeren fortsetter samtalen
+    continuation_words = ["men ", "men,", "kan du", "kunne du", "hva ", "hvem ", "hvor ", 
+                          "hvordan ", "hvorfor ", "når ", "hvilken ", "hvilket ", "hvilke ",
+                          "fortell", "si meg", "sjekk", "finn", "vis ", "gi meg", "hent"]
+    
+    # Sjekk om teksten inneholder en avslutningsfrase etterfulgt av en fortsettelse
+    def has_continuation_after(text: str, phrase: str) -> bool:
+        """Sjekk om det er en fortsettelse etter avslutningsfrasen."""
+        idx = text.find(phrase)
+        if idx == -1:
+            return False
+        after = text[idx + len(phrase):].strip().lstrip(",").strip()
+        return any(after.startswith(word) or after.startswith(word.lstrip()) for word in continuation_words)
+    
+    # Eksakte/korte avslutningsfraser (hele setningen må matche)
+    exact_endings = [
         "stopp",
         "slutt",
         "avslutt",
         "ha det",
         "farvel",
         "adjø",
+        "ferdig",
+        "snakkes",
+        "vi snakkes",
+        "god natt",
+        "natta",
+        "nei takk",
+    ]
+    
+    # Sjekk eksakte avslutninger (hele teksten)
+    if user_lower in exact_endings:
+        return True
+    
+    # Kontekst-sensitive avslutningsfraser (kan stå i en lengre setning,
+    # men bare hvis det IKKE er en fortsettelse etter)
+    context_endings = [
         "takk for hjelpen",
         "takk for meg",
         "det var alt",
         "det var det",
         "det er greit",
-        "det er bra",
-        "nei takk",
+        "det er bra", 
         "nei det er greit",
         "nei det holder",
         "det holder",
-        "ferdig",
-        "vi snakkes",
-        "snakkes",
-        "god natt",
-        "natta",
+        "nei takk",
     ]
     
-    return any(phrase in user_lower for phrase in ending_phrases)
+    for phrase in context_endings:
+        if phrase in user_lower:
+            # Sjekk om brukeren fortsetter etter avslutningsfrasen
+            if has_continuation_after(user_lower, phrase):
+                return False  # Brukeren vil fortsette!
+            return True
+    
+    # Sjekk "1000 takk" / "tusen takk" o.l. som avslutning (uten fortsettelse)
+    thank_phrases = ["tusen takk", "1000 takk", "mange takk", "takk skal du ha"]
+    for phrase in thank_phrases:
+        if phrase in user_lower:
+            if has_continuation_after(user_lower, phrase):
+                return False
+            return True
+    
+    return False
