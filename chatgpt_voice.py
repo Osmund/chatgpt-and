@@ -1620,8 +1620,10 @@ def main():
         messages = []
         no_response_count = 0  # Teller antall ganger uten svar
         
-        while True:
-            # Sjekk om Duck-Vision har gjenkjent en stemme mid-conversation
+        def _check_mid_conversation_recognition():
+            """Sjekk om stemme ble gjenkjent under STT og hilse med navn."""
+            global _mid_conversation_announced
+            nonlocal user_name, voice_recognized
             if _mid_conversation_speaker and not _mid_conversation_announced:
                 _mid_conversation_announced = True
                 _name_mapping = {'åsmund': 'Osmund', 'Åsmund': 'Osmund'}
@@ -1641,9 +1643,16 @@ def main():
                             print(f"⚠️ Kunne ikke bytte bruker mid-conversation: {e}", flush=True)
                     
                     speak(f"Å, hei {mid_name}! Nå kjente jeg deg igjen på stemmen!", speech_config, beak)
+        
+        while True:
+            # Sjekk FØRST om stemme ble gjenkjent (f.eks. fra forrige iterasjon)
+            _check_mid_conversation_recognition()
             
             prompt = recognize_speech_from_mic()
             blink_yellow_purple()  # Start blinking umiddelbart etter STT (Anda tenker!)
+            
+            # Sjekk IGJEN etter STT - stemmegjenkjenning skjer under lytting
+            _check_mid_conversation_recognition()
             
             if not prompt:
                 no_response_count += 1
