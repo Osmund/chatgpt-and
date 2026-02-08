@@ -28,6 +28,7 @@ from src.duck_news import get_nrk_news, get_news_headlines
 from src.duck_transport import get_departures, plan_journey
 from src.duck_wikipedia import wikipedia_lookup, wikipedia_random
 from src.duck_football import get_pl_standings, get_pl_matches
+from src.duck_olympics import get_olympics_medals
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1606,6 +1607,28 @@ def _get_function_tools():
                     "required": ["query_type"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_olympics_medals",
+                "description": "Hent medaljeoversikt for pågående eller siste OL (olympiske leker). Bruk denne når brukeren spør om OL-medaljer, medaljetabell, hvordan Norge/et land gjør det i OL, olympiske leker. Data hentes fra Wikipedia og oppdateres i nær-sanntid.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "top_n": {
+                            "type": "integer",
+                            "description": "Antall land å vise i tabellen (default 15)",
+                            "default": 15
+                        },
+                        "country": {
+                            "type": "string",
+                            "description": "Spesifikt land å fremheve i tabellen (f.eks. 'Norge', 'Sverige', 'USA')"
+                        }
+                    },
+                    "required": []
+                }
+            }
         }
     ]
 
@@ -2013,6 +2036,10 @@ def _handle_tool_calls(tool_calls, final_messages, source, source_user_id, sms_m
                 result = get_pl_matches(match_type="upcoming", count=count)
             else:
                 result = get_pl_standings()
+        elif function_name == "get_olympics_medals":
+            top_n = function_args.get("top_n", 15)
+            country = function_args.get("country", None)
+            result = get_olympics_medals(top_n=top_n, country=country)
         elif function_name == "set_led_color":
             color = function_args.get("color", "")
             color_map = {
