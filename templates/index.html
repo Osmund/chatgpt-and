@@ -541,6 +541,22 @@
                         <div id="backup-list" class="scroll-list-sm">Laster backups...</div>
                     </div>
                     
+                    <!-- Auto-Update -->
+                    <div class="settings-group">
+                        <h3 class="settings-group-title">🔄 Auto-Update</h3>
+                        <div class="printer-toggle-row">
+                            <button id="autoupdate-toggle-btn" class="btn printer-power-btn printer-off" onclick="toggleAutoUpdate()">
+                                <span id="autoupdate-power-icon">⏻</span> <span id="autoupdate-power-label">Aktivér</span>
+                            </button>
+                            <span id="autoupdate-toggle-status" class="printer-toggle-status">Laster...</span>
+                        </div>
+                        <div id="autoupdate-info" class="fan-status" style="margin-top:8px;">
+                            <div>📦 Versjon: <strong id="autoupdate-version">?</strong></div>
+                            <div id="autoupdate-next" style="display:none;">⏰ Neste sjekk: <span id="autoupdate-next-time"></span></div>
+                            <div id="autoupdate-last" style="display:none;">📅 Sist sjekket: <span id="autoupdate-last-time"></span></div>
+                        </div>
+                    </div>
+                    
                     <!-- WiFi -->
                     <div class="settings-group">
                         <h3 class="settings-group-title">🌐 WiFi & Nettverk</h3>

@@ -2683,6 +2683,111 @@ async function loadSystemStats() {
 // Load backup status on page load
 document.addEventListener('DOMContentLoaded', () => {
     loadBackupStatus();
+    loadAutoUpdateStatus();
     // Refresh every 30 seconds
     setInterval(loadBackupStatus, 30000);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AUTO-UPDATE
+// ═══════════════════════════════════════════════════════════════
+
+let autoUpdateEnabled = false;
+
+async function loadAutoUpdateStatus() {
+    try {
+        const response = await fetch('/api/auto-update/status');
+        const data = await response.json();
+        
+        autoUpdateEnabled = data.enabled;
+        updateAutoUpdateToggleButton();
+        
+        // Versjon
+        document.getElementById('autoupdate-version').textContent = data.version || '?';
+        
+        // Neste kjøring
+        const nextEl = document.getElementById('autoupdate-next');
+        const nextTimeEl = document.getElementById('autoupdate-next-time');
+        if (data.enabled && data.next_run) {
+            nextEl.style.display = 'block';
+            // Parse systemd timestamp
+            try {
+                const d = new Date(data.next_run);
+                nextTimeEl.textContent = d.toLocaleString('nb-NO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+            } catch(e) {
+                nextTimeEl.textContent = data.next_run;
+            }
+        } else {
+            nextEl.style.display = 'none';
+        }
+        
+        // Sist kjørt
+        const lastEl = document.getElementById('autoupdate-last');
+        const lastTimeEl = document.getElementById('autoupdate-last-time');
+        if (data.last_run) {
+            lastEl.style.display = 'block';
+            try {
+                const d = new Date(data.last_run);
+                lastTimeEl.textContent = d.toLocaleString('nb-NO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+            } catch(e) {
+                lastTimeEl.textContent = data.last_run;
+            }
+        } else {
+            lastEl.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Kunne ikke laste auto-update status:', error);
+        document.getElementById('autoupdate-toggle-status').textContent = 'Feil';
+    }
+}
+
+function updateAutoUpdateToggleButton() {
+    const btn = document.getElementById('autoupdate-toggle-btn');
+    const label = document.getElementById('autoupdate-power-label');
+    const status = document.getElementById('autoupdate-toggle-status');
+    
+    if (autoUpdateEnabled) {
+        btn.classList.remove('printer-off');
+        btn.classList.add('printer-on');
+        label.textContent = 'Deaktivér';
+        status.textContent = 'Aktiv';
+        status.style.color = '#4ade80';
+    } else {
+        btn.classList.remove('printer-on');
+        btn.classList.add('printer-off');
+        label.textContent = 'Aktivér';
+        status.textContent = 'Av';
+        status.style.color = '#888';
+    }
+}
+
+async function toggleAutoUpdate() {
+    const btn = document.getElementById('autoupdate-toggle-btn');
+    const label = document.getElementById('autoupdate-power-label');
+    const enable = !autoUpdateEnabled;
+    
+    btn.disabled = true;
+    label.textContent = enable ? 'Aktiverer...' : 'Deaktiverer...';
+    
+    try {
+        const response = await fetch('/api/auto-update/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enable: enable })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            autoUpdateEnabled = data.enabled;
+            updateAutoUpdateToggleButton();
+            // Oppdater full status etter kort forsinkelse  
+            setTimeout(loadAutoUpdateStatus, 1000);
+        } else {
+            alert('Feil: ' + (data.message || 'Ukjent feil'));
+        }
+    } catch (error) {
+        alert('Kunne ikke endre auto-update: ' + error.message);
+    } finally {
+        btn.disabled = false;
+    }
+}

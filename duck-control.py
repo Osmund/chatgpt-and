@@ -766,6 +766,53 @@ class DuckControlHandler(BaseHTTPRequestHandler):
             response = api_handlers.handle_printer_status()
             self.send_json_response(response, 200)
         
+        elif self.path == '/api/auto-update/status':
+            try:
+                # Sjekk om timer er enabled og aktiv
+                enabled_result = subprocess.run(
+                    ['systemctl', 'is-enabled', 'duck-update.timer'],
+                    capture_output=True, text=True, timeout=5
+                )
+                active_result = subprocess.run(
+                    ['systemctl', 'is-active', 'duck-update.timer'],
+                    capture_output=True, text=True, timeout=5
+                )
+                # Les nåværende versjon
+                version = '?'
+                version_file = str(project_root / 'VERSION')
+                if os.path.exists(version_file):
+                    with open(version_file) as f:
+                        version = f.read().strip()
+                # Neste planlagte kjøring
+                next_run = ''
+                try:
+                    next_result = subprocess.run(
+                        ['systemctl', 'show', 'duck-update.timer', '--property=NextElapseUSecRealtime', '--value'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    next_run = next_result.stdout.strip()
+                except Exception:
+                    pass
+                # Siste kjøring
+                last_result_text = ''
+                try:
+                    last_result = subprocess.run(
+                        ['systemctl', 'show', 'duck-update.timer', '--property=LastTriggerUSecRealtime', '--value'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    last_result_text = last_result.stdout.strip()
+                except Exception:
+                    pass
+                self.send_json_response({
+                    'enabled': enabled_result.stdout.strip() == 'enabled',
+                    'active': active_result.stdout.strip() == 'active',
+                    'version': version,
+                    'next_run': next_run,
+                    'last_run': last_result_text
+                }, 200)
+            except Exception as e:
+                self.send_json_response({'enabled': False, 'active': False, 'error': str(e)}, 200)
+        
         elif self.path == '/api/system/stats':
             response = api_handlers.handle_system_stats()
             self.send_json_response(response, 200)
@@ -1847,6 +1894,26 @@ class DuckControlHandler(BaseHTTPRequestHandler):
                 action = data.get('action', 'on')  # "on" or "off"
                 response = api_handlers.handle_printer_toggle(action)
                 self.send_json_response(response, 200 if response.get('success') else 500)
+            except Exception as e:
+                self.send_json_response({'success': False, 'message': str(e)}, 400)
+        
+        elif self.path == '/api/auto-update/toggle':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode())
+                enable = data.get('enable', True)
+                
+                if enable:
+                    subprocess.run(['sudo', 'systemctl', 'enable', 'duck-update.timer'], capture_output=True, timeout=10)
+                    subprocess.run(['sudo', 'systemctl', 'start', 'duck-update.timer'], capture_output=True, timeout=10)
+                    print("🔄 Auto-update aktivert", flush=True)
+                else:
+                    subprocess.run(['sudo', 'systemctl', 'stop', 'duck-update.timer'], capture_output=True, timeout=10)
+                    subprocess.run(['sudo', 'systemctl', 'disable', 'duck-update.timer'], capture_output=True, timeout=10)
+                    print("⏸️ Auto-update deaktivert", flush=True)
+                
+                self.send_json_response({'success': True, 'enabled': enable}, 200)
             except Exception as e:
                 self.send_json_response({'success': False, 'message': str(e)}, 400)
         
