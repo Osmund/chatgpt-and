@@ -8,6 +8,44 @@ Denne guiden beskriver hvordan du lager en ny release som alle ender med auto-up
 - GitHub-konto med tilgang til å lage releases
 - `gh` CLI (valgfritt, men anbefalt): `sudo apt install gh`
 
+## Oppsett på ny and (engangs)
+
+Repoet er privat, så hver and trenger en GitHub Personal Access Token (PAT).
+
+### 1. Opprett token på GitHub
+
+1. Gå til https://github.com/settings/tokens?type=beta (Fine-grained tokens)
+2. **Token name**: `anda-update-<andnavn>` (f.eks. `anda-update-samantha`)
+3. **Expiration**: Velg lang varighet (1 år+) eller "No expiration"
+4. **Repository access**: Only select repositories → `Osmund/oDuckberry`
+5. **Permissions**: Contents → Read-only
+6. Trykk **Generate token** og kopier tokenet
+
+### 2. Lagre token på Pi'en
+
+```bash
+mkdir -p ~/.config/duck
+echo "ghp_DittTokenHer" > ~/.config/duck/github_token
+chmod 600 ~/.config/duck/github_token
+```
+
+### 3. Aktivér auto-update
+
+Via kontrollpanelet: **⚙️ System → 🔄 Auto-Update → Aktivér**
+
+Eller via terminal:
+```bash
+sudo systemctl enable --now duck-update.timer
+```
+
+### 4. Test at det fungerer
+
+```bash
+# Tørkjør oppdateringsskriptet
+sudo systemctl start duck-update.service
+sudo journalctl -u duck-update.service --no-pager -n 20
+```
+
 ## Steg-for-steg
 
 ### 1. Gjør ferdig endringene

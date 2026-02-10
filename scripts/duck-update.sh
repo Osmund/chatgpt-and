@@ -15,6 +15,7 @@ UPDATE_LOG="/tmp/duck_last_update.json"
 LOCK_FILE="/tmp/duck_update.lock"
 GITHUB_REPO="Osmund/oDuckberry"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+GITHUB_TOKEN_FILE="/home/admog/.config/duck/github_token"
 
 # Tjenester som skal restartes etter oppdatering
 SERVICES=(
@@ -76,6 +77,22 @@ fi
 
 log "🦆 Anda Auto-Update startet (nåværende: v${CURRENT_VERSION})"
 
+# ── Last GitHub token (for private repo) ────────────────────────────────
+GITHUB_TOKEN=""
+if [ -f "$GITHUB_TOKEN_FILE" ]; then
+    GITHUB_TOKEN=$(cat "$GITHUB_TOKEN_FILE" | tr -d '[:space:]')
+    log "🔑 GitHub token lastet"
+else
+    log "❌ Ingen GitHub token funnet: $GITHUB_TOKEN_FILE"
+    log "   Opprett med: mkdir -p ~/.config/duck && echo 'ghp_DinToken' > ~/.config/duck/github_token && chmod 600 ~/.config/duck/github_token"
+    log_json "error" "Mangler GitHub token - se docs/RELEASES.md"
+    exit 1
+fi
+
+# Sett opp git credentials for denne kjøringen
+export GIT_ASKPASS=/bin/echo
+git config --local credential.helper "!f() { echo username=x-access-token; echo password=${GITHUB_TOKEN}; }; f"
+
 # ── Sjekk om anda er opptatt ──────────────────────────────────────────
 # Ikke oppdater midt i en samtale
 if [ -f "/tmp/duck_conversation_active.txt" ]; then
@@ -87,7 +104,7 @@ fi
 # ── Hent siste release fra GitHub ─────────────────────────────────────
 log "🔍 Sjekker GitHub for ny release..."
 
-RELEASE_JSON=$(curl -s --max-time 30 "$GITHUB_API" 2>/dev/null) || {
+RELEASE_JSON=$(curl -s --max-time 30 -H "Authorization: token ${GITHUB_TOKEN}" "$GITHUB_API" 2>/dev/null) || {
     log "❌ Kunne ikke nå GitHub API"
     log_json "error" "Kunne ikke nå GitHub API"
     exit 1
