@@ -1282,6 +1282,26 @@ def main():
     if is_hotspot_active():
         print("📡 Hotspot er aktivt - LED blinker gult", flush=True)
     
+    # Sjekk om det ble installert en oppdatering i natt
+    _pending_update_announcement = None
+    try:
+        update_log = '/tmp/duck_last_update.json'
+        if os.path.exists(update_log):
+            with open(update_log, 'r') as f:
+                update_info = json.loads(f.read())
+            if update_info.get('status') == 'updated':
+                from_ver = update_info.get('from_version', '?')
+                to_ver = update_info.get('to_version', '?')
+                _pending_update_announcement = (
+                    f"Jeg fikk en oppdatering i natt! "
+                    f"Versjon {to_ver}."
+                )
+                print(f"🆕 Oppdatering oppdaget: v{from_ver} → v{to_ver}", flush=True)
+            # Slett filen uansett så vi ikke annonserer flere ganger
+            os.remove(update_log)
+    except Exception as e:
+        print(f"⚠️ Kunne ikke lese oppdateringsstatus: {e}", flush=True)
+    
     # Vent litt ekstra for å la nebbet fullføre bevegelsene
     time.sleep(0.5)
     
@@ -1635,6 +1655,11 @@ def main():
             sms_manager.reduce_boredom(amount=2.0)
         except Exception as e:
             print(f"⚠️ Could not reduce boredom: {e}", flush=True)
+        
+        # Annonser oppdatering ved første samtale etter oppdatering
+        if _pending_update_announcement:
+            speak(_pending_update_announcement, speech_config, beak)
+            _pending_update_announcement = None
         
         # Start samtale (enten fra wake word eller samtale-trigger)
         messages = []

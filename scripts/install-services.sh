@@ -13,6 +13,8 @@ sudo cp /home/admog/Code/chatgpt-and/services/fan-control.service /etc/systemd/s
 sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-worker.service /etc/systemd/system/
 sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-hygiene.service /etc/systemd/system/
 sudo cp /home/admog/Code/chatgpt-and/services/duck-memory-hygiene.timer /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-update.service /etc/systemd/system/
+sudo cp /home/admog/Code/chatgpt-and/services/duck-update.timer /etc/systemd/system/
 
 # Reload systemd
 echo "Reloader systemd..."
@@ -26,6 +28,7 @@ sudo systemctl enable duck-control.service
 sudo systemctl enable fan-control.service
 sudo systemctl enable duck-memory-worker.service
 sudo systemctl enable duck-memory-hygiene.timer
+sudo systemctl enable duck-update.timer
 
 echo ""
 echo "=== Tjenester installert! ==="

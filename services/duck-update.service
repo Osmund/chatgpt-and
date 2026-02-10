@@ -1,0 +1,20 @@
+[Unit]
+Description=Anda Auto-Update
+After=network-online.target
+Wants=network-online.target
+# Ikke kjør oppdatering hvis anda snakker
+ConditionPathExists=!/tmp/duck_conversation_active.txt
+
+[Service]
+Type=oneshot
+User=admog
+WorkingDirectory=/home/admog/Code/chatgpt-and
+ExecStart=/bin/bash /home/admog/Code/chatgpt-and/scripts/duck-update.sh
+Environment="PATH=/home/admog/Code/chatgpt-and/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Logg til journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=duck-update
+
+[Install]
+WantedBy=multi-user.target

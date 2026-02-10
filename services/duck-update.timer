@@ -1,0 +1,13 @@
+[Unit]
+Description=Anda Auto-Update Timer (sjekker for ny versjon kl 03:00)
+
+[Timer]
+# Kjør kl 03:00 hver natt
+OnCalendar=*-*-* 03:00:00
+# Tilfeldig forsinkelse 0-30 min (unngår at alle ender henter samtidig)
+RandomizedDelaySec=1800
+# Kjør ved boot hvis timen ble misset (f.eks. pi var av kl 03:00)
+Persistent=true
+
+[Install]
+WantedBy=timers.target
