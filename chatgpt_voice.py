@@ -1939,8 +1939,12 @@ def main():
             set_idle_led()  # Gul blinkende hvis hotspot, ellers blå
         
         # Etter samtale: sjekk om vi bør spørre ukjent person om å bli kjent
-        # Krav: naturlig samtaleslutt, personen er ukjent, minst 3 meldingsutvekslinger (6 meldinger)
+        # Krav: naturlig samtaleslutt, personen er ukjent, Duck-Vision var tilgjengelig,
+        # og minst 3 meldingsutvekslinger (6 meldinger).
+        # Hvis Duck-Vision ikke er tilkoblet vet vi ikke om personen er ukjent eller bare ikke sjekket.
+        vision_was_available = vision_service and vision_service.is_connected()
         if (conversation_ended_naturally 
+                and vision_was_available
                 and not vision_recognized 
                 and not voice_recognized 
                 and not _mid_conversation_announced
