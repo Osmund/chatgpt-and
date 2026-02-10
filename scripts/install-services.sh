@@ -28,7 +28,8 @@ sudo systemctl enable duck-control.service
 sudo systemctl enable fan-control.service
 sudo systemctl enable duck-memory-worker.service
 sudo systemctl enable duck-memory-hygiene.timer
-sudo systemctl enable duck-update.timer
+# NB: duck-update.timer er IKKE enabled som standard.
+# Aktiver via kontrollpanelet (⚙️ System → 🔄 Auto-Update) på hver and.
 
 echo ""
 echo "=== Tjenester installert! ==="
